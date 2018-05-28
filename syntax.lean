@@ -41,10 +41,32 @@ inductive terminator
 | br_cond: op → string → string → terminator
 | ret: op → terminator -- returning value, instruction
 
-def basicblock := string × (list inst) × terminator
+structure basicblock :=
+    (name:string) (insts:(list inst)) (term:terminator)
 
-def function := ty × string × list (ty × string) × list basicblock
 
-def program := list function
+structure function := 
+    (retty:ty) (name:string)
+    (args:list (ty × string))
+    (body:list basicblock)
+
+namespace function
+def get (f:function) (bname:string): option basicblock :=
+    match f.body.filter (λ f:basicblock, f.name = bname) with
+    | [] := none
+    | h::t := some h
+    end
+end function
+
+
+def module := list function
+
+namespace module
+def get (m:module) (fname:string): option function :=
+    match m.filter (λ f:function, f.2 = fname) with
+    | [] := none
+    | h::t := some h
+    end
+end module
 
 end ir

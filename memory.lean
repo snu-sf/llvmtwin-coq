@@ -58,7 +58,13 @@ structure wf (mb:memblock) :=
     (twin: mb.P.length = TWINCNT)
 
 @[reducible]
-def alive (mb:memblock) := mb.r.2 = none
+def alive (mb:memblock) : Prop := mb.r.2 = none
+
+def inbounds (mb:memblock) (ofs:nat) : Prop := ofs < mb.n
+
+-- offset, len
+def bytes (mb:memblock) (ofs:nat) (len:nat): list byte :=
+    (mb.c.drop ofs).take len
 
 end memblock
 
@@ -85,6 +91,29 @@ def get (m:memory) (i:blockid): option memblock :=
     match (m.blocks.filter (λ (itm:blockid × memblock), itm.1 = i)) with
     | a::b := some a.2
     | nil := none
+    end
+
+def incr_time (m:memory): memory :=
+    {t := m.t + 1,
+     blocks := m.blocks,
+     calltimes := m.calltimes}
+
+-- call times
+
+def callbegin (m:memory) (cid:callid): memory :=
+    {t := m.t,
+     blocks := m.blocks,
+     calltimes := (cid, some m.t)::m.calltimes}
+
+def callend (m:memory) (cid:callid): memory :=
+    {t := m.t,
+     blocks := m.blocks,
+     calltimes := (cid, none)::m.calltimes}
+
+def calltime (m:memory) (cid:callid): option time :=
+    match m.calltimes.filter (λ (x:callid × option time), x.1 = cid) with
+    | [] := none
+    | h::t := h.2
     end
 
 end memory

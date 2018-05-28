@@ -1,7 +1,8 @@
 import .syntax
+import .state
 
 namespace ir
 
-inductive sstep: configuration → program → configuration → Prop
+inductive sstep: config → program → (config × option event) → Prop
 
 end ir
