@@ -2,11 +2,24 @@ Require Import List.
 Require Import BinPos.
 Require Import Bool.
 Require Import Coq.Arith.PeanoNat.
+Require Import Sumbool.
+
+(* Function version of List.incl *)
+
+Definition list_incl {X:Type}
+           {eq_dec: forall x y : X, {x = y}+{x <> y}}
+           (l1 l2: list X): bool :=
+  List.forallb (fun x =>
+                  List.existsb (fun y =>
+                     match (eq_dec x y) with
+                     | left _ => true
+                     | right _ => false
+                     end) l2) l1.
 
 (* Definition of list subseq. *)
 
 Inductive lsubseq {X:Type}: list X -> list X -> Prop :=
-| ss_nil: lsubseq nil nil
+| ss_nil: forall (l:list X), lsubseq l nil
 | ss_cons: forall (x:X) (l1 l2:list X) (H:lsubseq l1 l2),
     lsubseq (x::l1) (x::l2)
 | ss_elon: forall (x:X) (l1 l2:list X) (H:lsubseq l1 l2),
@@ -27,6 +40,20 @@ Proof.
   constructor. assumption.
 Qed.
 
+Lemma lsubseq_append: forall {X:Type} (l1 l2 l3 l4:list X)
+                             (H1:lsubseq l1 l2)
+                             (H2:lsubseq l3 l4),
+    lsubseq (l1++l3) (l2++l4).
+Proof.
+  intros.
+  induction H1.
+  - simpl.
+    induction l. assumption.
+    simpl. constructor. assumption.
+  - simpl. constructor. assumption.
+  - simpl. constructor. assumption.
+Qed.
+
 Lemma lsubseq_forallb: forall {X:Type} (l l':list X) f
                              (H:List.forallb f l = true)
                              (HLSS:lsubseq l l'),
@@ -34,7 +61,7 @@ Lemma lsubseq_forallb: forall {X:Type} (l l':list X) f
 Proof.
   intros.
   induction HLSS.
-  - assumption.
+  - constructor.
   - simpl in *.
     rewrite andb_true_iff in *.
     destruct H.
@@ -72,8 +99,15 @@ Fixpoint disjoint_ranges (rs:list (nat*nat)): bool :=
 Definition in_range (i:nat) (r:nat * nat): bool :=
   Nat.leb r.(fst) i && Nat.leb i (r.(fst) + r.(snd)).
 
+(* Returns a list of ranges which include i. *)
 Definition disjoint_include (rs:list (nat * nat)) (i:nat): list (nat*nat) :=
   List.filter (in_range i) rs.
+
+Definition disjoint_include2 {X:Type} (rs:list (nat * nat)) (data:list X) (i:nat)
+: list (nat*nat) * list X :=
+  List.split
+    (List.filter (fun x => in_range i x.(fst))
+                 (List.combine rs data)).
 
 Definition no_empty_range (rs:list (nat * nat)): bool :=
   List.forallb (fun t => Nat.ltb 0 t.(snd)) rs.
@@ -115,7 +149,7 @@ Lemma disjoint_lsubseq_disjoint:
 Proof.
   intros.
   induction HLSS.
-  - assumption.
+  - constructor.
   - simpl in *.
     rewrite andb_true_iff in *.
     destruct HDISJ as [HDISJ1 HDISJ2].
@@ -135,6 +169,51 @@ Lemma disjoint_include_lsubseq:
   forall rs i, lsubseq rs (disjoint_include rs i).
 Proof.
   intros. unfold disjoint_include. apply lsubseq_filter.
+Qed.
+
+(* Lemma: (disjoint_include2 rs data i).fst = disjoint_include rs i *)
+Lemma disjoint_include_include2 {X:Type} :
+  forall rs (data:list X) i
+    (HLEN:List.length rs = List.length data),
+    fst (disjoint_include2 rs data i) = disjoint_include rs i.
+Proof.
+  intros.
+  unfold disjoint_include2.
+  unfold disjoint_include.
+  generalize dependent data.
+  induction rs.
+  - intros. simpl in HLEN.
+    symmetry in HLEN.
+    rewrite length_zero_iff_nil in HLEN.
+    rewrite HLEN.
+    reflexivity.
+  - intros.
+    destruct data as [ | dh dt].
+    + simpl in HLEN. inversion HLEN.
+    + simpl in HLEN. inversion HLEN.
+      simpl.
+      destruct (in_range i a) eqn:HIN.
+      * simpl.
+        rewrite <- (IHrs dt).
+        destruct (split (filter
+                           (fun x : nat * nat * X => in_range i (fst x))
+                           (combine rs dt))) eqn:H.
+        reflexivity. assumption.
+      * rewrite <- (IHrs dt).
+        reflexivity. assumption.
+Qed.
+
+Lemma disjoint_include2_len {X:Type}:
+  forall rs (data:list X) i
+         (HLEN:List.length rs = List.length data),
+    List.length (fst (disjoint_include2 rs data i)) =
+    List.length (snd (disjoint_include2 rs data i)).
+Proof.
+  intros.
+  unfold disjoint_include2.
+  rewrite split_length_l.
+  rewrite split_length_r.
+  reflexivity.
 Qed.
 
 (* Lemma: If there are two ranges (b1, l1), (b2, l2),

@@ -12,11 +12,7 @@ Definition get_deref_blks_phyptr (m:Ir.Memory.t) (o:nat) (Is:list nat)
            (cid:option Ir.callid) (sz:nat)
 : list Ir.MemBlock.t :=
   List.map snd
-  (match (List.filter
-           (fun mb => List.forallb
-                (fun ofs => Ir.MemBlock.inbounds_abs mb.(snd) ofs)
-                (o::(o+sz)::Is))
-           (Ir.Memory.blocks m)) with
+  (match Ir.Memory.inbounds_blocks m o with
   | nil => nil (* No such block *)
   | blks =>
     match cid with

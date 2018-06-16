@@ -2,6 +2,7 @@ Require Import Common.
 Require Import List.
 Require Import BinPos.
 Require Import Bool.
+Require Import PeanoNat.
 
 Module Ir.
 
@@ -39,7 +40,8 @@ Definition ptr_eqb (p1 p2:ptrval): bool :=
     Nat.eqb bid1 bid2 && Nat.eqb ofs1 ofs2
   | (pphy (ofs1, I1, cid1), pphy (ofs2, I2, cid2)) =>
     Nat.eqb ofs1 ofs2 &&
-    List.incl I1 I2 && List.incl I2 I1 &&
+    @list_incl nat Nat.eq_dec I1 I2 &&
+    @list_incl nat Nat.eq_dec I2 I1 &&
     match (cid1, cid2) with
     | (Some c1, Some c2) => Nat.eqb c1 c2
     | (None, None) => true
@@ -175,21 +177,27 @@ Structure t := mk
     P: list nat
   }.
 
-(* Returns (start_ofs, size). *)
-Definition P_size (mb:t) := List.map (fun ofs => (ofs, mb.(n))) mb.(P).
+(* Returns (start_ofs, size)s including all twin blocks. *)
+Definition P_size (mb:t):list (nat * nat) :=
+  List.map (fun ofs => (ofs, mb.(n))) mb.(P).
 
 (* Returns integer address of the block. *)
 Definition addr (mb:t): nat :=
   List.hd 0 mb.(P).
+
+(* Returns (start_ofs, size) of the using one. *)
+Definition P0_size (mb:t): nat * nat :=
+  (addr mb, mb.(n)).
+
 
 Structure wf (mb:t) := mkWf
   {
     wf_tcond: forall t (FREED:mb.(r).(snd) = Some t), mb.(r).(fst) < t;
     wf_clen: List.length mb.(c) = mb.(n);
     wf_poslen: mb.(n) <> 0;
-    wf_align: forall p (HAS:list_has p mb.(P)), Nat.modulo p mb.(a) = 0;
-    wf_inmem: forall p (HAS:list_has p mb.(P)), p + mb.(n) < MEMSZ;
-    wf_notnull: forall p (HAS:list_has p mb.(P)), ~ (p = 0);
+    wf_align: forall p (HAS:List.In p mb.(P)), Nat.modulo p mb.(a) = 0;
+    wf_inmem: forall p (HAS:List.In p mb.(P)), p + mb.(n) < MEMSZ;
+    wf_notnull: forall p (HAS:List.In p mb.(P)), ~ (p = 0);
     wf_disj: disjoint_ranges (P_size mb) = true;
     wf_twin: List.length mb.(P) = TWINCNT
   }.
@@ -203,8 +211,7 @@ Definition inbounds (mb:t) (ofs:nat): bool :=
   Nat.ltb ofs mb.(n).
 
 Definition inbounds_abs (mb:t) (ofs':nat): bool :=
-  if Nat.ltb ofs' (addr mb) then false
-  else inbounds mb (ofs' - addr mb).
+  in_range ofs' (P0_size mb).
 
 (* offset, len *)
 Definition bytes (mb:t) (ofs len:nat): list (Byte.t) :=
@@ -212,6 +219,8 @@ Definition bytes (mb:t) (ofs len:nat): list (Byte.t) :=
 
 End MemBlock.
 
+
+(* Memory. *)
 
 Module Memory.
 
@@ -226,22 +235,29 @@ Structure t := mk
 Definition alive_blocks (m:t): list (blockid * MemBlock.t) :=
   List.filter (fun xb => MemBlock.alive xb.(snd)) m.(blocks).
 
-(* Returns a list of allocated ranges.
+(* Returns a list of allocated ranges (including twins).
    Each element has a form of (begin-index, length). *)
-Definition allocated_ranges (m:t): list (nat * nat) :=
+Definition alive_P_ranges (m:t): list (nat * nat) :=
   List.concat (List.map (fun b => MemBlock.P_size b.(snd)) (alive_blocks m)).
+
+Definition alive_P0_ranges (m:t): list (nat * nat) :=
+  List.map (fun x => MemBlock.P0_size x.(snd)) (alive_blocks m).
 
 (* Returns true if range r never overlaps with other alive blocks,
    false otherwise. *)
 Definition allocatable (m:t) (r:list (nat * nat)):bool :=
-  disjoint_ranges (r++(allocated_ranges m)).
+  disjoint_ranges (r++(alive_P_ranges m)).
+
+(* Returns blocks which are alive & has abs_ofs as inbounds *)
+Definition inbounds_blocks (m:t) (abs_ofs:nat): list (blockid * MemBlock.t) :=
+  snd (disjoint_include2 (alive_P0_ranges m) (alive_blocks m) abs_ofs).
 
 (* Well-formedness of memory. *)
 Structure wf (m:t) :=
   {
-    wf_blocks: forall i p (HAS:list_has (i, p) m.(blocks)), MemBlock.wf p;
+    wf_blocks: forall i p (HAS:List.In (i, p) m.(blocks)), MemBlock.wf p;
     wf_uniqueid: List.NoDup (List.map fst m.(blocks));
-    wf_disjoint: disjoint_ranges (allocated_ranges m) = true;
+    wf_disjoint: disjoint_ranges (alive_P_ranges m) = true;
   }.
 
 
@@ -263,9 +279,6 @@ Definition get (m:t) (i:blockid): option MemBlock.t :=
   | a::b => Some a.(snd)
   end.
 
-Definition inbounds_blocks (m:t) (abs_ofs:nat): list (blockid * MemBlock.t) :=
-  List.filter (fun mb => mb.(snd).(MemBlock.inbounds_abs) abs_ofs)
-              m.(blocks).
 
 Definition incr_time (m:t): t :=
   mk (1 + m.(mt)) m.(blocks) m.(calltimes) m.(fresh_bid).
@@ -281,6 +294,82 @@ Definition calltime (m:t) (cid:callid): option time :=
   | nil => None
   | h::t => h.(snd)
   end.
+
+
+(********************************
+             Lemmas
+ ********************************)
+
+Lemma P_P0_size_lsubseq:
+  forall mb (HWF:MemBlock.wf mb),
+    lsubseq (MemBlock.P_size mb) ((MemBlock.P0_size mb)::nil).
+Proof.
+  intros.
+  unfold MemBlock.P_size.
+  unfold MemBlock.P0_size.
+  destruct (MemBlock.P mb) as [| P0 Pt] eqn:HP1.
+  { (* cannot be nil. *)
+    assert (List.length (MemBlock.P mb) = 0).
+    { rewrite HP1. reflexivity. }
+    rewrite (MemBlock.wf_twin) in H. inversion H. assumption.
+  }
+  unfold MemBlock.addr.
+  rewrite HP1. simpl.
+  constructor.
+  constructor.
+Qed.
+
+(*
+Lemma alive_P_P0_ranges:
+  forall (m:t) (HWF:wf m),
+    lsubseq (alive_P_ranges m) (alive_P0_ranges m).
+Proof.
+  intros.
+  unfold alive_P_ranges.
+  unfold alive_P0_ranges.
+  destruct m eqn:HM.
+  unfold alive_blocks.
+  simpl.
+  generalize dependent m.
+  induction blocks0.
+  - simpl. intros. constructor.
+  - simpl. intros.
+    destruct a as [newbid newb].
+    simpl.
+    destruct (MemBlock.alive newb) eqn:HALIVE.
+    + simpl.
+      (* Why do I need this?? *)
+      assert (forall {X:Type} (p: X) (q:list X), p::q = (p::nil) ++ q).
+      { simpl. reflexivity. }
+      rewrite H.
+      apply lsubseq_append.
+      {
+        apply P_P0_size_lsubseq.
+        apply wf_blocks with (m := m) (i := newbid).
+        rewrite HM.
+        apply HWF.
+        rewrite HM. simpl. left. reflexivity.
+      }
+      {
+        eapply IHblocks0.
+        
+      }
+    }
+    destruct m.
+
+Lemma inbounds_blocks_two:
+  forall (m:t) abs_ofs l
+         (HWF:wf m)
+         (HINB:inbounds_blocks m abs_ofs = l),
+    List.length l < 3.
+Proof.
+  intros.
+  unfold inbounds_blocks in HINB.
+  rewrite <- HINB.
+  rewrite <- disjoint_include2_len.
+  rewrite disjoint_include_include2.
+  eapply disjoint_includes_atmost_2.
+*)
 
 End Memory.
 
