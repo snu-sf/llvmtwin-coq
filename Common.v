@@ -164,6 +164,25 @@ Proof.
     apply IHHLSS. assumption.
 Qed.
 
+Lemma disjoint_ranges_append:
+  forall l1 l2 (HDISJ:disjoint_ranges (l1 ++ l2) = true),
+    disjoint_ranges l1 = true /\ disjoint_ranges l2 = true.
+Proof.
+  intros.
+  induction l1.
+  - simpl in HDISJ.
+    split. reflexivity. assumption.
+  - simpl in HDISJ.
+    rewrite andb_true_iff in HDISJ.
+    destruct HDISJ.
+    split. simpl. rewrite andb_true_iff. split.
+    rewrite forallb_app in H.
+    rewrite andb_true_iff in H.
+    destruct H. assumption.
+    apply IHl1. assumption.
+    apply IHl1. assumption.
+Qed.
+
 (* Lemma: the result of disjoint_include is subsequence of the input. *)
 Lemma disjoint_include_lsubseq:
   forall rs i, lsubseq rs (disjoint_include rs i).

@@ -300,6 +300,31 @@ Definition calltime (m:t) (cid:callid): option time :=
              Lemmas
  ********************************)
 
+(* Wellformedness, inversed direction - when a new block is added. *)
+Lemma wf_newblk_inv:
+  forall mt blocks newblk calltime fresh_cid
+         (HWF: wf (mk mt (newblk::blocks) calltime fresh_cid)),
+    wf (mk mt blocks calltime fresh_cid).
+Proof.
+  intros.
+  destruct HWF.
+  split.
+  - intros.
+    apply wf_blocks0 with (i := i).
+    simpl. simpl in HAS. right. assumption.
+  - simpl. simpl in wf_uniqueid0.
+    inversion wf_uniqueid0. assumption.
+  - unfold alive_P_ranges in *.
+    unfold alive_blocks in *.
+    simpl in *.
+    destruct (MemBlock.alive (snd newblk)) eqn:HALIVE.
+    + simpl in wf_disjoint0.
+      apply disjoint_ranges_append in wf_disjoint0.
+      destruct wf_disjoint0.
+      assumption.
+    + assumption.
+Qed.
+
 Lemma P_P0_size_lsubseq:
   forall mb (HWF:MemBlock.wf mb),
     lsubseq (MemBlock.P_size mb) ((MemBlock.P0_size mb)::nil).
@@ -319,7 +344,6 @@ Proof.
   constructor.
 Qed.
 
-(*
 Lemma alive_P_P0_ranges:
   forall (m:t) (HWF:wf m),
     lsubseq (alive_P_ranges m) (alive_P0_ranges m).
@@ -352,12 +376,17 @@ Proof.
       }
       {
         eapply IHblocks0.
-        
+        eapply wf_newblk_inv.
+        apply HWF.
+        reflexivity.
       }
-    }
-    destruct m.
+    + eapply IHblocks0.
+      eapply wf_newblk_inv.
+      apply HWF. reflexivity.
+Qed.
 
-Lemma inbounds_blocks_two:
+(*
+Lemma inbounds_blocks_atmost_2:
   forall (m:t) abs_ofs l
          (HWF:wf m)
          (HINB:inbounds_blocks m abs_ofs = l),
