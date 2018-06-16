@@ -80,6 +80,32 @@ Definition no_empty_range (rs:list (nat * nat)): bool :=
 
 
 
+(* Lemma: two ranges with same begin index & non-zero length overlaps. *)
+Lemma disjoint_same:
+  forall b1 b2 l1 l2 (HL1:0 < l1) (HL2: 0 < l2) (HEQ:b1 = b2),
+    disjoint_range (b1, l1) (b2, l2) = false.
+Proof.
+  intros.
+  unfold disjoint_range.
+  rewrite orb_false_iff.
+  repeat (rewrite Nat.leb_nle).
+  split; rewrite HEQ; apply Gt.gt_not_le; apply Nat.lt_add_pos_r; auto.
+Qed.
+
+(* Same as disjoint_same, but with same end index. *)
+Lemma disjoint_same2:
+  forall b1 b2 l1 l2 (HL1:0 < l1) (HL2:0 < l2) (HEQ:b1 + l1 = b2 + l2),
+    disjoint_range (b1, l1) (b2, l2) = false.
+Proof.
+  intros.
+  unfold disjoint_range.
+  rewrite orb_false_iff.
+  repeat (rewrite Nat.leb_nle).
+  split.
+  - rewrite HEQ; apply Gt.gt_not_le; apply Nat.lt_add_pos_r; auto.
+  - rewrite <- HEQ; apply Gt.gt_not_le; apply Nat.lt_add_pos_r; auto.
+Qed.
+
 (* Lemma: the subsequence of disjoint ranges is also disjoint. *)
 Lemma disjoint_lsubseq_disjoint:
   forall rs rs'
@@ -111,6 +137,49 @@ Proof.
   intros. unfold disjoint_include. apply lsubseq_filter.
 Qed.
 
+(* Lemma: If there are two ranges (b1, l1), (b2, l2),
+   and they include some natural number i,
+   and they are disjoint,
+   either (b1 + l1 = b2 /\ i = b2) or (b2 + l2 = b1 /\ i = b1). *)
+Lemma inrange2_disjoint:
+  forall (b1 l1 b2 l2 i:nat)
+         (H1:in_range i (b1, l1) = true)
+         (H2:in_range i (b2, l2) = true)
+         (HDISJ:disjoint_ranges ((b1,l1)::(b2,l2)::nil) = true),
+    (b1 + l1 = b2 /\ i = b2) \/ (b2 + l2 = b1 /\ i = b1).
+Proof.
+  intros.
+  unfold in_range in *.
+  unfold disjoint_ranges in HDISJ.
+  simpl in HDISJ.
+  repeat (rewrite andb_true_r in HDISJ).
+  unfold disjoint_range in HDISJ.
+  rewrite andb_true_iff in *.
+  rewrite orb_true_iff in *.
+  repeat (rewrite Nat.leb_le in *).
+  simpl in *.
+  destruct HDISJ.
+  - (* Make i = b1 + l1, from b1 + l1 <= i <= b1 + l1. *)
+    assert (i = b1 + l1).
+    { apply Nat.le_antisymm. apply H1.
+      apply Nat.le_trans with (m := b2). assumption. apply H2. }
+    (* Make i = b2, from b2 <= i <= b2. *)
+    assert (i = b2).
+    { apply Nat.le_antisymm.
+      apply Nat.le_trans with (m := b1 + l1). apply H1. assumption.
+      apply H2. }
+    left. split; congruence.
+  - (* Make i = b2 + l2, from b2 + l2 <= i <= b2 + l2. *)
+    assert (i = b2 + l2).
+    { apply Nat.le_antisymm. apply H2.
+      apply Nat.le_trans with (m := b1). assumption. apply H1. }
+    assert (i = b1).
+    { apply Nat.le_antisymm.
+      apply Nat.le_trans with (m := b2 + l2). apply H2. assumption.
+      apply H1. }
+    right. split; congruence.
+Qed.
+
 (* Lemma: If there are three ranges (b1, l1), (b2, l2), (b3, l3),
    and they all include some natural number i,
    (e.g. b1<=i<=l1, b2<=i<=l2, b3<=i<=l3),
@@ -125,41 +194,62 @@ Lemma inrange3_never_disjoint:
     disjoint_ranges (r1::r2::r3::nil) = false.
 Proof.
   intros.
-  unfold in_range in *.
   destruct r1 as [b1 l1].
   destruct r2 as [b2 l2].
   destruct r3 as [b3 l3].
-  simpl in *.
-  rewrite andb_true_r in *.
-  repeat (rewrite andb_true_r).
-  repeat (rewrite andb_true_iff in *).
-  destruct H1. destruct H2. destruct H3.
-  destruct HNOEMPTY.
-  destruct H6.
-  destruct (disjoint_range (b1, l1) (b2, l2)) eqn:HDR1;
-  destruct (disjoint_range (b1, l1) (b3, l3)) eqn:HDR2;
-  destruct (disjoint_range (b2, l2) (b3, l3)) eqn:HDR3;
-  try auto.
+  (* Prettify HNOEMPTY. *)
+  simpl in HNOEMPTY.
+  rewrite andb_true_r in HNOEMPTY.
+  repeat (rewrite andb_true_iff in HNOEMPTY).
+  destruct HNOEMPTY as [HNOEMPTY1 [HNOEMPTY2 HNOEMPTY3]].
+  (* Use inrange2_disjoint! *)
+  destruct (disjoint_ranges ((b1,l1)::(b2,l2)::nil)) eqn:HDISJ12;
+  destruct (disjoint_ranges ((b1,l1)::(b3,l3)::nil)) eqn:HDISJ13.
+  - (* Okay, (b1, l1), (b2, l2) are disjoint. *)
+    assert (H12:(b1 + l1 = b2 /\ i = b2) \/ (b2 + l2 = b1 /\ i = b1)).
+    { apply inrange2_disjoint; assumption. }
+    (* (b1, l1), (b3, l3) are also disjoint. *)
+    assert (H13:(b1 + l1 = b3 /\ i = b3) \/ (b3 + l3 = b1 /\ i = b1)).
+    { apply inrange2_disjoint; assumption. }
+    (* Prettify *)
+    unfold in_range in *.
+    simpl in *.
+    repeat (rewrite andb_true_iff in *).
+    repeat (rewrite andb_true_r in *).
+    repeat (rewrite Nat.leb_le in *).
+    repeat (rewrite Nat.ltb_lt in *).
+    destruct H12 as [H12 | H12];
+    destruct H12 as [H12 H12'];
+    destruct H13 as [H13 | H13];
+    destruct H13 as [H13 H13'].
+    + assert (disjoint_range (b2, l2) (b3, l3) = false).
+      { apply disjoint_same. assumption. assumption. congruence. }
+      rewrite H. rewrite andb_false_r. auto.
+    + assert (disjoint_range (b1, l1) (b2, l2) = false).
+      { apply disjoint_same. assumption. assumption. congruence. }
+      rewrite H. reflexivity.
+    + assert (disjoint_range (b1, l1) (b3, l3) = false).
+      { apply disjoint_same. assumption. assumption. congruence. }
+      rewrite H. rewrite andb_false_r. auto.
+    + assert (disjoint_range (b2, l2) (b3, l3) = false).
+      { apply disjoint_same2. assumption. assumption. congruence. }
+      rewrite H. rewrite andb_false_r. auto.
+  - (* No, (b1, l1), (b3, l3) overlap. *)
+    simpl in *.
+    repeat (rewrite andb_true_r in *).
+    rewrite HDISJ13. rewrite andb_false_r. auto.
+  - (* No, (b1, l1), (b2, l2) overlap. *)
+    simpl in *.
+    repeat (rewrite andb_true_r in *).
+    rewrite HDISJ12. auto.
+  - (* (b1, l1) - (b3, l3) overlap, and (b1, l1) - (b2, l2) overlap too. *)
+    simpl in *.
+    repeat (rewrite andb_true_r in *).
+    rewrite HDISJ12. auto.
+Qed.
 
-  assert (HTRI:forall x y z
-                 (H1:Nat.ltb x y = true)
-                 (H2:Nat.ltb y z = true)
-                 (H3:Nat.ltb z x = true), False).
-  {
-    intros.
-    rewrite Nat.ltb_lt in *.
-    assert (x < z). apply Nat.lt_trans with (m := y); assumption.
-    apply (Nat.lt_asymm x z H11).
-    assumption.
-  }
-  (* remains only one case! - when all disjoint_range return true *)
-  unfold disjoint_range in *.
-  rewrite orb_true_iff in *.
-  destruct HDR1; destruct HDR2; destruct HDR3; exfalso.
-Admitted.
-
-(* Theorem: If ranges are disjoint, there at most 2 ranges
-   which contain number i. *)
+(* Theorem: If ranges are disjoint, there are at most 2 ranges
+   which have number i in-range. *)
 Theorem disjoint_includes_atmost_2:
   forall rs i rs' (HDISJ: disjoint_ranges rs = true)
          (HIN:rs' = disjoint_include rs i)
@@ -176,7 +266,7 @@ Proof.
     simpl in HNOZERO.
     rewrite andb_true_iff in HNOZERO.
     destruct HDISJ as [HDISJ1 HDISJ2].
-    destruct HNOZERO as [HNOZERO1 HNOZERO2].
+    destruct HNOZERO as [HNOZERO0 HNOZERO].
     simpl in HIN.
     destruct (in_range i a) eqn:HCOND.
     + (* New element fit. *)
@@ -202,10 +292,89 @@ Proof.
         destruct rs'ttt as [ | rs'ttth rs'tttt].
         { (* [(beg1, len1), (beg2, len2)]. *)
           (* (beg1, len1), (beg2, len2) are in rs(all ranges) as well. *)
-          admit.
+          assert (HDISJ0:forallb (fun r2 : nat * nat => disjoint_range (beg, len) r2)
+                          ((beg1,len1)::(beg2,len2)::nil) = true).
+          {
+            apply lsubseq_forallb with (l := rs).
+            assumption.
+            rewrite H1.
+            apply disjoint_include_lsubseq.
+          }
+          assert (HDISJ12: disjoint_ranges ((beg1, len1)::(beg2, len2)::nil) = true).
+          {
+            apply disjoint_lsubseq_disjoint with (rs := rs).
+            assumption.
+            rewrite H1.
+            apply disjoint_include_lsubseq.
+          }
+          (* Okay, we got (beg, len) (beg1, len1) disjoint,
+             (beg, len) (beg2, len2) disjoint. *)
+          simpl in HDISJ0.
+          rewrite andb_true_r in HDISJ0.
+          rewrite andb_true_iff in HDISJ0.
+          destruct HDISJ0 as [HDISJ01 HDISJ02].
+          simpl in HDISJ12.
+          repeat (rewrite andb_true_r in HDISJ12).
+          (* Make in_range predicates. *)
+          assert (HIN12: List.forallb (in_range i)
+                                      ((beg1,len1)::(beg2,len2)::nil) = true).
+          {
+            rewrite H1.
+            unfold disjoint_include.
+            apply filter_forallb.
+          }
+          simpl in HIN12.
+          repeat (rewrite andb_true_iff in HIN12).
+          destruct HIN12 as [HIN1 [HIN2 _]].
+          (* Non-zero-size range. *)
+          assert (HNOZERO12: no_empty_range ((beg1,len1)::(beg2,len2)::nil) = true).
+          {
+            unfold no_empty_range.
+            rewrite H1.
+            apply lsubseq_forallb with (l := rs).
+            apply HNOZERO. apply disjoint_include_lsubseq.
+          }
+          simpl in HNOZERO12.
+          repeat (rewrite andb_true_iff in HNOZERO12).
+          destruct HNOZERO12 as [HNOZERO1 [HNOZERO2 _]].
+          (* Now, the main theorem. *)
+          assert (HMAIN: disjoint_ranges
+                           ((beg, len)::(beg1, len1)::(beg2, len2)::nil) = false).
+          {
+            apply inrange3_never_disjoint with (i := i).
+            assumption. assumption. assumption.
+            simpl. simpl in HNOZERO0.
+            rewrite HNOZERO0. rewrite HNOZERO1. rewrite HNOZERO2.
+            reflexivity.
+          }
+          (* Make False *)
+          simpl in HMAIN.
+          rewrite HDISJ01 in HMAIN.
+          rewrite HDISJ02 in HMAIN.
+          rewrite HDISJ12 in HMAIN.
+          simpl in HMAIN.
+          inversion HMAIN.
         }
-Admitted.
+        { (* disjoint_include already returned more than 2 ranges.
+             This is impossible. *)
+          simpl in H.
+          exfalso.
+          apply (Lt.le_not_lt 3 (3 + length rs'tttt)).
+          repeat (apply le_n_S).
+          apply le_0_n.
+          apply H.
+        }
+   + (* No new range fit *)
+     apply IHrs.
+     assumption.
+     assumption.
+     assumption.
+Qed.
 
+
+(**************************************************
+             Number <-> bits (list bool)
+ *************************************************)
 
 Fixpoint pos_to_bits (n:positive): list bool :=
   match n with
