@@ -39,8 +39,7 @@ Definition ptr_eqb (p1 p2:ptrval): bool :=
     Nat.eqb bid1 bid2 && Nat.eqb ofs1 ofs2
   | (pphy (ofs1, I1, cid1), pphy (ofs2, I2, cid2)) =>
     Nat.eqb ofs1 ofs2 &&
-    List.forallb (fun i1 => List.existsb (fun i2 => Nat.eqb i1 i2) I2) I1 &&
-    List.forallb (fun i2 => List.existsb (fun i1 => Nat.eqb i1 i2) I1) I2 &&
+    List.incl I1 I2 && List.incl I2 I1 &&
     match (cid1, cid2) with
     | (Some c1, Some c2) => Nat.eqb c1 c2
     | (None, None) => true
@@ -219,7 +218,8 @@ Module Memory.
 Structure t := mk
   {
     mt:time; blocks:list (blockid * MemBlock.t);
-    calltimes: list (callid * option time)
+    calltimes: list (callid * option time);
+    fresh_bid: blockid
   }.
 
 (* Returns a list of alive blocks in the memory. *)
@@ -231,10 +231,10 @@ Definition alive_blocks (m:t): list (blockid * MemBlock.t) :=
 Definition allocated_ranges (m:t): list (nat * nat) :=
   List.concat (List.map (fun b => MemBlock.P_size b.(snd)) (alive_blocks m)).
 
-(* Returns true if newb never overlaps with other alive blocks,
+(* Returns true if range r never overlaps with other alive blocks,
    false otherwise. *)
-Definition allocatable (m:t) (newb:MemBlock.t):bool :=
-  disjoint_ranges ((MemBlock.P_size newb) ++ (allocated_ranges m)).
+Definition allocatable (m:t) (r:list (nat * nat)):bool :=
+  disjoint_ranges (r++(allocated_ranges m)).
 
 (* Well-formedness of memory. *)
 Structure wf (m:t) :=
@@ -245,6 +245,18 @@ Structure wf (m:t) :=
   }.
 
 
+(* Add a new memory block. *)
+Definition new (m:t) (t:blockty) (n:nat) (a:nat) (c:list Byte.t) (P:list nat)
+           (HALIGN: forall n (HIN:List.In n P), Nat.modulo n a = 0)
+           (HDISJ: allocatable m (List.map (fun x => (x, n)) P) = true)
+: Memory.t * blockid :=
+  (mk (1 + m.(mt)) (* update time *)
+     ((m.(fresh_bid), (MemBlock.mk t (m.(mt), None) n a c P))::m.(blocks)) (* add block *)
+     m.(calltimes) (* no update to call times *)
+     (1 + m.(fresh_bid)) (* update block id *)
+   , m.(fresh_bid)).
+
+(* Get the memory block which has id i. *)
 Definition get (m:t) (i:blockid): option MemBlock.t :=
   match (List.filter (fun i2 => Nat.eqb i2.(fst) i) m.(blocks)) with
   | nil => None
@@ -256,13 +268,13 @@ Definition inbounds_blocks (m:t) (abs_ofs:nat): list (blockid * MemBlock.t) :=
               m.(blocks).
 
 Definition incr_time (m:t): t :=
-  mk (1 + m.(mt)) m.(blocks) m.(calltimes).
+  mk (1 + m.(mt)) m.(blocks) m.(calltimes) m.(fresh_bid).
 
 Definition callbegin (m:t) (cid:callid): t :=
-  mk m.(mt) m.(blocks) ((cid, Some m.(mt))::m.(calltimes)).
+  mk m.(mt) m.(blocks) ((cid, Some m.(mt))::m.(calltimes)) m.(fresh_bid).
 
 Definition callend (m:t) (cid:callid): t :=
-  mk m.(mt) m.(blocks) ((cid, None)::m.(calltimes)).
+  mk m.(mt) m.(blocks) ((cid, None)::m.(calltimes)) m.(fresh_bid).
 
 Definition calltime (m:t) (cid:callid): option time :=
   match (List.filter (fun i2 => Nat.eqb i2.(fst) cid) m.(calltimes)) with
