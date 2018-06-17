@@ -178,7 +178,7 @@ Structure t := mk
   }.
 
 (* Returns (start_ofs, size)s including all twin blocks. *)
-Definition P_size (mb:t):list (nat * nat) :=
+Definition P_ranges (mb:t):list (nat * nat) :=
   List.map (fun ofs => (ofs, mb.(n))) mb.(P).
 
 (* Returns integer address of the block. *)
@@ -186,7 +186,7 @@ Definition addr (mb:t): nat :=
   List.hd 0 mb.(P).
 
 (* Returns (start_ofs, size) of the using one. *)
-Definition P0_size (mb:t): nat * nat :=
+Definition P0_range (mb:t): nat * nat :=
   (addr mb, mb.(n)).
 
 
@@ -194,11 +194,11 @@ Structure wf (mb:t) := mkWf
   {
     wf_tcond: forall t (FREED:mb.(r).(snd) = Some t), mb.(r).(fst) < t;
     wf_clen: List.length mb.(c) = mb.(n);
-    wf_poslen: no_empty_range (P_size mb) = true;
+    wf_poslen: no_empty_range (P_ranges mb) = true;
     wf_align: forall p (HAS:List.In p mb.(P)), Nat.modulo p mb.(a) = 0;
     wf_inmem: forall p (HAS:List.In p mb.(P)), p + mb.(n) < MEMSZ;
     wf_notnull: forall p (HAS:List.In p mb.(P)), ~ (p = 0);
-    wf_disj: disjoint_ranges (P_size mb) = true;
+    wf_disj: disjoint_ranges (P_ranges mb) = true;
     wf_twin: List.length mb.(P) = TWINCNT
   }.
 
@@ -214,7 +214,7 @@ Definition inbounds (ofs:nat) (mb:t): bool :=
   Nat.ltb ofs mb.(n).
 
 Definition inbounds_abs (ofs':nat) (mb:t): bool :=
-  in_range ofs' (P0_size mb).
+  in_range ofs' (P0_range mb).
 
 (* offset, len *)
 Definition bytes (mb:t) (ofs len:nat): list (Byte.t) :=
@@ -241,10 +241,10 @@ Definition alive_blocks (m:t): list (blockid * MemBlock.t) :=
 (* Returns a list of allocated ranges (including twins).
    Each element has a form of (begin-index, length). *)
 Definition alive_P_ranges (m:t): list (nat * nat) :=
-  List.concat (List.map (fun b => MemBlock.P_size b.(snd)) (alive_blocks m)).
+  List.concat (List.map (fun b => MemBlock.P_ranges b.(snd)) (alive_blocks m)).
 
 Definition alive_P0_ranges (m:t): list (nat * nat) :=
-  List.map (fun x => MemBlock.P0_size x.(snd)) (alive_blocks m).
+  List.map (fun x => MemBlock.P0_range x.(snd)) (alive_blocks m).
 
 (* Returns true if range r never overlaps with other alive blocks,
    false otherwise. *)
@@ -339,13 +339,13 @@ Proof.
     + assumption.
 Qed.
 
-Lemma P_P0_size_lsubseq:
+Lemma P_P0_range_lsubseq:
   forall mb (HWF:MemBlock.wf mb),
-    lsubseq (MemBlock.P_size mb) ((MemBlock.P0_size mb)::nil).
+    lsubseq (MemBlock.P_ranges mb) ((MemBlock.P0_range mb)::nil).
 Proof.
   intros.
-  unfold MemBlock.P_size.
-  unfold MemBlock.P0_size.
+  unfold MemBlock.P_ranges.
+  unfold MemBlock.P0_range.
   destruct (MemBlock.P mb) as [| P0 Pt] eqn:HP1.
   { (* cannot be nil. *)
     assert (List.length (MemBlock.P mb) = 0).
@@ -393,7 +393,7 @@ Proof.
       rewrite H.
       apply lsubseq_append.
       {
-        apply P_P0_size_lsubseq.
+        apply P_P0_range_lsubseq.
         apply wf_blocks with (m := m) (i := newbid).
         rewrite HM.
         apply HWF.
@@ -489,6 +489,18 @@ Proof.
   simpl. reflexivity.
 Qed.
 
+(* Lemma: we can generate the result of alive_P0_ranges from alive_blocks. *)
+Lemma alive_blocks_P0_ranges:
+  forall (m:t),
+    List.map (fun mb => MemBlock.P0_range mb.(snd)) (alive_blocks m) =
+    alive_P0_ranges m.
+Proof.
+  intros.
+  unfold alive_P0_ranges.
+  unfold alive_blocks.
+  reflexivity.
+Qed.
+
 (* Theorem: inbounds_blocks_all permits permutation of I. *)
 Theorem inbounds_blocks_all_singleton:
   forall (m:t) (ofs1 ofs2:nat) l (HWF:wf m)
@@ -557,8 +569,29 @@ Proof.
     destruct HLEN_MBS1 as [mb2 HLEN_MBS1].
     destruct HLEN_RES1 as [P01 HLEN_RES1].
     destruct HLEN_RES1 as [P02 HLEN_RES1].
-    rewrite <- HINB.
-    rewrite HLEN_MBS1, HLEN_RES1.
+    assert (HP0 := alive_blocks_P0_ranges m).
+    assert (map (fun mb : blockid * MemBlock.t => MemBlock.P0_range (snd mb))
+                (P0s1, mbs1).(snd) = (P0s1, mbs1).(fst)).
+    {
+      eapply split_filter_combine_map.
+      apply HP0.
+      unfold disjoint_include2 in Heqres1.
+      rewrite <- HeqP0s. rewrite <- Heqmbs.
+      apply Heqres1.
+    }
+    rewrite HLEN_RES1 in H0.
+    rewrite HLEN_MBS1 in H0.
+    simpl in H0.
+    (* Okay, now show that two ranges:
+       MemBlock.P0_range (snd mb1),
+       MemBlock.P0_range (snd mb2) are disjoint, and
+       they include ofs1. *)
+    (* Then, we can use inrange2_disjoint to show
+       (b1 + l1 = b2 /\ i = b2) \/ (b2 + l2 = b1 /\ i = b1).
+       And then we show that for i' != i,
+       in_range i' (b1, l1) && in_range i' (b2, l2) = false,
+       using inrange2_false.
+    *)
     admit.
   }
   {

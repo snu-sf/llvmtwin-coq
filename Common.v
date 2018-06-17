@@ -63,6 +63,75 @@ Proof.
   assumption.
 Qed.
 
+(* Why do I need this? *)
+Lemma list_eq:
+  forall {X:Type} (a b:X) (c d:list X)
+    (HEQ:a = b)
+    (HEQ2:c = d),
+    a::c = b::d.
+Proof.
+  intros.
+  rewrite HEQ.
+  rewrite HEQ2.
+  reflexivity.
+Qed.
+
+(* If map f b = a,
+   and p = split (filter g (combine a b)),
+   map f p.snd = p.fst. *)
+Lemma split_filter_combine_map:
+  forall {X Y:Type} (a:list X) (b:list Y) p f g
+         (HMAP:List.map f b = a)
+         (HP:p = List.split (List.filter g (List.combine a b))),
+    List.map f p.(snd) = p.(fst).
+Proof.
+  intros.
+  remember (combine a b) as ab.
+  generalize dependent a.
+  generalize dependent b.
+  generalize dependent p.
+  induction ab as [| abh abt].
+  - intros. simpl in HP. rewrite HP. reflexivity.
+  - intros.
+    destruct (split (filter g abt)) as [abtl abtr] eqn:HS.
+    simpl in HP.
+    destruct a as [| ah at'].
+    { simpl in Heqab. inversion Heqab. }
+    destruct b as [| bh bt].
+    { simpl in Heqab. inversion Heqab. }
+    destruct (g abh).
+    + destruct abh as [abhl abhr].
+      simpl in Heqab.
+      inversion Heqab.
+      rewrite H0 in *. clear H0.
+      rewrite H1 in *. clear H1. clear Heqab.
+      simpl in HP.
+      rewrite HS in HP.
+      rewrite HP.
+      simpl.
+      simpl in HMAP.
+      inversion HMAP.
+      rewrite H0 in *. clear H0.
+      rewrite H1 in *. clear HMAP.
+      apply list_eq. reflexivity.
+      assert (abtr = snd (split (filter g abt))).
+      { rewrite HS. reflexivity. }
+      assert (abtl = fst (split (filter g abt))).
+      { rewrite HS. reflexivity. }
+      rewrite H. rewrite H0.
+      eapply IHabt.
+      * assumption.
+      * apply H1.
+      * assumption.
+    + apply IHabt with (b := bt) (a := at').
+      * rewrite HP. assumption.
+      * simpl in HMAP.
+        inversion HMAP. reflexivity.
+      * simpl in Heqab.
+        inversion Heqab.
+        reflexivity.
+Qed.
+
 Lemma In_map:
   forall {X Y:Type} (l:list X) (f:X -> Y) (y:Y)
          (HIN:List.In y (List.map f l)),
@@ -449,6 +518,25 @@ Proof.
   reflexivity.
 Qed.
 
+(* If ranges can be mapped from data,
+   the result of disjoint_include2 can be mapped to. *)
+Lemma disjoint_include2_rel {X:Type}:
+  forall rs (data:list X) i f
+         (HMAP:List.map f data = rs),
+    List.map f (snd (disjoint_include2 rs data i)) =
+    fst (disjoint_include2 rs data i).
+Proof.
+  intros.
+  remember (disjoint_include2 rs data i) as dj eqn:HDJ. 
+  simpl.
+  unfold disjoint_include2 in HDJ.
+  eapply split_filter_combine_map.
+  apply HMAP.
+  apply HDJ.
+Qed.
+
+(* Given (rs, data) = disjoint_include2 .... , 
+   length rs = length data. *)
 Lemma disjoint_include2_len2 {X:Type}:
   forall rs (data:list X) i,
     List.length (snd (disjoint_include2 rs data i)) <=
@@ -698,6 +786,52 @@ Proof.
      assumption.
 Qed.
 
+(* If (b1, l1) (b2, l2) are disjoint,
+   and i != b1 /\ i != b2,
+   then i cannot belong to both ranges. *) 
+Lemma inrange2_false:
+  forall b1 l1 b2 l2 i
+         (HDISJ:disjoint_ranges ((b1, l1)::(b2, l2)::nil) = true)
+         (HNOTBEG:~(i = b1 \/ i = b2)),
+    in_range i (b1,l1) && in_range i (b2, l2) = false.
+Proof.
+  intros.
+  simpl in HDISJ.
+  repeat (rewrite andb_true_r in HDISJ).
+  unfold disjoint_range in HDISJ.
+  rewrite orb_true_iff in HDISJ.
+  repeat (rewrite Nat.leb_le in HDISJ).
+  remember (in_range i (b1, l1)) as v1.
+  remember (in_range i (b2, l2)) as v2.
+  unfold in_range in *.
+  simpl in *.
+  destruct v1; destruct v2; try reflexivity.
+  {
+    symmetry in Heqv1.
+    symmetry in Heqv2.
+    rewrite andb_true_iff in *.
+    repeat (rewrite Nat.leb_le in *).
+    destruct HDISJ.
+    - assert (i = b2).
+      {
+        apply Nat.le_antisymm.
+        - apply Nat.le_trans with (m := b1 + l1).
+          apply Heqv1. apply H.
+        - apply Heqv2.
+      }
+      exfalso.
+      apply HNOTBEG. right. assumption.
+    - assert (i = b1).
+      {
+        apply Nat.le_antisymm.
+        - apply Nat.le_trans with (m := b2 + l2).
+          apply Heqv2. apply H.
+        - apply Heqv1.
+      }
+      exfalso.
+      apply HNOTBEG. left. assumption.
+  }
+Qed.
 
 (**************************************************
              Number <-> bits (list bool)
