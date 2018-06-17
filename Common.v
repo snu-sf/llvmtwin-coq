@@ -7,6 +7,52 @@ Require Import Sumbool.
 
 (* Some helpful lemmas regarding List *)
 
+(* If List.length l = 1, l = h::nil. *)
+Lemma list_len1:
+  forall {X:Type} (l:list X)
+         (H:List.length l = 1),
+    exists h, l = h::nil.
+Proof.
+  intros.
+  destruct l.
+  - simpl in H. inversion H.
+  - destruct l.
+    + eexists. reflexivity.
+    + simpl in H. inversion H.
+Qed.
+
+(* If List.length l = 2, l = h1::h2::nil. *)
+Lemma list_len2:
+  forall {X:Type} (l:list X)
+         (H:List.length l = 2),
+    exists h1 h2, l = h1::h2::nil.
+Proof.
+  intros.
+  destruct l.
+  - simpl in H. inversion H.
+  - destruct l.
+    + simpl in H. inversion H.
+    + destruct l.
+      * eexists. eexists. reflexivity.
+      * simpl in H. inversion H.
+Qed.
+
+Lemma filter_length:
+  forall {X:Type} (l:list X) f,
+    List.length (List.filter f l) <= List.length l.
+Proof.
+  intros.
+  induction l.
+  - simpl. auto.
+  - simpl.
+    destruct (f a).
+    + simpl.
+      apply Le.le_n_S.
+      assumption.
+    + apply le_S.
+      assumption.
+Qed.
+
 (* the result of List.filter satisfies forallb. *)
 Lemma filter_forallb: forall {X:Type} (l:list X) f,
     List.forallb f (List.filter f l) = true.
@@ -35,6 +81,7 @@ Proof.
     split. eassumption. simpl. right. assumption.
 Qed.
 
+
 (* Function version of List.incl *)
 
 Definition list_incl {X:Type}
@@ -47,7 +94,10 @@ Definition list_incl {X:Type}
                      | right _ => false
                      end) l2) l1.
 
-(* Definition of list subseq. *)
+
+(*******************************************
+      Subsequence of a list.
+ *******************************************)
 
 Inductive lsubseq {X:Type}: list X -> list X -> Prop :=
 | ss_nil: forall (l:list X), lsubseq l nil
@@ -61,6 +111,43 @@ Proof.
   intros.
   induction l. constructor. constructor. assumption.
 Qed.
+
+Lemma lsubseq_inv:
+  forall {X:Type} (l1 l2:list X) (x:X)
+         (H:lsubseq l1 (x::l2)),
+    lsubseq l1 l2.
+Proof.
+  intros.
+  induction l1.
+  - inversion H.
+  - inversion H.
+    + apply ss_elon. assumption.
+    + apply ss_elon. apply IHl1.
+      assumption.
+Qed.
+
+Lemma lsubseq_trans:
+  forall {X:Type} (l1 l2 l3:list X)
+         (H1:lsubseq l1 l2)
+         (H2:lsubseq l2 l3),
+    lsubseq l1 l3.
+Proof.
+  intros.
+  generalize dependent l3.
+  induction H1 as [| x l1' l2' | x l1' l2'].
+  - intros. inversion H2. constructor.
+  - intros.
+    inversion H2 as [| y l2'' l3' | y l2'' l3'].
+    + constructor.
+    + constructor. apply IHlsubseq. assumption.
+    + apply ss_elon.
+      apply IHlsubseq.
+      assumption.
+  - intros.
+    apply ss_elon.
+    apply IHlsubseq.
+    assumption.
+Qed.    
 
 Lemma lsubseq_In:
   forall {X:Type} (l l':list X) (x:X)
@@ -302,6 +389,53 @@ Proof.
         reflexivity. assumption.
 Qed.
 
+Lemma disjoint_include2_lsubseq {X:Type}:
+  forall (l l': list X) rs rs' ofs
+         (HDISJ: disjoint_include2 rs l ofs = (rs', l')),
+    lsubseq rs rs' /\ lsubseq l l'.
+Proof.
+  intros.
+  unfold disjoint_include2 in HDISJ.
+  remember (combine rs l) as lcomb.
+  generalize dependent l.
+  generalize dependent l'.
+  generalize dependent rs.
+  generalize dependent rs'.
+  induction lcomb.
+  {
+    intros.
+    simpl in HDISJ.
+    inversion HDISJ.
+    split. constructor. constructor.
+  }
+  {
+    intros.
+    destruct rs as [|rsh rst];
+    destruct l as [|lh lt];
+    simpl in Heqlcomb;
+    try inversion Heqlcomb.
+    clear Heqlcomb.
+    rewrite H0 in HDISJ.
+    simpl in HDISJ.
+    destruct (in_range ofs rsh) eqn:HINR.
+    - simpl in HDISJ.
+      remember (split (filter (fun x : nat * nat * X => in_range ofs (fst x)) lcomb)) as l0.
+      destruct l0 as [rs'' l''].
+      inversion HDISJ.
+      destruct IHlcomb with (rs' := rs'') (rs := rst) (l' := l'') (l := lt).
+      + reflexivity.
+      + assumption.
+      + split.
+        * constructor. assumption.
+        * constructor. assumption.
+    - destruct IHlcomb with (rs := rst) (rs' := rs') (l := lt) (l' := l').
+      + assumption.
+      + assumption.
+      + split. constructor. assumption.
+        constructor. assumption.
+  }
+Qed.
+
 Lemma disjoint_include2_len {X:Type}:
   forall rs (data:list X) i
          (HLEN:List.length rs = List.length data),
@@ -314,6 +448,21 @@ Proof.
   rewrite split_length_r.
   reflexivity.
 Qed.
+
+Lemma disjoint_include2_len2 {X:Type}:
+  forall rs (data:list X) i,
+    List.length (snd (disjoint_include2 rs data i)) <=
+    List.length rs.
+Proof.
+  intros.
+  unfold disjoint_include2.
+  rewrite split_length_r.
+  apply Nat.le_trans with (List.length (combine rs data)).
+  - apply filter_length.
+  - rewrite combine_length.
+    apply Nat.le_min_l.
+Qed.
+  
 
 (* Lemma: If there are two ranges (b1, l1), (b2, l2),
    and they include some natural number i,

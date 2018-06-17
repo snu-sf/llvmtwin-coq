@@ -207,10 +207,13 @@ Definition alive (mb:t): bool :=
   | None => true | Some _ => false
   end.
 
-Definition inbounds (mb:t) (ofs:nat): bool :=
+Definition alive_before (the_time:nat) (mb:t): bool :=
+  Nat.ltb mb.(r).(fst) the_time.
+
+Definition inbounds (ofs:nat) (mb:t): bool :=
   Nat.ltb ofs mb.(n).
 
-Definition inbounds_abs (mb:t) (ofs':nat): bool :=
+Definition inbounds_abs (ofs':nat) (mb:t): bool :=
   in_range ofs' (P0_size mb).
 
 (* offset, len *)
@@ -249,8 +252,19 @@ Definition allocatable (m:t) (r:list (nat * nat)):bool :=
   disjoint_ranges (r++(alive_P_ranges m)).
 
 (* Returns blocks which are alive & has abs_ofs as inbounds *)
-Definition inbounds_blocks (m:t) (abs_ofs:nat): list (blockid * MemBlock.t) :=
+Definition inbounds_blocks (m:t) (abs_ofs:nat)
+: list (blockid * MemBlock.t) :=
   snd (disjoint_include2 (alive_P0_ranges m) (alive_blocks m) abs_ofs).
+
+(* REturns blocks which are alive & has abs_ofss as inbounds. *)
+Definition inbounds_blocks_all (m:t) (abs_ofss:list nat)
+: list (blockid * MemBlock.t) :=
+  snd
+    (List.fold_left
+       (fun blks_and_ranges abs_ofs =>
+          disjoint_include2 blks_and_ranges.(fst) blks_and_ranges.(snd) abs_ofs)
+       abs_ofss
+       ((alive_P0_ranges m), (alive_blocks m))).
 
 (* Well-formedness of memory. *)
 Structure wf (m:t) :=
@@ -397,7 +411,9 @@ Proof.
 Qed.
 
 
-Lemma inbounds_blocks_atmost_2:
+(* Theorem: there are at most 2 alive blocks
+   which have abs_ofs as inbounds. *)
+Theorem inbounds_blocks_atmost_2:
   forall (m:t) abs_ofs l
          (HWF:wf m)
          (HINB:inbounds_blocks m abs_ofs = l),
@@ -439,6 +455,123 @@ Proof.
   - unfold alive_P0_ranges.
     rewrite map_length. reflexivity.
 Qed.
+
+Lemma inbounds_blocks_lsubseq:
+  forall (m:t) abs_ofs l
+         (HINB:inbounds_blocks m abs_ofs = l),
+    lsubseq m.(blocks) l.
+Proof.
+  intros.
+  unfold inbounds_blocks in HINB.
+  apply lsubseq_trans with (l2 := alive_blocks m).
+  - apply blocks_alive_blocks_lsubseq.
+  - destruct (disjoint_include2 (alive_P0_ranges m) (alive_blocks m) abs_ofs) eqn:Hls.
+    assert (lsubseq (alive_P0_ranges m) l0 /\
+            lsubseq (alive_blocks m) l1).
+    { eapply disjoint_include2_lsubseq.
+      eassumption.
+    }
+    destruct H.
+    simpl in HINB.
+    rewrite HINB in *.
+    assumption.
+Qed.
+
+(* Lemma: inbounds_blocks ofs is equivalent to
+   inbounds_blocks_all [ofs]. *)
+Lemma inbounds_blocks_inbounds_blocks_all:
+  forall (m:t) abs_ofs,
+    inbounds_blocks m abs_ofs = inbounds_blocks_all m (abs_ofs::nil).
+Proof.
+  intros.
+  unfold inbounds_blocks.
+  unfold inbounds_blocks_all.
+  simpl. reflexivity.
+Qed.
+
+(* Theorem: inbounds_blocks_all permits permutation of I. *)
+Theorem inbounds_blocks_all_singleton:
+  forall (m:t) (ofs1 ofs2:nat) l (HWF:wf m)
+         (HNEQ:~ (ofs1 = ofs2))
+         (HINB:inbounds_blocks_all m (ofs1::ofs2::nil) = l),
+    List.length l < 2.
+Proof.
+  intros.
+  unfold inbounds_blocks_all in HINB.
+  remember (alive_blocks m) as mbs.
+  remember (alive_P0_ranges m) as P0s.
+  assert (HLEN:List.length (alive_blocks m) = List.length (alive_P0_ranges m)).
+  {
+    unfold alive_P0_ranges.
+    rewrite map_length.
+    reflexivity.
+  }
+  simpl in HINB.
+  remember (disjoint_include2 P0s mbs ofs1) as res1.
+  assert (HLEN_RES1: List.length res1.(fst) = List.length res1.(snd)).
+  {
+    rewrite Heqres1.
+    eapply disjoint_include2_len.
+    congruence.
+  }
+  assert (List.length res1.(snd) < 3).
+  {
+    eapply inbounds_blocks_atmost_2.
+    eassumption.
+    rewrite inbounds_blocks_inbounds_blocks_all.
+    unfold inbounds_blocks_all.
+    simpl.
+    rewrite <- HeqP0s.
+    rewrite <- Heqmbs.
+    rewrite Heqres1.
+    reflexivity.
+  }
+  (* Okay, we showed that inbounds_blocks_all m (ofs1::nil) has
+     less than 3 blocks. *)
+  destruct res1 as [P0s1 mbs1].
+  simpl in *.
+  destruct (length mbs1) eqn:HLEN_MBS1.
+  { (* length is 0. *)
+    rewrite length_zero_iff_nil in HLEN_MBS1.
+    rewrite length_zero_iff_nil in HLEN_RES1.
+    rewrite HLEN_MBS1 in *.
+    rewrite HLEN_RES1 in *.
+    simpl in HINB. rewrite <- HINB. simpl. auto.
+  }
+  destruct n.
+  { (* length is 1. *)
+    apply list_len1 in HLEN_MBS1.
+    apply list_len1 in HLEN_RES1.
+    destruct HLEN_MBS1 as [h1 HLEN_MBS1].
+    destruct HLEN_RES1 as [h2 HLEN_RES1].
+    rewrite HLEN_MBS1, HLEN_RES1 in HINB.
+    rewrite <- HINB.
+    apply Lt.le_lt_n_Sm.
+    apply disjoint_include2_len2.
+  }
+  destruct n.
+  { (* length is 2. *)
+    apply list_len2 in HLEN_MBS1.
+    apply list_len2 in HLEN_RES1.
+    destruct HLEN_MBS1 as [mb1 HLEN_MBS1].
+    destruct HLEN_MBS1 as [mb2 HLEN_MBS1].
+    destruct HLEN_RES1 as [P01 HLEN_RES1].
+    destruct HLEN_RES1 as [P02 HLEN_RES1].
+    rewrite <- HINB.
+    rewrite HLEN_MBS1, HLEN_RES1.
+    admit.
+  }
+  {
+    SearchAbout (~ _ < _).
+    exfalso.
+    eapply Lt.le_not_lt.
+    apply Nat.le_add_r.
+    assert (S (S (S n)) =  3+n). (* Why should I do this? :( *)
+    reflexivity.
+    rewrite H0 in H.
+    apply H.
+  }
+Admitted.
 
 End Memory.
 
