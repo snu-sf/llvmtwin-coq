@@ -4,6 +4,37 @@ Require Import Bool.
 Require Import Coq.Arith.PeanoNat.
 Require Import Sumbool.
 
+
+(* Some helpful lemmas regarding List *)
+
+(* the result of List.filter satisfies forallb. *)
+Lemma filter_forallb: forall {X:Type} (l:list X) f,
+    List.forallb f (List.filter f l) = true.
+Proof.
+  intros.
+  induction l. reflexivity. simpl.
+  destruct (f a) eqn:H. simpl. rewrite H. rewrite IHl. auto.
+  assumption.
+Qed.
+
+Lemma In_map:
+  forall {X Y:Type} (l:list X) (f:X -> Y) (y:Y)
+         (HIN:List.In y (List.map f l)),
+    exists (x:X), f x = y /\ List.In x l.
+Proof.
+  induction l.
+  intros. simpl in HIN. inversion HIN.
+  intros.
+  simpl in HIN.
+  destruct HIN.
+  - eexists. split. eassumption. constructor. reflexivity.
+  - apply IHl in H.
+    destruct H as [xH H].
+    destruct H as [H1 H2].
+    eexists.
+    split. eassumption. simpl. right. assumption.
+Qed.
+
 (* Function version of List.incl *)
 
 Definition list_incl {X:Type}
@@ -29,6 +60,22 @@ Lemma lsubseq_refl: forall {X:Type} (l:list X), lsubseq l l.
 Proof.
   intros.
   induction l. constructor. constructor. assumption.
+Qed.
+
+Lemma lsubseq_In:
+  forall {X:Type} (l l':list X) (x:X)
+         (HIN:List.In x l')
+         (HLSS:lsubseq l l'),
+    List.In x l.
+Proof.
+  intros.
+  induction HLSS.
+  - simpl in HIN. inversion HIN.
+  - simpl in HIN.
+    destruct HIN.
+    + rewrite H. simpl. auto.
+    + simpl. right. apply IHHLSS. assumption.
+  - simpl. right. apply IHHLSS. assumption.
 Qed.
 
 Lemma lsubseq_filter: forall {X:Type} (l:list X) f,
@@ -70,15 +117,6 @@ Proof.
     destruct H. apply IHHLSS. assumption.
 Qed.
 
-(* the result of List.filter satisfies forallb. *)
-Lemma filter_forallb: forall {X:Type} (l:list X) f,
-    List.forallb f (List.filter f l) = true.
-Proof.
-  intros.
-  induction l. reflexivity. simpl.
-  destruct (f a) eqn:H. simpl. rewrite H. rewrite IHl. auto.
-  assumption.
-Qed.
 
 (*******************************************
       Definition of range & disjointness.
@@ -138,6 +176,48 @@ Proof.
   split.
   - rewrite HEQ; apply Gt.gt_not_le; apply Nat.lt_add_pos_r; auto.
   - rewrite <- HEQ; apply Gt.gt_not_le; apply Nat.lt_add_pos_r; auto.
+Qed.
+
+(* Lemma: no_empty_range still holds for appended lists *)
+Lemma no_empty_range_append:
+  forall l1 l2 (H1:no_empty_range l1 = true) (H2:no_empty_range l2 = true),
+    no_empty_range (l1++l2) = true.
+Proof.
+  intros.
+  induction l1.
+  - simpl. assumption.
+  - simpl in H1.
+    simpl. rewrite andb_true_iff in *.
+    destruct H1.
+    split. assumption. apply IHl1. assumption.
+Qed.
+
+(* Lemma: no_empty_range holds for subsequences *)
+Lemma no_empty_range_lsubseq:
+  forall l1 l2 (H1:no_empty_range l1 = true) (HLSS:lsubseq l1 l2),
+    no_empty_range l2 = true.
+Proof.
+  intros.
+  induction HLSS. reflexivity.
+  simpl. simpl in H1. rewrite andb_true_iff in *.
+  destruct H1. split. assumption. apply IHHLSS. assumption.
+  apply IHHLSS. simpl in H1. rewrite andb_true_iff in *.
+  destruct H1. assumption.
+Qed.
+
+(* Lemma: no_empty_range holds for concatenated lists *)
+Lemma no_empty_range_concat:
+  forall (ll:list (list (nat * nat)))
+         (HALL:forall l (HIN:List.In l ll), no_empty_range l = true),
+    no_empty_range (List.concat ll) = true.
+Proof.
+  intros.
+  induction ll.
+  - reflexivity.
+  - simpl. apply no_empty_range_append.
+    apply HALL. constructor. reflexivity.
+    apply IHll. intros. apply HALL.
+    simpl. right. assumption.
 Qed.
 
 (* Lemma: the subsequence of disjoint ranges is also disjoint. *)

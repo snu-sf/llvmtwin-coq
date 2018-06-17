@@ -194,7 +194,7 @@ Structure wf (mb:t) := mkWf
   {
     wf_tcond: forall t (FREED:mb.(r).(snd) = Some t), mb.(r).(fst) < t;
     wf_clen: List.length mb.(c) = mb.(n);
-    wf_poslen: mb.(n) <> 0;
+    wf_poslen: no_empty_range (P_size mb) = true;
     wf_align: forall p (HAS:List.In p mb.(P)), Nat.modulo p mb.(a) = 0;
     wf_inmem: forall p (HAS:List.In p mb.(P)), p + mb.(n) < MEMSZ;
     wf_notnull: forall p (HAS:List.In p mb.(P)), ~ (p = 0);
@@ -344,7 +344,18 @@ Proof.
   constructor.
 Qed.
 
-Lemma alive_P_P0_ranges:
+Lemma blocks_alive_blocks_lsubseq:
+  forall (m:t),
+    lsubseq (blocks m) (alive_blocks m).
+Proof.
+  intros.
+  destruct m.
+  unfold alive_blocks.
+  simpl.
+  apply lsubseq_filter.
+Qed.
+
+Lemma alive_P_P0_ranges_lsubseq:
   forall (m:t) (HWF:wf m),
     lsubseq (alive_P_ranges m) (alive_P0_ranges m).
 Proof.
@@ -385,7 +396,7 @@ Proof.
       apply HWF. reflexivity.
 Qed.
 
-(*
+
 Lemma inbounds_blocks_atmost_2:
   forall (m:t) abs_ofs l
          (HWF:wf m)
@@ -397,8 +408,37 @@ Proof.
   rewrite <- HINB.
   rewrite <- disjoint_include2_len.
   rewrite disjoint_include_include2.
-  eapply disjoint_includes_atmost_2.
-*)
+  eapply disjoint_includes_atmost_2 with (rs := (alive_P0_ranges m)).
+  - (* disjoint_ranges (alive_P0_ranges m) is true. *)
+    apply disjoint_lsubseq_disjoint with (rs := alive_P_ranges m).
+    (* disjoint_ranges (alive_P_ranges m) is true. *)
+    apply wf_disjoint. assumption.
+    apply alive_P_P0_ranges_lsubseq.
+    assumption.
+  - reflexivity.
+  - apply no_empty_range_lsubseq with (l1 := alive_P_ranges m).
+    unfold alive_P_ranges.
+    apply no_empty_range_concat.
+    intros.
+    apply In_map in HIN.
+    destruct HIN as [x HIN].
+    destruct HIN as [HPSZ HIN].
+    apply lsubseq_In with (l1 := blocks m) in HIN .
+    + assert (MemBlock.wf x.(snd)).
+      { apply wf_blocks with (m := m) (i := x.(fst)).
+        assumption.
+        destruct x; assumption.
+      }
+      rewrite <- HPSZ.
+      apply MemBlock.wf_poslen. assumption.
+    + apply blocks_alive_blocks_lsubseq.
+    + apply alive_P_P0_ranges_lsubseq.
+      assumption.
+  - unfold alive_P0_ranges.
+    rewrite map_length. reflexivity.
+  - unfold alive_P0_ranges.
+    rewrite map_length. reflexivity.
+Qed.
 
 End Memory.
 
