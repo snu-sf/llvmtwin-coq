@@ -1,5 +1,5 @@
 Require Import List.
-Require Import Nat.
+Require Import BinPos.
 
 Module Ir.
 
@@ -8,11 +8,10 @@ Inductive ty :=
 | ptrty: ty -> ty.
 
 Inductive const :=
-| cnum: ty -> nat -> const
+| cnum: ty -> N -> const
 | cnullptr: ty -> const
 | cpoison: ty -> const
-| cglb: nat -> const
-| cvec: list const -> const.
+| cglb: nat -> const.
 
 Definition reg := nat.
 
@@ -23,17 +22,18 @@ Inductive op :=
 Inductive inst :=
 | iadd: reg -> ty -> op -> op -> inst (* lhs, retty, op1, op2 *)
 | isub: reg -> ty -> op -> op -> inst
-| ipsub: reg -> ty -> op -> op -> inst (* lhs, retty, ptr1, ptr2 *)
+| ipsub: reg -> ty -> ty -> op -> op -> inst (* lhs, retty, ptrty, ptr1, ptr2 *)
 | igep: reg -> ty -> op -> op -> bool -> inst (* lhs, retty, ptr, idx, inbounds *)
-| iload: reg -> ty -> op -> nat -> inst (* retty, ptr, access-size *)
-| istore: ty -> op -> op -> nat -> inst (* valty, val, ptr, access-size *)
-| imalloc: nat -> inst (* block size *)
+                                           (* For simplicity, retty equals operand ty *)
+| iload: reg -> ty -> op -> inst (* retty, retty, ptr *)
+| istore: ty -> op -> op -> inst (* valty, val, ptr *)
+| imalloc: reg -> nat -> inst (* block size *)
 | ifree: op -> inst (* pointer *)
 | iptrtoint: reg -> op -> ty -> inst (* lhs, ptr, retty *)
 | iinttoptr: reg -> op -> ty -> inst (* rhs, int, retty *)
 | ievent: op -> inst
-| iicmp_ptreq: reg -> op -> op -> inst (* lhs, ptr1, ptr2 *)
-| iicmp_ptrule: reg -> op -> op -> inst (* lhs, ptr1, ptr2 *)
+| iicmp_ptreq: reg -> ty -> op -> op -> inst (* lhs, opty, ptr1, ptr2 *)
+| iicmp_ptrule: reg -> ty -> op -> op -> inst (* lhs, ptr1, ptr2 *)
 .
 
 Inductive terminator :=
