@@ -37,6 +37,64 @@ Proof.
       * simpl in H. inversion H.
 Qed.
 
+(* If the result of List.combine is nil, and
+   their length is the same. input is both nil *)
+Lemma combine_length_nil:
+  forall {X Y:Type} (l1: list X) (l2:list Y)
+         (HLEN:List.length l1 = List.length l2)
+         (HNIL:List.combine l1 l2 = nil),
+    l1 = nil /\ l2 = nil.
+Proof.
+  intros.
+  destruct l1; destruct l2.
+  - split; reflexivity.
+  - simpl in HLEN. inversion HLEN.
+  - simpl in HLEN. inversion HLEN.
+  - simpl in HNIL. inversion HNIL.
+Qed.
+
+Lemma combine_length_some:
+  forall {X Y:Type} (l1: list X) (l2:list Y) a t
+         (HLEN:List.length l1 = List.length l2)
+         (HSOME:List.combine l1 l2 = a::t),
+    l1 = (a.(fst))::((List.split t).(fst))  /\
+    l2 = (a.(snd))::((List.split t).(snd)).
+Proof.
+  intros.
+  assert (split (combine l1 l2) = (l1, l2)).
+  { apply combine_split. assumption. }
+  destruct l1; destruct l2.
+  - simpl in HSOME; inversion HSOME. 
+  - simpl in HLEN; inversion HLEN.
+  - simpl in HLEN; inversion HLEN.
+  - simpl in HSOME.
+    inversion HSOME.
+    simpl in H.
+    remember (split (combine l1 l2)) as q.
+    destruct q.
+    inversion H.
+    simpl.
+    split; reflexivity.
+Qed.
+
+(* l = combine (fst (split l), snd (split l)). *)
+Lemma combine_fst_snd_split:
+  forall {X Y:Type} (l:list (X*Y)),
+    l = List.combine (fst (List.split l)) (snd (List.split l)).
+Proof.
+  intros.
+  induction l.
+  - reflexivity.
+  - destruct a.
+    remember (split l) as p.
+    simpl.
+    rewrite <- Heqp.
+    destruct p.
+    simpl. rewrite IHl.
+    reflexivity.
+Qed.
+
+(* Filtered list is shorter than the original list. *)
 Lemma filter_length:
   forall {X:Type} (l:list X) f,
     List.length (List.filter f l) <= List.length l.
@@ -234,6 +292,63 @@ Proof.
   - simpl. right. apply IHHLSS. assumption.
 Qed.
 
+
+(* Lemma: if length if output is larger than input,
+   lsubseq does not hold. *)
+Lemma lsubseq_exceed:
+  forall {X:Type} (l l':list X)
+         (HLEN:List.length l' > List.length l),
+    ~ lsubseq l l'.
+Proof.
+  intros.
+  intros H.
+  induction H.
+  - simpl in HLEN.
+    destruct (length l).
+    inversion HLEN. inversion HLEN.
+  - simpl in HLEN.
+    apply Gt.gt_S_n in HLEN.
+    apply IHlsubseq. assumption.
+  - simpl in HLEN.
+    apply IHlsubseq.
+    apply Gt.gt_trans with (m := S (length l1)).
+    assumption.
+    constructor.
+Qed.
+
+(* Lemma: if length of input is same as output,
+   the input equals the output. *)
+Lemma lsubseq_full:
+  forall {X:Type} (l l':list X)
+         (H:lsubseq l l')
+         (HLEN:List.length l = List.length l'),
+    l = l'.
+Proof.
+  intros X l.
+  induction l.
+  - intros.
+    simpl in HLEN. symmetry in HLEN. rewrite length_zero_iff_nil in HLEN.
+    congruence.
+  - intros.
+    destruct l'.
+    simpl in HLEN. inversion HLEN.
+    simpl in HLEN. inversion HLEN.
+    inversion H.
+    + rewrite IHl with (l' := l').
+      reflexivity.
+      assumption.
+      assumption.
+    + exfalso.
+      eapply lsubseq_exceed.
+      assert (length (x::l') > length l').
+      { simpl. constructor. }
+      apply H5.
+      rewrite IHl with (l' := l') in H4.
+      assumption.
+      eapply lsubseq_inv. eassumption.
+      assumption.
+Qed.
+
 Lemma lsubseq_filter: forall {X:Type} (l:list X) f,
     lsubseq l (List.filter f l).
 Proof.
@@ -254,6 +369,88 @@ Proof.
     induction l. assumption.
     simpl. constructor. assumption.
   - simpl. constructor. assumption.
+  - simpl. constructor. assumption.
+Qed.
+
+Lemma lsubseq_combine:
+  forall {X Y:Type} (a1 a2:list X) (b1 b2:list Y)
+         (HLEN1:List.length a1 = List.length b1)
+         (HLEN2:List.length a2 = List.length b2)
+         (HSS:lsubseq (List.combine a1 b1) (List.combine a2 b2)),
+    lsubseq a1 a2 /\ lsubseq b1 b2.
+Proof.
+  intros.
+  remember (combine a1 b1) as c1.
+  remember (combine a2 b2) as c2.
+  generalize dependent a1.
+  generalize dependent a2.
+  generalize dependent b1.
+  generalize dependent b2.
+  induction HSS.
+  - intros.
+    assert (a2 = nil /\ b2 = nil).
+    { apply combine_length_nil.
+      assumption. congruence. }
+    destruct H. rewrite H in *. rewrite H0 in *.
+    split; constructor.
+  - intros.
+    symmetry in Heqc1, Heqc2.
+    assert (H1 := combine_length_some a1 b1 x l1 HLEN1 Heqc1).
+    assert (H2 := combine_length_some a2 b2 x l2 HLEN2 Heqc2).
+    destruct H1 as [H11 H12].
+    destruct H2 as [H21 H22].
+    rewrite H11, H12, H21, H22.
+    assert (HH:lsubseq (fst (split l1)) (fst (split l2)) /\
+               lsubseq (snd (split l1)) (snd (split l2)) ->
+               lsubseq (fst x :: fst (split l1)) (fst x :: fst (split l2)) /\
+               lsubseq (snd x :: snd (split l1)) (snd x :: snd (split l2))).
+    { intros.
+      destruct H.
+      split; constructor; assumption.
+    }
+    apply HH. clear HH.
+    apply IHHSS.
+    + rewrite H21 in HLEN2. rewrite H22 in HLEN2.
+      simpl in HLEN2. apply Nat.succ_inj. assumption.
+    + rewrite H21, H22 in Heqc2.
+      simpl in Heqc2. inversion Heqc2. rewrite H1. congruence.
+    + rewrite H11 in HLEN1. rewrite H12 in HLEN1.
+      simpl in HLEN1. congruence.
+    + rewrite H11, H12 in Heqc1.
+      simpl in Heqc1. inversion Heqc1. rewrite H1. congruence.
+  - intros.
+    symmetry in Heqc1.
+    assert (H1 := combine_length_some a1 b1 x l1 HLEN1 Heqc1).
+    assert (HH:lsubseq (fst (split l1)) a2 /\
+               lsubseq (snd (split l1)) b2 ->
+               lsubseq (fst x :: fst (split l1)) a2 /\
+               lsubseq (snd x :: snd (split l1)) b2).
+    { intros.
+      destruct H.
+      split; constructor; assumption.
+    }
+    destruct H1 as [H11 H12].
+    rewrite H11, H12.
+    apply HH. clear HH.
+    apply IHHSS.
+    + assumption.
+    + congruence.
+    + rewrite H11, H12 in HLEN1.
+      simpl in HLEN1. apply Nat.succ_inj. assumption.
+    + apply combine_fst_snd_split.
+Qed.
+
+Lemma lsubseq_len:
+  forall {X:Type} (l l':list X)
+         (HLSS:lsubseq l l'),
+    List.length l' <= List.length l.
+Proof.
+  intros.
+  induction HLSS.
+  - simpl.
+    apply Nat.le_0_l.
+  - simpl.
+    apply le_n_S. assumption.
   - simpl. constructor. assumption.
 Qed.
 
@@ -426,6 +623,25 @@ Proof.
   intros. unfold disjoint_include. apply lsubseq_filter.
 Qed.
 
+(* Lemma: if lsubseq l1 l2, lsubseq (disjoint_include l1 i)
+   (disjoint_include l2 i). *)
+Lemma disjoint_include_lsubseq2:
+  forall rs1 rs2 i
+         (H:lsubseq rs1 rs2),
+    lsubseq (disjoint_include rs1 i) (disjoint_include rs2 i).
+Proof.
+  intros.
+  induction H.
+  - simpl. constructor.
+  - simpl.
+    destruct (in_range i x).
+    constructor. assumption.
+    assumption.
+  - simpl.
+    destruct (in_range i x).
+    constructor. assumption. assumption.
+Qed.
+
 (* Lemma: (disjoint_include2 rs data i).fst = disjoint_include rs i *)
 Lemma disjoint_include_include2 {X:Type} :
   forall rs (data:list X) i
@@ -458,10 +674,23 @@ Proof.
         reflexivity. assumption.
 Qed.
 
+(* Lemma: the result of disjoint_include all satisfies in_range. *)
+Lemma disjoint_include_inrange:
+  forall rs i rs'
+         (HIN:rs' = disjoint_include rs i),
+    List.forallb (in_range i) rs' = true.
+Proof.
+  intros.
+  unfold disjoint_include in HIN.
+  rewrite HIN.
+  apply filter_forallb.
+Qed.
+
+(* Lemma: the result of disjoint_include2 is subsequence of the input. *)
 Lemma disjoint_include2_lsubseq {X:Type}:
   forall (l l': list X) rs rs' ofs
          (HDISJ: disjoint_include2 rs l ofs = (rs', l')),
-    lsubseq rs rs' /\ lsubseq l l'.
+    lsubseq (List.combine rs l) (List.combine rs' l').
 Proof.
   intros.
   unfold disjoint_include2 in HDISJ.
@@ -474,8 +703,7 @@ Proof.
   {
     intros.
     simpl in HDISJ.
-    inversion HDISJ.
-    split. constructor. constructor.
+    inversion HDISJ. constructor.
   }
   {
     intros.
@@ -490,21 +718,151 @@ Proof.
     - simpl in HDISJ.
       remember (split (filter (fun x : nat * nat * X => in_range ofs (fst x)) lcomb)) as l0.
       destruct l0 as [rs'' l''].
-      inversion HDISJ.
-      destruct IHlcomb with (rs' := rs'') (rs := rst) (l' := l'') (l := lt).
-      + reflexivity.
-      + assumption.
-      + split.
-        * constructor. assumption.
-        * constructor. assumption.
-    - destruct IHlcomb with (rs := rst) (rs' := rs') (l := lt) (l' := l').
-      + assumption.
-      + assumption.
-      + split. constructor. assumption.
-        constructor. assumption.
+      inversion HDISJ. 
+      simpl.
+      apply ss_cons.
+      rewrite <- H1.
+      eapply IHlcomb. reflexivity. eassumption.
+    - apply ss_elon.
+      rewrite <- H1.
+      eapply IHlcomb.
+      assumption. eassumption.
   }
 Qed.
 
+(* Lemma: If the inputs of two disjoint_include2 calls have subsequence relation.
+   so do their outputs. *)
+Lemma disjoint_include2_lsubseq2 {X:Type}:
+  forall rs1 rs1' rs2 rs2' (data1 data1' data2 data2':list X) i
+         (HLEN1:List.length rs1 = List.length data1)
+         (HLEN2:List.length rs2 = List.length data2)
+         (H:lsubseq (List.combine rs1 data1) (List.combine rs2 data2))
+         (H1: (rs1', data1') = disjoint_include2 rs1 data1 i)
+         (H2: (rs2', data2') = disjoint_include2 rs2 data2 i),
+    lsubseq (List.combine rs1' data1') (List.combine rs2' data2').
+Proof.
+  intros.
+  generalize dependent rs1'.
+  generalize dependent data1'.
+  generalize dependent rs2'.
+  generalize dependent data2'.
+  remember (combine rs1 data1) as rd1.
+  remember (combine rs2 data2) as rd2.
+  generalize dependent data1.
+  generalize dependent rs1.
+  generalize dependent data2.
+  generalize dependent rs2.
+  induction H. (* lsubseq rs1 rs2 *)
+  - intros.
+    assert (rs2 = nil /\ data2 = nil).
+    { apply combine_length_nil. assumption. congruence. }
+    destruct H.
+    rewrite H in *. rewrite H0 in *.
+    intros.
+    unfold disjoint_include2 in H2. simpl in H2.
+    inversion H2. simpl. constructor.
+  - intros.
+    assert (rs1 = fst x :: fst (split l1) /\
+            data1 = snd x :: snd (split l1)).
+    { apply combine_length_some.
+      assumption. congruence.
+    }
+    assert (rs2 = fst x :: fst (split l2) /\
+            data2 = snd x :: snd (split l2)).
+    { apply combine_length_some.
+      assumption. congruence.
+    }
+    destruct H0 as [HRS1 HDATA1].
+    destruct H3 as [HRS2 HDATA2].
+    rewrite HRS1, HDATA1 in H1.
+    unfold disjoint_include2 in H1.
+    simpl in H1.
+    rewrite HRS2, HDATA2 in H2.
+    unfold disjoint_include2 in H2.
+    simpl in H2.
+    destruct (in_range i (fst x)) eqn:HINRANGE.
+    + rewrite <- combine_fst_snd_split in H1, H2.
+      remember (split (filter (fun x : nat * nat * X => in_range i (fst x)) l2)) as res2.
+      remember (split (filter (fun x : nat * nat * X => in_range i (fst x)) l1)) as res1.
+      destruct res2 as [rs2'' data2''].
+      destruct res1 as [rs1'' data1''].
+      simpl in H1, H2.
+      rewrite <- Heqres2 in H2.
+      rewrite <- Heqres1 in H1.
+      inversion H1.
+      inversion H2.
+      simpl.
+      apply ss_cons.
+      apply IHlsubseq with (rs1 := fst (split l1)) (data1 := snd (split l1))
+                           (rs2 := fst (split l2)) (data2 := snd (split l2)).
+      * rewrite HRS2 in HLEN2.
+        rewrite HDATA2 in HLEN2.
+        simpl in HLEN2.
+        apply Nat.succ_inj.
+        assumption.
+      * apply combine_fst_snd_split.
+      * rewrite HRS1 in HLEN1. rewrite HDATA1 in HLEN1.
+        simpl in HLEN1. apply Nat.succ_inj.
+        assumption.
+      * apply combine_fst_snd_split.
+      * unfold disjoint_include2.
+        rewrite <- combine_fst_snd_split.
+        assumption.
+      * unfold disjoint_include2.
+        rewrite <- combine_fst_snd_split.
+        assumption.
+    + apply IHlsubseq with (rs2 := fst (split l2)) (rs1 := fst (split l1))
+                           (data1 := snd (split l1)) (data2 := snd (split l2)).
+      * rewrite HDATA2 in HLEN2.
+        rewrite HRS2 in HLEN2.
+        simpl in HLEN2. apply Nat.succ_inj. assumption.
+      * apply combine_fst_snd_split.
+      * rewrite HDATA1 in HLEN1. rewrite HRS1 in HLEN1.
+        simpl in HLEN1. apply Nat.succ_inj. assumption.
+      * apply combine_fst_snd_split.
+      * unfold disjoint_include2. assumption.
+      * unfold disjoint_include2. assumption.
+  - intros.
+    assert (rs1 = fst x :: fst (split l1) /\
+            data1 = snd x :: snd (split l1)).
+    { apply combine_length_some.
+      assumption. congruence.
+    }
+    destruct H0 as [HRS1 HDATA1].
+    rewrite HRS1, HDATA1 in H1.
+    unfold disjoint_include2 in H1.
+    simpl in H1.
+    destruct (in_range i (fst x)) eqn:HINRANGE.
+    + rewrite <- combine_fst_snd_split in H1.
+      remember (split (filter (fun x : nat * nat * X => in_range i (fst x)) l1)) as res1.
+      simpl in H1.
+      rewrite <- Heqres1 in H1.
+      destruct res1 as [rs1'' data1''].
+      inversion H1.
+      simpl. apply ss_elon.
+      apply IHlsubseq with (rs2 := rs2) (rs1 := fst (split l1))
+                           (data1 := snd (split l1)) (data2 := data2).
+      * assumption.
+      * assumption.
+      * rewrite split_length_l. rewrite split_length_r.
+        reflexivity.
+      * apply combine_fst_snd_split.
+      * assumption.
+      * unfold disjoint_include2.
+        rewrite <- combine_fst_snd_split.
+        assumption.
+    + apply IHlsubseq with (rs2 := rs2) (rs1 := fst (split l1))
+                           (data1 := snd (split l1)) (data2 := data2);
+        try assumption.
+      * rewrite split_length_l, split_length_r.
+        reflexivity.
+      * apply combine_fst_snd_split.
+Qed.
+
+
+(* If length data = length rs,
+   the two list results of disjoint_include2 have
+   same length. *)
 Lemma disjoint_include2_len {X:Type}:
   forall rs (data:list X) i
          (HLEN:List.length rs = List.length data),
@@ -550,7 +908,60 @@ Proof.
   - rewrite combine_length.
     apply Nat.le_min_l.
 Qed.
-  
+
+Lemma disjoint_include2_fold_left_lsubseq {X:Type}:
+  forall rs (data:list X) ofss res
+         (HRES:res =
+               List.fold_left (fun x ofs =>
+                                 disjoint_include2 (fst x) (snd x) ofs)
+                              ofss (rs, data)),
+    lsubseq (List.combine rs data) (List.combine res.(fst) res.(snd)).
+Proof.
+  intros.
+  generalize dependent rs.
+  generalize dependent data.
+  generalize dependent res.
+  induction ofss.
+  - intros.
+    simpl in HRES. destruct res. inversion HRES.
+    simpl. apply lsubseq_refl.
+  - intros.
+    simpl in HRES.
+    remember (disjoint_include2 rs data a) as res'.
+    apply lsubseq_trans with (l2 := List.combine (fst res') (snd res')).
+    + apply disjoint_include2_lsubseq with (ofs := a).
+      destruct res'. rewrite <- Heqres'. reflexivity.
+    + apply IHofss.
+      destruct res'.
+      simpl.
+      assumption.
+Qed.
+
+Lemma disjoint_include2_fold_left_len {X:Type}:
+  forall rs (data:list X) ofss res
+         (HLEN:List.length rs = List.length data)
+         (HRES:res =
+               List.fold_left (fun x ofs =>
+                                 disjoint_include2 (fst x) (snd x) ofs)
+                              ofss (rs, data)),
+    List.length res.(fst) = List.length res.(snd).
+Proof.
+  intros.
+  generalize dependent rs.
+  generalize dependent data.
+  generalize dependent res.
+  induction ofss.
+  - intros. simpl in HRES. destruct res. simpl. inversion HRES. congruence.
+  - intros. simpl in HRES.
+    remember (disjoint_include2 rs data a) as res'.
+    assert (List.length res'.(fst) = List.length res'.(snd)).
+    { rewrite Heqres'.
+      apply disjoint_include2_len.
+      assumption. }
+    eapply IHofss.
+    + eapply H.
+    + destruct res'. simpl. assumption.
+Qed.
 
 (* Lemma: If there are two ranges (b1, l1), (b2, l2),
    and they include some natural number i,
@@ -831,6 +1242,18 @@ Proof.
       exfalso.
       apply HNOTBEG. left. assumption.
   }
+Qed.
+
+Lemma inrange2_forallb:
+  forall i r1 r2
+         (HIN:List.forallb (in_range i) (r1::r2::nil) = true),
+    in_range i r1 = true /\ in_range i r2 = true.
+Proof.
+  intros.
+  simpl in HIN.
+  rewrite andb_true_r in HIN.
+  rewrite andb_true_iff in HIN.
+  assumption.
 Qed.
 
 (**************************************************

@@ -3,6 +3,7 @@ Require Import List.
 Require Import BinPos.
 Require Import Bool.
 Require Import PeanoNat.
+Require Import Omega.
 
 Module Ir.
 
@@ -456,6 +457,15 @@ Proof.
     rewrite map_length. reflexivity.
 Qed.
 
+Lemma alive_P0_ranges_blocks_len:
+  forall (m:t),
+    List.length (alive_P0_ranges m) = List.length (alive_blocks m).
+Proof.
+  intros.
+  unfold alive_P0_ranges.
+  apply map_length.
+Qed.
+
 Lemma inbounds_blocks_lsubseq:
   forall (m:t) abs_ofs l
          (HINB:inbounds_blocks m abs_ofs = l),
@@ -468,8 +478,16 @@ Proof.
   - destruct (disjoint_include2 (alive_P0_ranges m) (alive_blocks m) abs_ofs) eqn:Hls.
     assert (lsubseq (alive_P0_ranges m) l0 /\
             lsubseq (alive_blocks m) l1).
-    { eapply disjoint_include2_lsubseq.
-      eassumption.
+    { eapply lsubseq_combine.
+      - apply alive_P0_ranges_blocks_len.
+      - replace (length l0) with (length (fst (l0, l1))).
+        replace (length l1) with (length (snd (l0, l1))).
+        rewrite <- Hls.
+        apply disjoint_include2_len.
+        apply alive_P0_ranges_blocks_len.
+        reflexivity. reflexivity.
+      - eapply disjoint_include2_lsubseq.
+        eassumption.
     }
     destruct H.
     simpl in HINB.
@@ -501,7 +519,31 @@ Proof.
   reflexivity.
 Qed.
 
-(* Theorem: inbounds_blocks_all permits permutation of I. *)
+(* Lemma: there's no empty range in 'alive_P_ranges m'. *)
+Lemma no_empty_range_alive_P_ranges:
+  forall (m:t) (HWF:wf m),
+    no_empty_range (alive_P_ranges m) = true.
+Proof.
+  intros.
+  unfold alive_P_ranges.
+  apply no_empty_range_concat.
+  intros.
+  apply In_map in HIN.
+  destruct HIN.
+  destruct H.
+  rewrite <- H.
+  apply (MemBlock.wf_poslen).
+  destruct x.
+  simpl in *.
+  eapply wf_blocks.
+  eassumption.
+  eapply lsubseq_In.
+  apply H0.
+  apply blocks_alive_blocks_lsubseq.
+Qed.
+
+(* Theorem: inbounds_blocks_all with two different
+   elements returns only one block. *)
 Theorem inbounds_blocks_all_singleton:
   forall (m:t) (ofs1 ofs2:nat) l (HWF:wf m)
          (HNEQ:~ (ofs1 = ofs2))
@@ -563,39 +605,219 @@ Proof.
   }
   destruct n.
   { (* length is 2. *)
-    apply list_len2 in HLEN_MBS1.
-    apply list_len2 in HLEN_RES1.
-    destruct HLEN_MBS1 as [mb1 HLEN_MBS1].
-    destruct HLEN_MBS1 as [mb2 HLEN_MBS1].
-    destruct HLEN_RES1 as [P01 HLEN_RES1].
-    destruct HLEN_RES1 as [P02 HLEN_RES1].
-    assert (HP0 := alive_blocks_P0_ranges m).
-    assert (map (fun mb : blockid * MemBlock.t => MemBlock.P0_range (snd mb))
-                (P0s1, mbs1).(snd) = (P0s1, mbs1).(fst)).
-    {
-      eapply split_filter_combine_map.
-      apply HP0.
-      unfold disjoint_include2 in Heqres1.
-      rewrite <- HeqP0s. rewrite <- Heqmbs.
-      apply Heqres1.
+    (* show that inbounds_blocks_all m (ofs2::ofs1::nil) has less than
+       2 elements. *)
+    remember (disjoint_include2 P0s1 mbs1 ofs2) as res2.
+    remember (length l) as n' eqn:HLEN_MBS2.
+    destruct n'.
+    { auto. }
+    destruct n'.
+    { auto. }
+    destruct n'.
+    { (* Okay, let's show that this is impossible. *)
+      apply list_len2 in HLEN_MBS1.
+      apply list_len2 in HLEN_RES1.
+      destruct HLEN_MBS1 as [mb1 HLEN_MBS1].
+      destruct HLEN_MBS1 as [mb2 HLEN_MBS1].
+      destruct HLEN_RES1 as [P01 HLEN_RES1].
+      destruct HLEN_RES1 as [P02 HLEN_RES1].
+      symmetry in HLEN_MBS2.
+      destruct res2 as [P0s2 mbs2].
+      assert (length P0s1 = length mbs1).
+      { rewrite HLEN_MBS1.
+        rewrite HLEN_RES1.
+        reflexivity.
+      }
+      assert (lsubseq P0s1 P0s2 /\ lsubseq mbs1 mbs2).
+      {
+        apply lsubseq_combine.
+        - assumption.
+        - replace (length P0s2) with (length (fst (P0s2, mbs2))).
+          replace (length mbs2) with (length (snd (P0s2, mbs2))).
+          rewrite Heqres2.
+          apply disjoint_include2_len.
+          assumption.
+          reflexivity. reflexivity.
+        - apply disjoint_include2_lsubseq with (ofs := ofs2).
+          rewrite <- Heqres2.
+          reflexivity.
+      }
+      assert (length P0s2 = length mbs2).
+      {
+        assert (P0s2 = fst (disjoint_include2 P0s1 mbs1 ofs2)).
+        { rewrite <- Heqres2. reflexivity. }
+        assert (mbs2 = snd (disjoint_include2 P0s1 mbs1 ofs2)).
+        { rewrite <- Heqres2. reflexivity. }
+        rewrite H2.
+        rewrite H3.
+        apply disjoint_include2_len.
+        assumption.
+      }
+      assert (mbs2 = mbs1).
+      {
+        symmetry.
+        apply lsubseq_full.
+        - destruct H1. assumption.
+        - rewrite <- HINB in HLEN_MBS2.
+          simpl in HLEN_MBS2.
+          rewrite HLEN_MBS1. rewrite HLEN_MBS2.
+          reflexivity.
+      }
+      assert (P0s2 = P0s1).
+      {
+        symmetry.
+        apply lsubseq_full.
+        - destruct H1. assumption.
+        - rewrite H0. rewrite H2. rewrite H3. reflexivity.
+      }
+      rewrite H3 in *. clear H3.
+      rewrite H4 in *. clear H4.
+      simpl in HINB.
+      rewrite <- HINB in *. clear HINB.
+      clear H2.
+      assert (HP0 := alive_blocks_P0_ranges m).
+      assert (map (fun mb : blockid * MemBlock.t => MemBlock.P0_range (snd mb))
+                  (P0s1, mbs1).(snd) = (P0s1, mbs1).(fst)).
+      {
+        eapply split_filter_combine_map.
+        apply HP0.
+        unfold disjoint_include2 in Heqres1.
+        rewrite <- HeqP0s. rewrite <- Heqmbs.
+        apply Heqres1.
+      }
+      (* Okay, now show that two ranges:
+         MemBlock.P0_range (snd mb1),
+         MemBlock.P0_range (snd mb2) are disjoint, and
+         they include ofs1. *)
+      assert (lsubseq P0s P0s1 /\ lsubseq mbs mbs1).
+      {
+        apply lsubseq_combine.
+        - rewrite HeqP0s.
+          rewrite Heqmbs.
+          apply alive_P0_ranges_blocks_len.
+        - assumption.
+        - apply disjoint_include2_lsubseq with (ofs := ofs1).
+          rewrite Heqres1. reflexivity.
+      }
+      assert (HNOEMPTY: no_empty_range (P01::P02::nil) = true).
+      {
+        apply no_empty_range_lsubseq with (l1 := alive_P0_ranges m).
+        - apply no_empty_range_lsubseq with (l1 := alive_P_ranges m). 
+          + apply no_empty_range_alive_P_ranges.
+            assumption.
+          + apply alive_P_P0_ranges_lsubseq.
+            assumption.
+        - rewrite <- HLEN_RES1.
+          assert (P0s1 = fst (disjoint_include2 P0s mbs ofs1)).
+          { rewrite <- Heqres1. reflexivity. }
+          rewrite H4.
+          rewrite disjoint_include_include2.
+          rewrite HeqP0s.
+          apply disjoint_include_lsubseq.
+          rewrite HeqP0s.
+          rewrite Heqmbs.
+          congruence.
+      }
+      simpl in HNOEMPTY.
+      rewrite andb_true_r in HNOEMPTY.
+      rewrite andb_true_iff in HNOEMPTY.
+      repeat (rewrite Nat.ltb_lt in HNOEMPTY).
+      assert (disjoint_ranges (P01::P02::nil) = true).
+      {
+        apply disjoint_lsubseq_disjoint with (rs := P0s).
+        - rewrite HeqP0s.
+          apply disjoint_lsubseq_disjoint with (rs := alive_P_ranges m).
+          + apply wf_disjoint. assumption.
+          + apply alive_P_P0_ranges_lsubseq. assumption.
+        - destruct H3.
+          rewrite HLEN_RES1 in H3.
+          assumption.
+      }
+      assert (in_range ofs1 P01 = true /\ in_range ofs1 P02 = true).
+      {
+        apply inrange2_forallb.
+        apply disjoint_include_inrange with (rs := P0s).
+        erewrite <- disjoint_include_include2.
+        rewrite <- Heqres1.
+        rewrite HLEN_RES1.
+        reflexivity.
+        congruence.
+      }
+      assert (in_range ofs2 P01 = true /\ in_range ofs2 P02 = true).
+      {
+        apply inrange2_forallb.
+        apply disjoint_include_inrange with (rs := P0s1).
+        erewrite <- disjoint_include_include2.
+        rewrite <- Heqres2.
+        rewrite HLEN_RES1.
+        reflexivity.
+        congruence.
+      }
+      (* Then, we can use inrange2_disjoint to show
+         (b1 + l1 = b2 /\ i = b2) \/ (b2 + l2 = b1 /\ i = b1).
+         And then we show that for i' != i,
+         in_range i' (b1, l1) && in_range i' (b2, l2) = false,
+         using inrange2_false.
+      *)
+      destruct P01 as [mb1beg mb1len].
+      destruct P02 as [mb2beg mb2len].
+      simpl in HNOEMPTY.
+      destruct HNOEMPTY as [HNOEMPTY1 HNOEMPTY2].
+      destruct H5 as [HINR11 HINR12].
+      destruct H6 as [HINR21 HINR22].
+      assert (HCOND1 := inrange2_disjoint mb1beg mb1len mb2beg mb2len ofs1
+                                          HINR11 HINR12 H4).
+      assert (HCOND2 := inrange2_disjoint mb1beg mb1len mb2beg mb2len ofs2
+                                          HINR21 HINR22 H4).
+      exfalso.
+      destruct HCOND1 as [HCOND1 | HCOND1];
+        destruct HCOND2 as [HCOND2 | HCOND2].
+      - apply HNEQ.
+        destruct HCOND1. destruct HCOND2. congruence.
+      - destruct HCOND1 as [HCOND1 _].
+        destruct HCOND2 as [HCOND2 _].
+        rewrite <- HCOND2 in HCOND1.
+        rewrite <- Nat.add_assoc in HCOND1.
+        assert (HLEN': 0 < mb2len + mb1len).
+        { apply Nat.add_pos_r.
+          assumption. }
+        assert (HFALSE := Nat.lt_add_pos_r (mb2len + mb1len) mb2beg HLEN').
+        rewrite HCOND1 in HFALSE.
+        eapply Nat.lt_irrefl.
+        eassumption.
+      - destruct HCOND1 as [HCOND1 _].
+        destruct HCOND2 as [HCOND2 _].
+        rewrite <- HCOND2 in HCOND1.
+        rewrite <- Nat.add_assoc in HCOND1.
+        assert (HLEN': 0 < mb1len + mb2len).
+        { apply Nat.add_pos_r.
+          assumption. }
+        assert (HFALSE := Nat.lt_add_pos_r (mb1len + mb2len) mb1beg HLEN').
+        rewrite HCOND1 in HFALSE.
+        eapply Nat.lt_irrefl.
+        eassumption.
+      - destruct HCOND1. destruct HCOND2. congruence.
     }
-    rewrite HLEN_RES1 in H0.
-    rewrite HLEN_MBS1 in H0.
-    simpl in H0.
-    (* Okay, now show that two ranges:
-       MemBlock.P0_range (snd mb1),
-       MemBlock.P0_range (snd mb2) are disjoint, and
-       they include ofs1. *)
-    (* Then, we can use inrange2_disjoint to show
-       (b1 + l1 = b2 /\ i = b2) \/ (b2 + l2 = b1 /\ i = b1).
-       And then we show that for i' != i,
-       in_range i' (b1, l1) && in_range i' (b2, l2) = false,
-       using inrange2_false.
-    *)
-    admit.
+    { (* The result cannot have more than 2 elements *)
+      rewrite <- HINB in HLEN_MBS2.
+      rewrite Heqres2 in HLEN_MBS2.
+      rewrite <- disjoint_include2_len in HLEN_MBS2.
+      rewrite disjoint_include_include2 in HLEN_MBS2.
+      remember (disjoint_include P0s1 ofs2) as r.
+      assert (lsubseq P0s1 r).
+      { rewrite Heqr. apply disjoint_include_lsubseq. }
+      assert (~lsubseq P0s1 r).
+      { apply lsubseq_exceed.
+        rewrite <- HLEN_MBS2.
+        rewrite HLEN_RES1.
+        omega.
+      }
+      exfalso. apply H1. assumption.
+      congruence.
+      congruence.
+    }
   }
   {
-    SearchAbout (~ _ < _).
     exfalso.
     eapply Lt.le_not_lt.
     apply Nat.le_add_r.
@@ -604,7 +826,94 @@ Proof.
     rewrite H0 in H.
     apply H.
   }
-Admitted.
+Qed.
+
+(* Theorem: inbounds_blocks_all with at least two different
+   elements returns only one block. *)
+Theorem inbounds_blocks_all_singleton2:
+  forall (m:t) (ofs1 ofs2:nat) l ofs' (HWF:wf m)
+         (HNEQ:~ (ofs1 = ofs2))
+         (HINB:inbounds_blocks_all m (ofs1::ofs2::ofs') = l),
+    List.length l < 2.
+Proof.
+  intros.
+  unfold inbounds_blocks_all in HINB.
+  simpl in HINB.
+  remember (alive_P0_ranges m) as P0.
+  remember (alive_blocks m) as blks.
+  
+  remember (disjoint_include2 P0 blks ofs1) as res1.
+  assert (lsubseq (List.combine P0 blks) (List.combine res1.(fst) res1.(snd))).
+  { apply disjoint_include2_lsubseq with (ofs := ofs1).
+    rewrite <- Heqres1. destruct res1. reflexivity. }
+  assert (List.length res1.(fst) = List.length res1.(snd)).
+  { rewrite Heqres1.
+    apply disjoint_include2_len.
+    rewrite HeqP0. rewrite Heqblks. rewrite alive_P0_ranges_blocks_len.
+    reflexivity.
+  }
+
+  remember (disjoint_include2 (fst res1) (snd res1) ofs2) as res2.
+  assert (lsubseq (List.combine res1.(fst) res1.(snd))
+                  (List.combine res2.(fst) res2.(snd))).
+  { apply disjoint_include2_lsubseq with (ofs := ofs2).
+    rewrite <- Heqres2. destruct res2; reflexivity. }
+  assert (List.length res2.(fst) = List.length res2.(snd)).
+  { rewrite Heqres2.
+    apply disjoint_include2_len. congruence.
+  }
+
+  remember (fold_left
+              (fun (blks_and_ranges : list (nat * nat) * list (blockid * MemBlock.t))
+                 (abs_ofs : nat) =>
+               disjoint_include2 (fst blks_and_ranges) (snd blks_and_ranges) abs_ofs)
+              ofs' res2) as res3.
+  assert (lsubseq (List.combine res2.(fst) res2.(snd))
+                  (List.combine res3.(fst) res3.(snd))).
+  {
+    apply disjoint_include2_fold_left_lsubseq with (ofss := ofs').
+    destruct res2.
+    simpl.
+    assumption.
+  }
+  assert (List.length res3.(fst) = List.length res3.(snd)).
+  { eapply disjoint_include2_fold_left_len.
+    eapply H2.
+    destruct res2. simpl. eapply Heqres3.
+  }
+
+  assert (res2.(snd) = inbounds_blocks_all m (ofs1::ofs2::nil)).
+  {
+    unfold inbounds_blocks_all.
+    simpl.
+    rewrite <- HeqP0.
+    rewrite <- Heqblks.
+    rewrite <- Heqres1.
+    rewrite <- Heqres2.
+    reflexivity.
+  }
+  assert (length (snd res2) < 2).
+  {
+    apply inbounds_blocks_all_singleton with (m := m) (ofs1 := ofs1) (ofs2 := ofs2).
+    assumption.
+    assumption.
+    congruence.
+  }
+  assert (HLS:lsubseq (fst res2) (fst res3) /\ lsubseq (snd res2) (snd res3)).
+  { apply lsubseq_combine.
+    assumption.
+    assumption.
+    assumption.
+  }
+  destruct HLS.
+  rewrite <- HINB.
+  assert (length (snd res3) <= length (snd res2)).
+  { apply lsubseq_len. assumption. }
+  eapply Nat.le_lt_trans.
+  - eassumption.
+  - assumption.
+Qed.
+
 
 End Memory.
 
