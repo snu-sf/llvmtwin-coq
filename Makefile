@@ -1,2 +1,2 @@
 all:
-	coqc sflib.v Common.v Memory.v Syntax.v LoadStore.v State.v
+	coqc sflib.v Common.v Memory.v Syntax.v LoadStore.v State.v WellTyped.v

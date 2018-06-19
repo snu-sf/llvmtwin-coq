@@ -223,6 +223,120 @@ Definition list_incl {X:Type}
 
 
 (*******************************************
+      Numbering each element of a list.
+ *******************************************)
+
+Fixpoint _number_list {X:Type} (l:list X) (i:nat): list (nat * X) :=
+  match l with
+  | nil => nil
+  | h::t => (i, h)::(_number_list t (i+1))
+  end.
+
+Definition number_list {X:Type} (l:list X): list (nat * X) :=
+  _number_list l 0.
+
+Lemma _number_list_len {X:Type}:
+  forall (l:list X) i1 i2,
+    List.length (_number_list l i1) = List.length (_number_list l i2).
+Proof.
+  induction l.
+  intros. reflexivity.
+  intros. simpl. erewrite IHl. reflexivity.
+Qed.
+
+Lemma number_list_len {X:Type}:
+  forall (l:list X) l'
+    (HEQ:l' = number_list l),
+    List.length l = List.length l'.
+Proof.
+  induction l.
+  - intros. unfold number_list in HEQ. simpl in HEQ. rewrite HEQ. reflexivity.
+  - intros. unfold number_list in HEQ. simpl in HEQ.
+    rewrite HEQ. simpl.
+    rewrite _number_list_len with (i2 := 0).
+    rewrite <- IHl. reflexivity.
+    unfold number_list. reflexivity.
+Qed.
+
+Lemma _number_list_append {X:Type}:
+  forall (l:list X) (h:X) i n
+         (HLEN:n = List.length l),
+    (_number_list l i) ++ ((n + i, h)::nil) = (_number_list (l ++ (h::nil)) i).
+Proof.
+  induction l.
+  - intros. simpl. rewrite HLEN. reflexivity.
+  - simpl. intros.
+    destruct n. inversion HLEN.
+    inversion HLEN. rewrite <- H0. rewrite <- IHl with (n := n).
+    rewrite Nat.add_comm with (n := i) (m := 1). simpl.
+    rewrite Nat.add_succ_r.
+    reflexivity.
+    assumption.
+Qed.
+
+Lemma _number_list_nth_fst {X:Type}:
+  forall (l:list X) n def i,
+    fst (List.nth n (_number_list l i) (n + i, def)) = n + i.
+Proof.
+  induction l.
+  - intros. simpl. destruct n. reflexivity. reflexivity.
+  - intros. simpl. destruct n. reflexivity.
+    simpl.
+    rewrite <- Nat.add_succ_r with (n := n) (m := i).
+    rewrite Nat.add_comm with (n := i) (m := 1).
+    simpl.
+    rewrite IHl with (n := n) (def := def) (i := S i).
+    reflexivity.
+Qed.
+
+Lemma _number_list_nth_snd {X:Type}:
+  forall (l:list X) n m def i,
+    snd (List.nth n (_number_list l i) (m, def)) = List.nth n l def.
+Proof.
+  induction l.
+  - intros. simpl. destruct n; reflexivity.
+  - simpl. destruct n. intros. reflexivity.
+    intros. simpl.
+    rewrite IHl. reflexivity.
+Qed.
+
+Theorem list_number_nth {X:Type}:
+  forall (l:list X) n def,
+    List.nth n (number_list l) (n, def) = (n, List.nth n l def).
+Proof.
+  intros.
+  remember (List.nth n (number_list l) (n, def)) as res.
+  destruct res.
+  assert (n0 = fst (nth n (number_list l) (n, def))).
+  { rewrite <- Heqres. reflexivity. }
+  assert (x = snd (nth n (number_list l) (n, def))).
+  { rewrite <- Heqres. reflexivity. }
+  unfold number_list in H, H0.
+  replace (n, def) with (n+0, def) in H, H0.
+  rewrite _number_list_nth_fst in H.
+  rewrite _number_list_nth_snd in H0.
+  rewrite Nat.add_0_r in H.
+  rewrite H, H0. reflexivity.
+  rewrite Nat.add_0_r. reflexivity.
+Qed.
+
+
+(**************************************************
+   Checking all two adjacent elements in a list.
+ **************************************************)
+
+Fixpoint forall_adj {X:Type} (f:X -> X -> bool) (l:list X) :=
+  match l with
+  | nil => true
+  | h::t =>
+    match t with
+    | nil => true
+    | h2::t' => (f h h2) && (forall_adj f t)
+    end                     
+  end.
+
+
+(*******************************************
       Subsequence of a list.
  *******************************************)
 

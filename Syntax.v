@@ -1,5 +1,6 @@
 Require Import List.
 Require Import BinPos.
+Require Import Common.
 
 Module Ir.
 
@@ -141,15 +142,19 @@ Definition valid_phi_idx (i:nat) (t:t): bool :=
 Definition valid_inst_idx (i:nat) (t:t): bool :=
   Nat.ltb i (List.length t.(insts)).
 
-Definition defs (bb:t): list (reg * ty) :=
-  List.map PhiNode.def bb.(phis) ++
+Definition phi_defs (bb:t): list (nat * (reg * ty)) :=
+  List.map (fun pn => (pn.(fst), PhiNode.def pn.(snd)))
+           (number_list bb.(phis)).
+
+Definition inst_defs (bb:t): list (nat * (reg * ty)) :=
   List.concat (
-    List.map (fun i => match (Inst.def i) with
-                       | Some rt => rt::nil | None => nil
-             end) bb.(insts)).
+    List.map (fun i =>
+                match (Inst.def i.(snd)) with
+                | Some rt => (i.(fst), rt)::nil | None => nil
+             end)
+             (number_list bb.(insts))).
 
 End BasicBlock.
-
 
 Module IRFunction.
 
@@ -175,11 +180,23 @@ Inductive pc:Type :=
 
 (* Get PCs of definitions of the register.
    Note that, in SSA, the result of get_defs is singleton.
-   This will be shown in TypeCheck.v *)
+   This will be shown in WellTyped.v *)
 Definition get_defs (r:reg) (f:t): list pc :=
   List.concat (
-      List.map (fun bb => fst (List.split (BasicBlock.defs bb))) f.(body)).
-                                                                  
+      List.map
+        (fun bb =>
+           let bid := bb.(fst) in
+           let phi_res := List.filter
+                        (fun itm => Nat.eqb (itm.(snd).(fst)) r)
+                        (BasicBlock.phi_defs bb.(snd)) in
+           let phi_idxs := fst (List.split phi_res) in
+           let inst_res := List.filter
+                        (fun itm => Nat.eqb (itm.(snd).(fst)) r)
+                        (BasicBlock.inst_defs bb.(snd)) in
+           let inst_idxs := fst (List.split inst_res) in
+           (List.map (fun phi_idx => pc_phi bid phi_idx) phi_idxs) ++
+           (List.map (fun inst_idx => pc_inst bid inst_idx) inst_idxs))
+        (number_list f.(body))).
 
 Definition valid_pc (p:pc) (f:t): bool :=
   match p with
