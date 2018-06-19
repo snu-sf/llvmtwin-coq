@@ -212,7 +212,7 @@ Definition alive_before (the_time:nat) (mb:t): bool :=
   Nat.ltb mb.(r).(fst) the_time.
 
 Definition inbounds (ofs:nat) (mb:t): bool :=
-  Nat.ltb ofs mb.(n).
+  Nat.leb ofs mb.(n).
 
 Definition inbounds_abs (ofs':nat) (mb:t): bool :=
   in_range ofs' (P0_range mb).
@@ -370,6 +370,57 @@ Proof.
   apply lsubseq_filter.
 Qed.
 
+Lemma get_In:
+  forall (m:t) bid blk blks
+         (HGET:Some blk = get m bid)
+         (HBLK:blks = blocks m),
+    List.In (bid, blk) blks.
+Proof.
+  intros.
+  unfold get in HGET.
+  rewrite <- HBLK in *.
+  remember (filter (fun i2 : nat * MemBlock.t => Nat.eqb (fst i2) bid) blks)
+           as f.
+  destruct f.
+  - inversion HGET.
+  - inversion HGET.
+    assert (p.(fst) = bid).
+    { assert (List.forallb (fun i2 => Nat.eqb (fst i2) bid) (p::f) = true).
+      rewrite Heqf.
+      apply filter_forallb.
+      simpl in H.
+      rewrite andb_true_iff in H.
+      destruct H.
+      rewrite Nat.eqb_eq in H.
+      assumption.
+    }
+    rewrite <- H.
+    destruct p.
+    simpl.
+    apply lsubseq_In with (l':=(n,t0)::f).
+    simpl. left. reflexivity.
+    rewrite Heqf.
+    apply lsubseq_filter.
+Qed.    
+
+Lemma alive_blocks_In:
+  forall (m:t) bid blk blks
+    (HBLK:Some blk = get m bid)
+    (HALIVE:MemBlock.alive blk = true)
+    (HALIVES:blks = alive_blocks m),
+    List.In (bid, blk) blks.
+Proof.
+  intros.
+  unfold alive_blocks in HALIVES.
+  rewrite HALIVES.
+  rewrite filter_In.
+  split.
+  - apply get_In with (m := m).
+    assumption.
+    reflexivity.
+  - assumption.
+Qed.
+
 Lemma alive_P_P0_ranges_lsubseq:
   forall (m:t) (HWF:wf m),
     lsubseq (alive_P_ranges m) (alive_P0_ranges m).
@@ -411,6 +462,42 @@ Proof.
       apply HWF. reflexivity.
 Qed.
 
+Lemma inbounds_inbounds_abs:
+  forall (mb:Ir.MemBlock.t) ofs ofs_abs
+         (HABS: ofs_abs = ofs + Ir.MemBlock.addr mb),
+    Ir.MemBlock.inbounds ofs mb = Ir.MemBlock.inbounds_abs ofs_abs mb.
+Proof.
+  intros.
+  unfold Ir.MemBlock.inbounds.
+  unfold Ir.MemBlock.inbounds_abs.
+  rewrite HABS.
+  unfold Common.in_range.
+  unfold Ir.MemBlock.P0_range.
+  remember (Ir.MemBlock.addr mb) as addr.
+  remember (Ir.MemBlock.n mb) as n.
+  simpl.
+  assert (PeanoNat.Nat.leb addr (ofs + addr) = true).
+  {
+    rewrite PeanoNat.Nat.leb_le.
+    apply Plus.le_plus_r.
+  }
+  rewrite H.
+  simpl.
+  rewrite PeanoNat.Nat.add_comm with (n := ofs) (m := addr).
+  remember (PeanoNat.Nat.leb (addr + ofs) (addr + n)) as flag.
+  symmetry in Heqflag.
+  destruct flag.
+  - rewrite PeanoNat.Nat.leb_le in Heqflag.
+    apply Plus.plus_le_reg_l in Heqflag.
+    rewrite PeanoNat.Nat.leb_le.
+    assumption.
+  - rewrite PeanoNat.Nat.leb_nle in Heqflag.
+    rewrite PeanoNat.Nat.leb_nle.
+    intros H'.
+    apply Heqflag.
+    apply Plus.plus_le_compat_l.
+    assumption.
+Qed.
 
 (* Theorem: there are at most 2 alive blocks
    which have abs_ofs as inbounds. *)
@@ -506,6 +593,7 @@ Proof.
   unfold inbounds_blocks_all.
   simpl. reflexivity.
 Qed.
+ 
 
 (* Lemma: we can generate the result of alive_P0_ranges from alive_blocks. *)
 Lemma alive_blocks_P0_ranges:
@@ -518,6 +606,190 @@ Proof.
   unfold alive_blocks.
   reflexivity.
 Qed.
+
+(* Lemma: the result of inbounds_blocks all satisfies inbounds_abs. *)
+Theorem inbounds_blocks_forallb:
+  forall (m:t) abs_ofs blks
+         (HALL:inbounds_blocks m abs_ofs = blks),
+    List.forallb (MemBlock.inbounds_abs abs_ofs)
+                 (snd (List.split blks)) = true.
+Proof.
+  intros.
+  unfold inbounds_blocks in HALL.
+  remember (alive_P0_ranges m) as ar.
+  remember (alive_blocks m) as ab.
+  remember (disjoint_include2 ar ab abs_ofs) as res.
+  assert (fst res = disjoint_include ar abs_ofs).
+  { rewrite Heqres.
+    rewrite disjoint_include_include2.
+    reflexivity.
+    rewrite Heqar. rewrite Heqab.
+    apply alive_P0_ranges_blocks_len.
+  }
+  assert (List.forallb (in_range abs_ofs) (fst res) = true).
+  { eapply disjoint_include_inrange.
+    eassumption.
+  }
+  unfold MemBlock.inbounds_abs.
+  destruct res as [ranges blks0].
+  simpl in HALL.
+  rewrite HALL in *.
+  clear HALL.
+  simpl in H0.
+  assert (fst (ranges, blks) = List.map (fun mb => MemBlock.P0_range mb.(snd))
+                            (snd (ranges, blks))).
+  {
+    rewrite Heqres.
+    rewrite disjoint_include2_rel. reflexivity.
+    rewrite Heqar, Heqab.
+    rewrite alive_blocks_P0_ranges. reflexivity.
+  }
+  simpl in H1.
+  assert (ranges = map (fun mb:MemBlock.t => MemBlock.P0_range mb)
+                       (snd (split blks))).
+  {
+    rewrite H1.
+    apply split_map_snd.
+    reflexivity.
+  }
+  eapply forallb_map with (l' := ranges).
+  eassumption.
+  eassumption.
+  intros. reflexivity.
+Qed.
+
+Lemma inbounds_blocks_all_forallb:
+  forall (m:t) a abs_ofs blks
+         (HALL:inbounds_blocks_all m (a::abs_ofs) = blks),
+    List.forallb (MemBlock.inbounds_abs a) (snd (List.split blks)) = true.
+Proof.
+  intros.
+  unfold inbounds_blocks_all in HALL.
+  simpl in HALL.
+  remember (disjoint_include2 (alive_P0_ranges m) (alive_blocks m) a) as init.
+  destruct init as [init_rs init_blks].
+  remember (fold_left
+              (fun (blks_and_ranges : list (nat * nat) * list (blockid * MemBlock.t))
+                 (abs_ofs : nat) =>
+               disjoint_include2 (fst blks_and_ranges) (snd blks_and_ranges) abs_ofs)
+              abs_ofs (init_rs, init_blks)) as res.
+  assert (HLSS:= disjoint_include2_fold_left_lsubseq init_rs init_blks abs_ofs
+                                                     res Heqres).
+  assert (HFORALLB: List.forallb (MemBlock.inbounds_abs a)
+                                 (snd (List.split init_blks)) = true).
+  {
+    assert (init_blks = inbounds_blocks m a).
+    { unfold inbounds_blocks. rewrite <- Heqinit. reflexivity. }
+    eapply inbounds_blocks_forallb.
+    rewrite H. reflexivity.
+  }
+  eapply lsubseq_forallb.
+  eassumption.
+  assert (HLEN1: List.length (fst (init_rs, init_blks)) =
+          List.length (snd (init_rs, init_blks))).
+  { rewrite Heqinit. apply disjoint_include2_len.
+    rewrite alive_P0_ranges_blocks_len. reflexivity.
+  }
+  simpl in HLEN1.
+  assert (HLEN2: List.length (fst res) = List.length (snd res)).
+  { rewrite Heqres.
+    eapply disjoint_include2_fold_left_len.
+    eassumption. reflexivity. }
+  assert (HFINAL := lsubseq_combine init_rs (fst res) init_blks (snd res)
+                                    HLEN1 HLEN2 HLSS).
+  destruct HFINAL.
+  rewrite HALL in *.
+  eapply lsubseq_split_snd. assumption.
+Qed.
+
+Lemma inbounds_blocks_all_lsubseq:
+  forall (m:t) a abs_ofs blks1 blks2
+         (HALL1:inbounds_blocks_all m (a::abs_ofs) = blks1)
+         (HALL2:inbounds_blocks_all m abs_ofs = blks2),
+    lsubseq blks2 blks1.
+Proof.
+  intros.
+  unfold inbounds_blocks_all in *.
+  simpl in HALL1.
+  remember (alive_P0_ranges m) as P0s.
+  remember (alive_blocks m) as blks.
+  remember (disjoint_include2 P0s blks a) as init_res.
+  assert (HLEN: List.length P0s = List.length blks).
+  { rewrite HeqP0s. rewrite Heqblks.
+    apply alive_P0_ranges_blocks_len. }
+  assert (HLEN': List.length (fst init_res) = List.length (snd init_res)).
+  { rewrite Heqinit_res. apply disjoint_include2_len. assumption. }
+  remember (fold_left
+               (fun (blks_and_ranges : list (nat * nat) * list (blockid * MemBlock.t))
+                  (abs_ofs : nat) =>
+                disjoint_include2 (fst blks_and_ranges) (snd blks_and_ranges) abs_ofs)
+               abs_ofs (disjoint_include2 P0s blks a)) as res2.
+  remember (fold_left
+               (fun (blks_and_ranges : list (nat * nat) * list (blockid * MemBlock.t))
+                  (abs_ofs : nat) =>
+                disjoint_include2 (fst blks_and_ranges) (snd blks_and_ranges) abs_ofs)
+               abs_ofs (P0s, blks)) as res1.
+  assert (lsubseq (combine (fst res1) (snd res1)) (combine (fst res2) (snd res2))).
+  { apply disjoint_include2_fold_left_lsubseq2 with
+          (rs1 := P0s) (data1 := blks)
+          (rs2 := init_res.(fst)) (data2 := init_res.(snd))
+          (ofss := abs_ofs).
+    - assumption.
+    - rewrite Heqinit_res. apply disjoint_include2_len. assumption.
+    - assumption.
+    - rewrite <- Heqinit_res in Heqres2.
+      destruct init_res.
+      simpl. assumption.
+    - apply disjoint_include2_lsubseq with (ofs := a).
+      rewrite <- Heqinit_res. destruct init_res. reflexivity.
+  }
+  assert (HLEN1:List.length (fst res1) = List.length (snd res1)).
+  { eapply disjoint_include2_fold_left_len.
+    apply HLEN. eassumption. }
+  assert (HLEN2:List.length (fst res2) = List.length (snd res2)).
+  { eapply disjoint_include2_fold_left_len.
+    apply HLEN'. rewrite <- Heqinit_res in *. destruct init_res.
+    simpl. eassumption. }
+  assert (lsubseq (fst res1) (fst res2) /\ lsubseq (snd res1) (snd res2)).
+  { apply lsubseq_combine. assumption. assumption.
+    assumption. }
+  destruct H0.
+  rewrite <- Heqinit_res in Heqres2.
+  rewrite <- Heqres2 in HALL1.
+  rewrite HALL2, HALL1 in H1.
+  assumption.
+Qed.
+
+(* Theorem: The results of inbounds_blocks_all,
+   contain all input offsets. *)
+Theorem inbounds_blocks_all_forallb2:
+  forall (m:t) abs_ofs blks
+         (HALL:inbounds_blocks_all m abs_ofs = blks),
+    List.forallb (fun abs_ofs =>
+                    List.forallb (MemBlock.inbounds_abs abs_ofs)
+                                 (snd (List.split blks))) abs_ofs = true.
+Proof.
+  intros.
+  generalize dependent blks.
+  induction abs_ofs.
+  - reflexivity.
+  - simpl. intros.
+    rewrite inbounds_blocks_all_forallb with (m := m) (abs_ofs := abs_ofs).
+    simpl.
+    remember (inbounds_blocks_all m abs_ofs) as blks'.
+    assert (lsubseq blks' blks).
+    { apply inbounds_blocks_all_lsubseq with (m := m) (a := a) (abs_ofs := abs_ofs).
+      assumption. congruence. }
+    apply forallb_implies with
+      (fun o:nat => List.forallb (MemBlock.inbounds_abs o) (snd (List.split blks'))).
+    + intros.
+      eapply lsubseq_forallb. eassumption.
+      apply lsubseq_split_snd. assumption.
+    + apply IHabs_ofs.
+      reflexivity.
+    + assumption.
+Qed.
+
 
 (* Lemma: there's no empty range in 'alive_P_ranges m'. *)
 Lemma no_empty_range_alive_P_ranges:
@@ -914,6 +1186,54 @@ Proof.
   - assumption.
 Qed.
 
+(* Theorem: if there's alive block blk, which has abs_ofs1 & abs_ofs2
+   as its inbounds, blk must be included in the result of inbounds_blocks_all. *)
+Theorem inbounds_blocks_all_In:
+  forall (m:t) (bid:blockid) (blk:MemBlock.t) blks abs_ofs1 abs_ofs2
+         (HBLK: Some blk = get m bid)
+         (HRES: blks = inbounds_blocks_all m (abs_ofs1::abs_ofs2::nil))
+         (HALIVE: MemBlock.alive blk = true)
+         (HINB1: MemBlock.inbounds_abs abs_ofs1 blk = true)
+         (HINB2: MemBlock.inbounds_abs abs_ofs2 blk = true)
+         (HNEQ: abs_ofs1 <> abs_ofs2),
+    List.In (bid, blk) blks.
+Proof.
+  intros.
+  unfold inbounds_blocks_all in HRES.
+  unfold MemBlock.inbounds_abs in HINB1, HINB2.
+  simpl in HRES.
+  remember (disjoint_include2 (alive_P0_ranges m) (alive_blocks m) abs_ofs1) as res1.
+  assert (List.In (MemBlock.P0_range blk, (bid, blk))
+                  (List.combine (fst res1) (snd res1))).
+  {
+    apply disjoint_include2_In with (rs := alive_P0_ranges m)
+        (data := alive_blocks m) (i := abs_ofs1).
+    rewrite alive_P0_ranges_blocks_len. reflexivity.
+    apply combine_map_In with (f := fun x => MemBlock.P0_range x.(snd)).
+    - reflexivity.
+    - apply alive_blocks_P0_ranges.
+    - apply alive_blocks_In with (m := m).
+      assumption. assumption. reflexivity.
+    - assumption.
+    - assumption.
+  }
+  remember (disjoint_include2 (fst res1) (snd res1) abs_ofs2) as res2.
+  assert (List.In (MemBlock.P0_range blk, (bid, blk))
+                  (List.combine (fst res2) (snd res2))).
+  {
+    apply disjoint_include2_In with (rs := fst res1) (data := snd res1)
+                                    (i := abs_ofs2).
+    - rewrite Heqres1. rewrite disjoint_include2_len. reflexivity.
+      apply alive_P0_ranges_blocks_len.
+    - assumption.
+    - assumption.
+    - assumption.
+  }
+  rewrite HRES.
+  eapply in_combine_r.
+  eassumption.
+Qed.
+  
 
 End Memory.
 

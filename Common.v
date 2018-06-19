@@ -3,7 +3,7 @@ Require Import BinPos.
 Require Import Bool.
 Require Import Coq.Arith.PeanoNat.
 Require Import Sumbool.
-
+Require Import Basics.
 
 (* Some helpful lemmas regarding List *)
 
@@ -94,6 +94,25 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma combine_map_In:
+  forall {X Y:Type} (ly:list Y) (f:Y -> X) (x:X) (y:Y) (lx:list X)
+         (HX:x = f y)
+         (HLX:lx = List.map f ly)
+         (HIN:List.In y ly),
+  List.In (x, y) (List.combine lx ly).
+Proof.
+  induction ly.
+  - intros. simpl in HIN. inversion HIN.
+  - simpl. intros.
+    destruct lx; inversion HLX.
+    simpl.
+    rewrite HX.
+    destruct HIN.
+    + left. congruence.
+    + right. apply IHly with (f := f).
+      reflexivity. reflexivity. assumption.
+Qed.
+
 (* Filtered list is shorter than the original list. *)
 Lemma filter_length:
   forall {X:Type} (l:list X) f,
@@ -120,6 +139,75 @@ Proof.
   destruct (f a) eqn:H. simpl. rewrite H. rewrite IHl. auto.
   assumption.
 Qed.
+
+Lemma forallb_map:
+  forall {X Y:Type} (l: list X) (l':list Y)
+         (f:X -> Y) (g:Y -> bool) (h:X -> bool) b
+         (HMAP:l' = List.map f l)
+         (HFORALLB:forallb g l' = b)
+         (HEQ:forall x, (compose g f) x = h x),
+    forallb h l = b.
+Proof.
+  intros.
+  generalize dependent l'.
+  induction l.
+  - simpl. intros. rewrite HMAP in *. simpl in HFORALLB. congruence.
+  - simpl. intros. rewrite HMAP in HFORALLB.
+    simpl in HFORALLB.
+    destruct l'. inversion HMAP.
+    inversion HMAP.
+    unfold compose in *.
+    destruct (g (f a)) eqn:HGF.
+    + simpl. erewrite IHl. rewrite <- HEQ. rewrite HGF. reflexivity. eassumption.
+      simpl in HFORALLB. rewrite H1. assumption.
+    + simpl in HFORALLB. simpl. rewrite <- HEQ. rewrite HGF. simpl. assumption.
+Qed.
+
+Lemma forallb_implies:
+  forall {X:Type} (l:list X) (f g:X -> bool)
+         (HIMP:forall x, f x = true -> g x = true)
+         (HFORALLB:List.forallb f l = true),
+    List.forallb g l = true.
+Proof.
+  intros.
+  induction l.
+  - reflexivity.
+  - simpl. simpl in HFORALLB.
+    rewrite andb_true_iff in *.
+    destruct HFORALLB.
+    split. apply HIMP. assumption. apply IHl. assumption.
+Qed.
+
+Lemma split_map_fst:
+  forall {X Y Z:Type} (l:list (X * Y)) (f:X * Y -> Z) (g:X -> Z)
+         (HEQ:forall x y, f (x, y) = g x),
+    List.map f l = List.map g (fst (split l)).
+Proof.
+  intros.
+  induction l.
+  reflexivity.
+  simpl. destruct a.
+  remember (split l) as p.
+  destruct p.
+  simpl in *.
+  rewrite HEQ. congruence.
+Qed.
+
+Lemma split_map_snd:
+  forall {X Y Z:Type} (l:list (X * Y)) (f:X * Y -> Z) (g:Y -> Z)
+         (HEQ:forall x y, f (x, y) = g y),
+    List.map f l = List.map g (snd (split l)).
+Proof.
+  intros.
+  induction l.
+  reflexivity.
+  simpl. destruct a.
+  remember (split l) as p.
+  destruct p.
+  simpl in *.
+  rewrite HEQ. congruence.
+Qed.
+
 
 (* Why do I need this? *)
 Lemma list_eq:
@@ -613,6 +701,27 @@ Proof.
   - simpl. constructor. assumption.
 Qed.
 
+Lemma lsubseq_split_snd:
+  forall {X Y:Type} (l1 l2:list (X * Y))
+         (HLSS:lsubseq l1 l2),
+    lsubseq (snd (List.split l1)) (snd (List.split l2)).
+Proof.
+  intros.
+  induction HLSS.
+  - simpl. constructor.
+  - simpl. destruct x.
+    remember (split l1) as tmp.
+    destruct tmp as [a1 b1].
+    remember (split l2) as tmp.
+    destruct tmp as [a2 b2].
+    simpl in IHHLSS.
+    simpl. constructor. assumption.
+  - simpl. destruct x.
+    remember (split l1) as tmp.
+    destruct tmp as [a1 b1].
+    simpl in *. constructor. assumption.
+Qed.
+
 Lemma lsubseq_forallb: forall {X:Type} (l l':list X) f
                              (H:List.forallb f l = true)
                              (HLSS:lsubseq l l'),
@@ -845,6 +954,21 @@ Proof.
   apply filter_forallb.
 Qed.
 
+(* Lemma: a range that includes i is not filtered out. *)
+Lemma disjoint_include_In:
+  forall rs i rs' r
+         (HDISJ:rs' = disjoint_include rs i)
+         (HIN:List.In r rs)
+         (HIN':in_range i r = true),
+    List.In r rs'.
+Proof.
+  intros.
+  unfold disjoint_include in HDISJ.
+  rewrite HDISJ.
+  rewrite filter_In.
+  split; assumption.
+Qed.
+
 (* Lemma: the result of disjoint_include2 is subsequence of the input. *)
 Lemma disjoint_include2_lsubseq {X:Type}:
   forall (l l': list X) rs rs' ofs
@@ -1035,6 +1159,26 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma disjoint_include2_In {X:Type}:
+  forall rs (data:list X) i res d
+         (HLEN:List.length rs = List.length data)
+         (HIN:List.In d (List.combine rs data))
+         (HIN':in_range i d.(fst) = true)
+         (HDISJ:res = disjoint_include2 rs data i),
+    List.In d (List.combine res.(fst) res.(snd)).
+Proof.
+  intros.
+  unfold disjoint_include2 in HDISJ.
+  remember (filter (fun x => in_range i (fst x)) (combine rs data)) as res'.
+  assert (In d res').
+  { rewrite Heqres'.
+    rewrite filter_In.
+    split; assumption. }
+  rewrite HDISJ.
+  rewrite <- combine_fst_snd_split.
+  assumption.
+Qed.
+
 (* If ranges can be mapped from data,
    the result of disjoint_include2 can be mapped to. *)
 Lemma disjoint_include2_rel {X:Type}:
@@ -1094,6 +1238,57 @@ Proof.
       destruct res'.
       simpl.
       assumption.
+Qed.
+
+Lemma disjoint_include2_fold_left_lsubseq2 {X:Type}:
+  forall rs1 rs2 (data1 data2:list X) ofss res1 res2
+         (HLEN1:List.length rs1 = List.length data1)
+         (HLEN2:List.length rs2 = List.length data2)
+         (HRES1:res1 =
+               List.fold_left (fun x ofs =>
+                                 disjoint_include2 (fst x) (snd x) ofs)
+                              ofss (rs1, data1))
+         (HRES2:res2 =
+               List.fold_left (fun x ofs =>
+                                 disjoint_include2 (fst x) (snd x) ofs)
+                              ofss (rs2, data2))
+         (HLSS:lsubseq (List.combine rs1 data1) (List.combine rs2 data2)),
+    lsubseq (List.combine res1.(fst) res1.(snd))
+            (List.combine res2.(fst) res2.(snd)).
+Proof.
+  intros.
+  generalize dependent rs1.
+  generalize dependent rs2.
+  generalize dependent data1.
+  generalize dependent data2.
+  generalize dependent res1.
+  generalize dependent res2.
+  induction ofss.
+  - simpl. intros. rewrite HRES2, HRES1 in *.
+    simpl. apply HLSS.
+  - simpl. intros.
+    remember (disjoint_include2 rs1 data1 a) as res1'.
+    destruct res1' as [rs1' data1'].
+    assert(HLEN1':List.length (fst (rs1', data1')) = List.length (snd (rs1', data1'))).
+    { rewrite Heqres1'. apply disjoint_include2_len. assumption. }
+    simpl in HLEN1'.
+    remember (disjoint_include2 rs2 data2 a) as res2'.
+    destruct res2' as [rs2' data2'].
+    assert(HLEN2':List.length (fst (rs2', data2')) = List.length (snd (rs2', data2'))).
+    { rewrite Heqres2'. apply disjoint_include2_len. assumption. }
+    simpl in HLEN2'.
+
+    apply IHofss with (rs1:=rs1') (rs2:=rs2') (data1:=data1') (data2:=data2').
+    congruence.
+    assumption.
+    congruence.
+    assumption.
+    eapply disjoint_include2_lsubseq2 with (rs3 := rs1) (rs4 := rs2).
+    eassumption.
+    eassumption.
+    assumption.
+    eassumption.
+    assumption.
 Qed.
 
 Lemma disjoint_include2_fold_left_len {X:Type}:
