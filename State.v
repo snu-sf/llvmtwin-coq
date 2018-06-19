@@ -1,5 +1,5 @@
 Require Import Common.
-Require Import Syntax.
+Require Import Lang.
 Require Import Memory.
 Require Import BinPos.
 Require Import List.

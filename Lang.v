@@ -27,6 +27,7 @@ Definition regop (o:op): list reg :=
   end.
 
 
+(* PHI Node. *)
 Module PhiNode.
 
 Definition t:Type := reg * ty * list op.
@@ -40,6 +41,7 @@ Definition def (p:t):reg * ty :=
 End PhiNode.
 
 
+(* Instructions (which will be in the body of a basic block. *)
 Module Inst.
 
 Inductive t :=
@@ -142,10 +144,20 @@ Definition valid_phi_idx (i:nat) (t:t): bool :=
 Definition valid_inst_idx (i:nat) (t:t): bool :=
   Nat.ltb i (List.length t.(insts)).
 
+(* Returns defs of phis *)
 Definition phi_defs (bb:t): list (nat * (reg * ty)) :=
   List.map (fun pn => (pn.(fst), PhiNode.def pn.(snd)))
            (number_list bb.(phis)).
 
+(* Returns uses of register r in phis *)
+Definition phi_uses (r:reg) (bb:t): list nat :=
+  fst (List.split
+         (List.filter
+            (fun pn => List.existsb (fun r' => Nat.eqb r r')
+                                    (PhiNode.regops pn.(snd)))
+              (number_list bb.(phis)))).
+
+(* Returns defs of instructions *)
 Definition inst_defs (bb:t): list (nat * (reg * ty)) :=
   List.concat (
     List.map (fun i =>
@@ -153,6 +165,18 @@ Definition inst_defs (bb:t): list (nat * (reg * ty)) :=
                 | Some rt => (i.(fst), rt)::nil | None => nil
              end)
              (number_list bb.(insts))).
+
+(* Returns uses of register r in instructions *)
+Definition inst_uses (r:reg) (bb:t): list nat :=
+  fst (List.split
+         (List.filter
+            (fun pn => List.existsb (fun r' => Nat.eqb r r')
+                                    (Inst.regops pn.(snd)))
+              (number_list bb.(insts)))).
+
+(* Returns true if register r is used by the terminator *)
+Definition terminator_uses (r:reg) (bb:t): bool :=
+  List.existsb (fun r' => Nat.eqb r r') (Terminator.regops bb.(term)).
 
 End BasicBlock.
 
@@ -178,7 +202,7 @@ Inductive pc:Type :=
 | pc_terminator (bid:nat).
 
 
-(* Get PCs of definitions of the register.
+(* Get PCs of definitions of register r.
    Note that, in SSA, the result of get_defs is singleton.
    This will be shown in WellTyped.v *)
 Definition get_defs (r:reg) (f:t): list pc :=
@@ -197,6 +221,41 @@ Definition get_defs (r:reg) (f:t): list pc :=
            (List.map (fun phi_idx => pc_phi bid phi_idx) phi_idxs) ++
            (List.map (fun inst_idx => pc_inst bid inst_idx) inst_idxs))
         (number_list f.(body))).
+
+(* Get PCs of uses of register r. *)
+Definition get_uses (r:reg) (f:t): list pc :=
+  List.concat (
+      List.map
+        (fun bb =>
+           let bid := bb.(fst) in
+           (List.map (fun phi_idx => pc_phi bid phi_idx)
+                     (BasicBlock.phi_uses r bb.(snd))) ++
+           (List.map (fun inst_idx => pc_inst bid inst_idx)
+                     (BasicBlock.inst_uses r bb.(snd))) ++
+           (if BasicBlock.terminator_uses r bb.(snd) then
+              (pc_terminator bid)::nil
+           else nil))
+        (number_list f.(body))).
+
+(* Returns true if r is defined in arguments. false otherwise *)
+Definition is_argument (r:reg) (f:t): bool :=
+  List.existsb (fun x => Nat.eqb x.(snd) r) f.(args).
+
+(* Returns the beginning PC in this function. *)
+Definition get_begin_pc (f:t): pc :=
+  match f.(body) with
+  | nil => (* Cannot happen. in well-formed IR *)
+    pc_phi 0 0
+  | bb::_ =>
+    match bb.(BasicBlock.phis) with
+    | phi::_ => pc_phi 0 0
+    | nil =>
+      match bb.(BasicBlock.insts) with
+      | inst::_ => pc_inst 0 0
+      | nil => pc_terminator 0
+      end
+    end
+  end.
 
 Definition valid_pc (p:pc) (f:t): bool :=
   match p with
@@ -259,6 +318,7 @@ Definition valid_next_pc (p1 p2:pc) (f:t): bool :=
     end
   | (_, _) => false
   end.
+  
 
 End IRFunction.
 

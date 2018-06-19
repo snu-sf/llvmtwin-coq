@@ -209,6 +209,51 @@ Proof.
 Qed.
 
 
+Lemma last_cons {X:Type}:
+  forall (l:list X) h h' h'',
+    List.last (l ++ (h::nil)) h'' = List.last (h'::l ++ (h::nil)) h''.
+Proof.
+  intros.
+  generalize dependent h'.
+  induction l.
+  - simpl. reflexivity.
+  - intros. simpl. reflexivity.
+Qed.
+
+Lemma last_element {X:Type}:
+  forall (l:list X) h1 h3 h2
+         (HLAST:List.last (l ++ (h1::nil)) h3 = h2),
+    h1 = h2.
+Proof.
+  intros.
+  induction l.
+  - simpl in HLAST. congruence.
+  - simpl.
+    replace ((a::l)++h1::nil) with (a::l++h1::nil) in HLAST.
+    rewrite <- last_cons in HLAST.
+    apply IHl. assumption.
+    reflexivity.
+Qed.
+
+Lemma last_head {X:Type}:
+  forall (l:list X) (HLEN:List.length l > 0) x
+         (HLAST: List.last l x = x),
+    List.hd x (List.rev l) = x.
+Proof.
+  intros.
+  generalize dependent HLEN.
+  generalize dependent HLAST.
+  apply rev_ind with (l := l).
+  - intros. simpl in HLEN. inversion HLEN.
+  - intros.
+    assert (x0 = x).
+    { eapply last_element. eapply HLAST. }
+    rewrite H0 in *.
+    rewrite rev_unit.
+    reflexivity.
+Qed.
+
+
 (* Function version of List.incl *)
 
 Definition list_incl {X:Type}
