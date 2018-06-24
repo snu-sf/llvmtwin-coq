@@ -389,164 +389,6 @@ Eval compute in getptr ((null 0)::(null 1)::(null 2)::nil). (* None *)
          Lemmas about bits & bytes.
  ********************************************)
 
-Lemma list_segmentize8_l {X:Type}:
-  forall (bs:list X),
-    exists b1 b2, bs = b1 ++ b2 /\
-                  Nat.modulo (List.length b2) 8 = 0 /\
-                  List.length b1 < 8.
-Proof.
-  intros.
-  induction bs.
-  - exists nil. eexists nil.
-    split. reflexivity. split. reflexivity. simpl. omega.
-  - inversion IHbs as [b1 [b2 IH]].
-    destruct IH as [H1 [H2 H3]].
-    destruct b1 as [ | h1 b1].
-    { eexists (a::nil). eexists b2. 
-      split. rewrite H1. reflexivity.
-      split. assumption.
-      simpl. omega. }
-    destruct b1 as [ | h2 b1].
-    { simpl in H1.
-      rewrite H1.
-      eexists (a::h1::nil). eexists b2.
-      split. reflexivity.
-      split. assumption.
-      simpl. omega. }
-    destruct b1 as [ | h3 b1].
-    { simpl in H1.
-      rewrite H1.
-      eexists (a::h1::h2::nil). eexists b2.
-      split. reflexivity.
-      split. assumption.
-      simpl. omega. }
-    destruct b1 as [ | h4 b1].
-    { simpl in H1.
-      rewrite H1.
-      eexists (a::h1::h2::h3::nil). eexists b2.
-      split. reflexivity.
-      split. assumption.
-      simpl. omega. }
-    destruct b1 as [ | h5 b1].
-    { simpl in H1.
-      rewrite H1.
-      eexists (a::h1::h2::h3::h4::nil). eexists b2.
-      split. reflexivity.
-      split. assumption.
-      simpl. omega. }
-    destruct b1 as [ | h6 b1].
-    { simpl in H1.
-      rewrite H1.
-      eexists (a::h1::h2::h3::h4::h5::nil). eexists b2.
-      split. reflexivity.
-      split. assumption.
-      simpl. omega. }
-    destruct b1 as [ | h7 b1].
-    { simpl in H1.
-      rewrite H1.
-      eexists (a::h1::h2::h3::h4::h5::h6::nil). eexists b2.
-      split. reflexivity.
-      split. assumption.
-      simpl. omega. }
-    simpl in H1.
-    rewrite H1.
-    eexists nil.
-    eexists (a::h1::h2::h3::h4::h5::h6::h7::b1 ++ b2).
-    split. reflexivity.
-    split.
-    assert (a :: h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: b1 ++ b2 =
-            (a :: h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: b1) ++ b2).
-    { reflexivity. }
-    rewrite H.
-    rewrite app_length.
-    replace (length (a :: h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: b1)) with
-            (8 + length b1).
-    simpl in H3.
-    destruct b1.
-    + rewrite <- Nat.add_mod_idemp_l.
-      simpl.
-      apply H2.
-      omega.
-    + simpl in H3.
-      omega.
-    + simpl. reflexivity.
-    + simpl. omega.
-Qed.
-
-Lemma list_segmentize8_r {X:Type}:
-  forall (bs:list X),
-    exists b1 b2, bs = b1 ++ b2 /\
-                  Nat.modulo (List.length b1) 8 = 0 /\
-                  List.length b2 < 8.
-Proof.
-  intros.
-  assert (exists b1' b2', (rev bs) = b1' ++ b2' /\
-                          Nat.modulo (List.length b2') 8 = 0 /\
-                          List.length b1' < 8).
-  { eapply list_segmentize8_l. }
-  destruct H as [b1' H].
-  destruct H as [b2' H].
-  destruct H as [H1 [H2 H3]].
-  rewrite <- rev_involutive with (l := b1') in H1.
-  rewrite <- rev_involutive with (l := b2') in H1.
-  rewrite <- rev_app_distr in H1.
-  assert (bs = rev b2' ++ rev b1').
-  { rewrite <- rev_involutive with (l := bs).
-    rewrite H1.
-    rewrite rev_involutive.
-    reflexivity. }
-  exists (rev b2').
-  exists (rev b1').
-  split.
-  - assumption.
-  - split.
-    rewrite rev_length. assumption.
-    rewrite rev_length. assumption.
-Qed.
-
-Lemma list_split8_l {X:Type}:
-  forall (bs:list X) n
-         (HLEN:n = List.length bs)
-         (HLEN2:Nat.modulo n 8 = 0)
-         (HNEQ:n <> 0),
-    exists b1 b2, bs = b1 ++ b2 /\
-                  List.length b1 = 8 /\
-                  Nat.modulo (List.length b2) 8 = 0.
-Proof.
-  intros.
-  destruct bs as [| h1 bs].
-  { simpl in HLEN. omega. }
-  destruct bs as [| h2 bs].
-  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
-  destruct bs as [| h3 bs].
-  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
-  destruct bs as [| h4 bs].
-  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
-  destruct bs as [| h5 bs].
-  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
-  destruct bs as [| h6 bs].
-  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
-  destruct bs as [| h7 bs].
-  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
-  destruct bs as [| h8 bs].
-  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
- exists (h1::h2::h3::h4::h5::h6::h7::h8::nil).
-  exists bs.
-  split. reflexivity.
-  split. reflexivity.
-  assert (length (h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: h8 :: bs) =
-          8 + length bs).
-  { reflexivity. }
-  rewrite H in HLEN.
-  rewrite HLEN in HLEN2.
-  rewrite <- Nat.add_mod_idemp_l in HLEN2.
-  simpl in HLEN2.
-  simpl.
-  assumption.
-  omega.
-Qed.
-
-
 Lemma from_bits_nonnil:
   forall b bs,
     nil <> from_bits (b::bs).
@@ -744,7 +586,6 @@ Proof.
       simpl. reflexivity.
       omega.
 Qed.
-
 
 End Byte.
 
@@ -1024,6 +865,25 @@ Definition calltime (m:t) (cid:callid): option time :=
   | h::t => h.(snd)
   end.
 
+
+(**********************************************
+    Lemmas&Theorems about get/set functions
+ **********************************************)
+
+Lemma get_unique:
+  forall m (HWF:wf m) bid mb res
+         (HF:res = filter (fun i2 : nat * MemBlock.t => Nat.eqb (fst i2) bid)
+                          (blocks m))
+         (HGET:Some mb = get m bid),
+    res = (bid, mb)::nil \/ res = nil.
+Admitted.
+
+Lemma blocks_get:
+  forall m (HWF:wf m) bs b
+         (HBS:bs = blocks m)
+         (HIN:List.In b bs),
+    get m b.(fst) = Some b.(snd).
+Admitted.
 
 (**********************************************
       Lemmas&Theorems about inboundness
