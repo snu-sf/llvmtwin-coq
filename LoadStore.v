@@ -1,6 +1,10 @@
+Require Import Lang.
 Require Import Memory.
+Require Import State.
 Require Import Bool.
 Require Import List.
+Require Import BinNatDef.
+Require Import Omega.
 
 Module Ir.
 
@@ -48,6 +52,51 @@ Definition deref (m:Ir.Memory.t) (p:Ir.ptrval) (sz:nat): bool :=
   | nil => false | _=> true
   end.
 
+(* Returns a list of bytes, after dereferencing p with
+   sz bytes. *)
+Definition load_bytes (m:Ir.Memory.t) (p:Ir.ptrval) (sz:nat): list Ir.Byte.t :=
+  match (get_deref m p sz) with
+  | nil => nil
+  | (bid, blk, ofs)::_ => Ir.MemBlock.bytes blk ofs sz
+  end.
+
+Definition load_val (m:Ir.Memory.t) (p:Ir.ptrval) (t:Ir.ty): Ir.val :=
+  let bytes := load_bytes m p (Nat.div (7 + Ir.ty_bitsz t) 8) in
+  match t with
+  | Ir.ity bitsz =>
+    match Ir.Byte.getint bytes bitsz with
+    | None => Ir.poison
+    | Some n => Ir.num (N.modulo n (N.shiftl 1 (N.of_nat bitsz)))
+    end
+  | Ir.ptrty _ =>
+    match Ir.Byte.getptr bytes with
+    | None => Ir.poison
+    | Some p => Ir.ptr p
+    end
+  end.
+
+Definition store_bytes (m:Ir.Memory.t) (p:Ir.ptrval) (bs:list Ir.Byte.t)
+:Ir.Memory.t :=
+  match get_deref m p (List.length bs) with
+  | nil => m
+  | (bid, blk, ofs)::_ =>
+    Ir.Memory.set m bid (Ir.MemBlock.set_bytes blk ofs bs)
+  end.
+
+Definition store_val (m:Ir.Memory.t) (p:Ir.ptrval) (v:Ir.val) (t:Ir.ty)
+: Ir.Memory.t :=
+  match (t, v) with
+  | (Ir.ity bitsz, Ir.num n) =>
+    store_bytes m p (Ir.Byte.ofint n bitsz)
+  | (Ir.ptrty pty, Ir.ptr pv) =>
+    store_bytes m p (Ir.Byte.ofptr pv)
+  | _ => m
+  end.
+
+(***********************************************
+                Lemmas about get_deref
+ ***********************************************)
+
 (* Theorem: get_deref log(bid, ofs) either returns the input (bid, block, ofs)
    or returns nothing. *)
 Theorem get_deref_log:
@@ -91,7 +140,8 @@ Lemma get_deref_blks_phyptr_singleton:
   forall (m:Ir.Memory.t) (m_wf:Ir.Memory.wf m) o Is cid sz bos
          (HSZ: 0 < sz)
          (HDEREF: get_deref_blks_phyptr m o Is cid sz = bos),
-  (exists bo, bos = bo::nil) \/ (bos = nil).
+  (exists bo, bos = bo::nil /\ Ir.Memory.get m bo.(fst) = Some bo.(snd))
+  \/ (bos = nil).
 Proof.
   intros.
   unfold get_deref_blks_phyptr in HDEREF.
@@ -118,7 +168,8 @@ Proof.
     - destruct (Ir.Memory.calltime m cid) as [cid' |] eqn:HCT.
       + simpl in HDEREF.
         destruct (Ir.MemBlock.alive_before cid' (snd b1)).
-        * left. eexists. rewrite HDEREF. reflexivity.
+        * left. eexists. split.
+          rewrite HDEREF. reflexivity. 
         * right. congruence.
       + left. eexists. rewrite HDEREF. reflexivity.
     - left. eexists. rewrite HDEREF. reflexivity.
@@ -221,10 +272,10 @@ Proof.
     rewrite <- Heqalive, <- Heqinb1, <- Heqinb2 in HCOND.
     destruct alive; destruct inb1; destruct inb2;
       simpl in HCOND; try (inversion HCOND; fail).
-    rewrite Ir.Memory.inbounds_inbounds_abs
+    rewrite Ir.MemBlock.inbounds_inbounds_abs
       with (ofs_abs := Ir.MemBlock.addr blk + ofs)
       in Heqinb1.
-    rewrite Ir.Memory.inbounds_inbounds_abs
+    rewrite Ir.MemBlock.inbounds_inbounds_abs
       with (ofs_abs := Ir.MemBlock.addr blk + ofs + sz)
       in Heqinb2.
     destruct HLOG.
@@ -328,5 +379,42 @@ Qed.
              - e
            }
 *)
+
+(***********************************************
+      Lemmas about load_bytes & store_bytes
+ ***********************************************)
+
+Theorem load_store_bytes:
+  forall (m:Ir.Memory.t) (wf:Ir.Memory.wf m) (sz:nat)
+         (p:Ir.ptrval)
+         (HDEREF:deref m p sz = true),
+    store_bytes m p (load_bytes m p sz) = m.
+Proof.
+  intros.
+  unfold load_bytes.
+  unfold store_bytes.
+  unfold deref in HDEREF.
+  remember (get_deref m p sz) as bos.
+  destruct bos as [| [[bid mb] ofs] bos'].
+  { inversion HDEREF. }
+  assert (Ir.Memory.get m bid = Some mb).
+  { unfold get_deref in Heqbos.
+    remember (Ir.Memory.get m bid) as blk.
+    destruct p as [[bid' ofs'] | [[o Is] cid]].
+    - remember (Ir.Memory.get m bid') as blk'.
+      destruct blk'.
+      + destruct (Ir.MemBlock.alive t && Ir.MemBlock.inbounds ofs' t &&
+             Ir.MemBlock.inbounds (ofs' + sz) t).
+        * inversion Heqbos.
+          congruence.
+        * inversion Heqbos.
+      + inversion Heqbos.
+    - unfold get_deref_blks_phyptr in Heqbos.
+      destruct cid.
+      destruct (Ir.Memory.calltime m c).
+    
+  rewrite bytes_length.
+  rewrite <- Heqbos.
+  rewrite set_bytes_self.
 
 End Ir.

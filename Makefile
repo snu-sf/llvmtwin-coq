@@ -3,4 +3,5 @@ all:
 	coqc Common.v
 	coqc Memory.v
 	coqc Lang.v
-	coqc LoadStore.v State.v WellTyped.v
+	coqc State.v
+	coqc LoadStore.v WellTyped.v

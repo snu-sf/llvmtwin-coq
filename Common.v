@@ -2,6 +2,7 @@ Require Import List.
 Require Import BinPos.
 Require Import Bool.
 Require Import Coq.Arith.PeanoNat.
+Require Import Coq.Arith.Compare_dec.
 Require Import Sumbool.
 Require Import Basics.
 
@@ -36,6 +37,120 @@ Proof.
       * eexists. eexists. reflexivity.
       * simpl in H. inversion H.
 Qed.
+
+Lemma firstn_app_decompose {X:Type}:
+  forall (l l1 l2:list X) n
+         (HL:l = l1 ++ l2)
+         (HLEN:List.length l1 = n),
+    firstn n l = l1.
+Proof.
+  intros.
+  generalize dependent l.
+  generalize dependent n.
+  induction l1.
+  - simpl. intros. rewrite <- HLEN. reflexivity.
+  - simpl. intros.
+    destruct n.
+    + inversion HLEN.
+    + inversion HLEN.
+      destruct l.
+      inversion HL.
+      inversion HL.
+      simpl. rewrite H0. rewrite IHl1. reflexivity.
+      congruence. reflexivity.
+Qed.
+
+Lemma skipn_app_decompose {X:Type}:
+  forall (l l1 l2:list X) n
+         (HL:l = l1 ++ l2)
+         (HLEN:List.length l1 = n),
+    skipn n l = l2.
+Proof.
+  intros.
+  generalize dependent l.
+  generalize dependent n.
+  induction l1.
+  - simpl. intros. rewrite HL. rewrite <- HLEN. reflexivity.
+  - simpl. intros.
+    destruct n.
+    + inversion HLEN.
+    + inversion HLEN.
+      destruct l.
+      inversion HL.
+      inversion HL.
+      simpl. rewrite H0. rewrite IHl1. reflexivity.
+      congruence. reflexivity.
+Qed.
+
+Lemma skipn_all {X:Type}:
+  forall (l:list X) n
+         (HLEN:List.length l <= n),
+    skipn n l = nil.
+Proof.
+  intros.
+  generalize dependent n.
+  induction l.
+  - simpl. intros. destruct n; reflexivity.
+  - simpl. intros.
+    destruct n.
+    + inversion HLEN.
+    + simpl. apply IHl.
+      apply le_S_n. assumption.
+Qed.
+
+Lemma app_decompose {X:Type} (n:nat):
+  forall (l:list X)
+         (HLEN:n <= List.length l),
+    exists l1 l2, (l = l1 ++ l2 /\ List.length l1 = n).
+Proof.
+  intros.
+  generalize dependent n.
+  induction l.
+  - simpl. intros. inversion HLEN.
+    exists nil. exists nil. split; reflexivity.
+  - simpl. intros.
+    destruct n.
+    + exists nil. exists (a::l). split; reflexivity.
+    + apply le_S_n in HLEN.
+      apply IHl in HLEN.
+      destruct HLEN. destruct H.
+      destruct H.
+      exists (a::x). exists x0.
+      rewrite H. split. reflexivity. simpl. congruence.
+Qed.
+
+Lemma firstn_firstn_skipn {X:Type}:
+  forall n1 n2 (l:list X),
+    firstn n1 l ++ firstn n2 (skipn n1 l) = firstn (n1+n2) l.
+Proof.
+  intros.
+  assert (HD := app_decompose n1 l).
+  assert (HDEC := Compare_dec.le_gt_dec n1 (List.length l)).
+  destruct HDEC as [HDEC | HDEC].
+  - apply HD in HDEC.
+    destruct HDEC as [l1 [l2 [HDEC1 HDEC2]]].
+    rewrite firstn_app_decompose with (l0 := l) (l3 := l1) (l4 := l2).
+    rewrite <- HDEC2.
+    rewrite HDEC1.
+    rewrite firstn_app_2.
+    rewrite skipn_app_decompose with (l3 := l1) (l4 := l2).
+    reflexivity. reflexivity. reflexivity. congruence. congruence.
+  - assert (length l <= n1).
+    { apply Gt.gt_le_S in HDEC.
+      apply PeanoNat.Nat.le_trans with (m := S (length l)).
+      auto. assumption. }
+    rewrite firstn_all2.
+    rewrite firstn_all2 with (n:= n1+n2).
+    rewrite skipn_all. rewrite firstn_nil.
+    rewrite app_nil_r. reflexivity.
+    assumption.
+    apply Gt.gt_le_S in HDEC.
+    apply PeanoNat.Nat.le_trans with (m := n1).
+    apply PeanoNat.Nat.le_trans with (m := S (length l)).
+    auto. assumption. apply PeanoNat.Nat.le_add_r.
+    assumption.
+Qed.
+
 
 (* If the result of List.combine is nil, and
    their length is the same. input is both nil *)

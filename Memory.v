@@ -321,8 +321,6 @@ Definition ofint (i:N) (bitsz:nat): list Byte.t :=
 
 Eval compute in getint (zero::zero::nil) 2.
 Eval compute in getint (one::zero::nil) 2.
-Eval compute in getint (zero::one::nil).
-Eval compute in getint (one::one::nil).
 Eval compute in ofint (10%N) 9.
 
 (* Check whether b has 8 pointer bits (p, i), (p, i + 1, ..)
@@ -390,15 +388,6 @@ Eval compute in getptr ((null 0)::(null 1)::(null 2)::nil). (* None *)
 (********************************************
          Lemmas about bits & bytes.
  ********************************************)
-
-(*Lemma from_ibits_getibits:
-  forall (bs:list Bit.t),
-    merge (List.map getibits (from_bits bs)) = Some bs.
-Proof.
-  induction bs.
-  - reflexivity.
-  - 
-Qed.*)
 
 Lemma list_segmentize8_l {X:Type}:
   forall (bs:list X),
@@ -557,87 +546,6 @@ Proof.
   omega.
 Qed.
 
-(*
-Theorem list_app_ind {X:Type} (P:list X -> Prop):
-  forall (H0:P nil)
-         (HIND:forall l1 l2 (HPREV:P l1),
-             P (l2++l1)),
-    forall l, P l.
-Proof.
-  intros.
-  induction l.
-  - assumption.
-  - assert (HIND' := HIND l (a::nil)).
-    simpl in HIND'.
-    apply HIND'. assumption.
-Qed.
-
-
-Lemma list8 {X:Type} :=
-| l8nil := list8
-| l8e1 := forall h1, list8
-| l8e2 := forall h1 h2, list8
-| l8e3 := forall h1 h2 h3, list8
-| l8e4 := forall h1 h2 h3 h4, list8
-| l8e5 := forall h1 h2 h3 h4 h5, list8
-| l8e6 := forall h1 h2 h3 h4 h5 h6, list8
-| l8e7 := forall h1 h2 h3 h4 h5 h6 h7, list8
-| l8cons := forall h1 h2 h3 h4 h5 h6 h7 h8 l,
-                
-
-
-Theorem list_2_ind {X:Type} (P:list X -> Prop):
-  forall (H0:P nil) (H1:forall a, P (a::nil))
-         (HIND:forall l (HPREV:P l),
-             forall a1 a2,
-               P (a1::a2::l)),
-    forall l,
-      P l.
-Proof.
-  induction l using list_app_ind.
-  assumption.
-  destruct l2.
-  simpl. assumption.
-  destruct l2. simpl. 
-  destruct l.
-  apply H1.
-  
-  destruct l as [|h1 l].
-  { intros. assumption. }
-  generalize dependent h1.
-  destruct l as [|h2 l].
-  { intros. apply H1. }
-  intros.
-  apply HIND.
-  apply HIND.
-  - admit.
-  - 
-  induction l as [|h3 l].
-  { intros. inversion H8. }
-  induction l as [|h4 l].
-  { inversion H8. }
-  induction l as [|h5 l].
-  { inversion H8. }
-  induction l as [|h6 l].
-  { inversion H8. }
-  induction l as [|h7 l].
-  { inversion H8. }
-  induction l as [|h8 l].
-  { inversion H8. }
-  clear IHl0.
-  apply HIND.
-  - assert (length (h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: h8 :: l) =
-            8 + length l).
-    { reflexivity. }
-    rewrite H in H8.
-    rewrite <- Nat.add_mod_idemp_l in H8.
-    simpl in H8.
-    simpl.
-    assumption.
-    omega.
-  - assumption.
-Qed.
-*)
 
 Lemma from_bits_nonnil:
   forall b bs,
@@ -724,13 +632,11 @@ Proof.
     assert (ls1 = nil \/
             (exists ls1' ls1'', List.length ls1' = 8 /\ ls1 = ls1' ++ ls1'')).
     { remember (List.length ls1) as n1.
-      Check Nat.eq_dec.
       assert (HN1 := Nat.eq_dec n1 0).
       destruct HN1.
       - left. rewrite Heqn1 in e.
         rewrite length_zero_iff_nil in e. congruence. 
-      - Check list_split8_l.
-        assert (HSP:=list_split8_l ls1 n1 Heqn1 HB2).
+      - assert (HSP:=list_split8_l ls1 n1 Heqn1 HB2).
         destruct HSP as [ls1h [ls1t [HSP1 [HSP2 HSP3]]]].
         assumption.
         right.
@@ -964,6 +870,64 @@ Proof.
     apply Plus.plus_le_compat_l.
     assumption.
 Qed.
+
+Lemma bytes_length:
+  forall mb ofs sz
+    (HOFS:ofs + sz <= List.length (Ir.MemBlock.c mb)),
+    length (Ir.MemBlock.bytes mb ofs sz) = sz.
+Proof.
+  intros.
+  unfold Ir.MemBlock.bytes.
+  remember (Ir.MemBlock.c mb) as c.
+  assert (length (firstn sz (skipn ofs c)) = sz).
+  {
+    assert (exists l1 l2, (c = l1 ++ l2 /\ List.length l1 = ofs)).
+    {
+      apply app_decompose.
+      omega.
+    }
+    destruct H as [l1 [l2 [H1 H2]]].
+    rewrite skipn_app_decompose with (l3 := l1) (l4 := l2).
+    assert (exists l2' l3, (l2 = l2' ++ l3 /\ List.length l2' = sz)).
+    { apply app_decompose.
+      assert (List.length c = List.length l1 + List.length l2).
+      { rewrite <- app_length. rewrite H1. reflexivity. }
+      rewrite H2 in H. rewrite H in HOFS.
+      omega.
+    }
+    destruct H as [l2' [l3 [H3 H4]]].
+    erewrite firstn_app_decompose.
+    - eapply H4.
+    - eapply H3.
+    - assumption.
+    - assumption.
+    - assumption.
+  }
+  assumption.
+Qed.
+
+Lemma set_bytes_self:
+  forall mb ofs sz
+    (HOFS:ofs + sz <= List.length (Ir.MemBlock.c mb)),
+    Ir.MemBlock.set_bytes mb ofs (Ir.MemBlock.bytes mb ofs sz) = mb.
+Proof.
+  intros.
+  unfold Ir.MemBlock.set_bytes.
+  rewrite bytes_length.
+  unfold Ir.MemBlock.bytes.
+  remember (Ir.MemBlock.c mb) as c.
+  assert (firstn ofs c ++ firstn sz (skipn ofs c) ++ skipn (ofs + sz) c
+                 = c).
+  {
+    rewrite app_assoc.
+    rewrite firstn_firstn_skipn.
+    rewrite firstn_skipn. reflexivity.
+  }
+  rewrite H.
+  rewrite Heqc.
+  admit.
+Admitted.
+
 
 End MemBlock.
 
@@ -1929,6 +1893,8 @@ Proof.
   eassumption.
 Qed.
   
+
+
 
 End Memory.
 
