@@ -1,12 +1,20 @@
 Require Import List.
 Require Import BinPos.
 Require Import Common.
+Require Import Memory.
 
 Module Ir.
 
 Inductive ty :=
 | ity: nat -> ty (* bitsz *)
 | ptrty: ty -> ty.
+
+Definition ty_bitsz (t:ty):nat :=
+  match t with
+  | ity bitsz => bitsz
+  | ptrty _ => Ir.PTRSZ
+  end.
+
 
 Inductive const :=
 | cnum: ty -> N -> const

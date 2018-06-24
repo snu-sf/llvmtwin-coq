@@ -208,6 +208,21 @@ Proof.
   rewrite HEQ. congruence.
 Qed.
 
+Lemma existsb_rev:
+  forall {X:Type} (f:X -> bool) (l:list X),
+    List.existsb f (List.rev l) = List.existsb f l.
+Proof.
+  intros.
+  induction l.
+  - reflexivity.
+  - simpl in *.
+    rewrite existsb_app.
+    simpl.
+    rewrite orb_comm.
+    rewrite orb_comm with (b1 := f a).
+    simpl.
+    rewrite IHl. reflexivity.
+Qed.
 
 (* Why do I need this? *)
 Lemma list_eq:
@@ -1610,78 +1625,3 @@ Proof.
   assumption.
 Qed.
 
-(**************************************************
-             Number <-> bits (list bool)
- *************************************************)
-
-Fixpoint pos_to_bits (n:positive): list bool :=
-  match n with
-  | xH => true::nil
-  | xI n' => true::(pos_to_bits n')
-  | xO n' => false::(pos_to_bits n')
-  end.
-Definition N_to_bits (n:N): list bool :=
-  match n with
-  | N0 => nil
-  | Npos p => pos_to_bits p
-  end.
-
-Eval compute in N_to_bits 0%N. (* nil *)
-Eval compute in N_to_bits 10%N. (* [f,t,f,t] *)
-
-Fixpoint bits_to_pos (bits:list bool): positive :=
-  match bits with
-  | nil => xH
-  | true::nil => xH
-  | h::t => (if h then xI else xO) (bits_to_pos t)
-  end.
-Fixpoint bits_to_N (bits:list bool): N :=
-  match bits with
-  | nil => N0
-  | _ => Npos (bits_to_pos bits)
-  end.
-
-
-Fixpoint erase_lzerobits (bits:list bool): list bool :=
-  match bits with
-  | nil => nil
-  | h::t =>
-    match h with | false => erase_lzerobits t | true => bits
-    end
-  end.
-
-Definition erase_hzerobits (bits:list bool): list bool :=
-  List.rev (erase_lzerobits (List.rev bits)).
-
-Eval compute in bits_to_N nil. (* 0 *)
-Eval compute in bits_to_N (true::false::true::nil). (* 5 *)
-Eval compute in erase_hzerobits (false::false::true::false::nil).
-
-
-Lemma pos_bits_pos:
-  forall (p:positive), bits_to_pos (pos_to_bits p) = p.
-Proof.
-  intros.
-  induction p.
-  - simpl. rewrite IHp.
-    destruct p; simpl; reflexivity.
-  - simpl. rewrite IHp. reflexivity.
-  - simpl. reflexivity.
-Qed.
-
-Lemma N_bits_N:
-  forall (n:N), bits_to_N (N_to_bits n) = n.
-Proof.
-  intros.
-  destruct n.
-  - reflexivity.
-  - simpl.
-    assert (~ (pos_to_bits p = nil)).
-    {
-      intros H.
-      destruct p; simpl in H; inversion H.
-    }
-    destruct (pos_to_bits p) eqn:HEQ.
-    + exfalso. apply H. reflexivity.
-    + unfold bits_to_N. rewrite <- HEQ. rewrite pos_bits_pos. reflexivity.
-Qed.

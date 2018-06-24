@@ -54,67 +54,285 @@ Definition ptr_eqb (p1 p2:ptrval): bool :=
 Inductive blockty :=
 | stack | heap | global | function.
 
-Inductive bit :=
-| bint: bool -> bit
-(* (p, i). Note that 0 <= i < PTRSZ is kept as invariant. *)
-| baddr: ptrval -> nat -> bit.
 
-Definition bit0 := bint false.
-Definition bit1 := bint true.
-Definition bnull (i:nat) := baddr NULL i.
+Module Bit.
+
+Inductive t :=
+| bint: bool -> t
+(* (p, i). Note that 0 <= i < PTRSZ is kept as invariant. *)
+| baddr: ptrval -> nat -> t
+| bpoison: t.
+
+Definition zero := bint false.
+Definition one := bint true.
+Definition null (i:nat) := baddr NULL i.
+
+
+Definition bools_to_bit (bs:list bool): list t :=
+  List.map (fun b => bint b) bs.
+
+Fixpoint erase_lzerobits (bits:list t): list t :=
+  match bits with
+  | nil => nil
+  | (bint h)::t =>
+    match h with | false => erase_lzerobits t | true => bits
+    end
+  | x => x
+  end.
+
+Definition erase_hzerobits (bits:list t): list t :=
+  List.rev (erase_lzerobits (List.rev bits)).
+
+Definition add_lzerobits (bits:list t) (n:nat): list t :=
+  List.repeat (bint false) n ++ bits.
+
+Definition add_hzerobits (bits:list t) (n:nat): list t :=
+  bits ++ List.repeat (bint false) n.
+
+(**************************************************
+             Number <-> bits (list bool)
+ *************************************************)
+
+Fixpoint pos_to_bits (n:positive): list t :=
+  match n with
+  | xH => (bint true)::nil
+  | xI n' => (bint true)::(pos_to_bits n')
+  | xO n' => (bint false)::(pos_to_bits n')
+  end.
+Definition N_to_bits (n:N): list t :=
+  match n with
+  | N0 => nil
+  | Npos p => pos_to_bits p
+  end.
+
+Eval compute in N_to_bits 0%N. (* nil *)
+Eval compute in N_to_bits 10%N. (* [f,t,f,t] *)
+
+Fixpoint _bits_to_pos (bits:list t): positive :=
+  match bits with
+  | nil => xH
+  | (bint true)::nil => xH
+  | (bint h)::t => (if h then xI else xO) (_bits_to_pos t)
+  | _ => xH
+  end.
+Definition bits_to_pos (bits:list t): positive :=
+  _bits_to_pos (erase_hzerobits bits).
+
+Definition bits_to_N (bits:list t): N :=
+  match bits with
+  | nil => N0
+  | _ => Npos (bits_to_pos bits)
+  end.
+
+Definition nonzero (b:t): bool :=
+  match b with
+  | bint false => false
+  | _ => true
+  end.
+
+
+Eval compute in bits_to_N nil. (* 0 *)
+Eval compute in bits_to_N (bint true::bint false::bint true::nil). (* 5 *)
+Eval compute in erase_lzerobits (bint false::bint false::bint true::nil).
+Eval compute in erase_hzerobits (bint false::bint false::bint true::bint false::nil).
+Eval compute in add_lzerobits (bint true::bint false::bint true::nil) 2.
+Eval compute in add_hzerobits (bint true::bint false::bint true::nil) 2.
+
+(**********************************************
+            Lemmas about bit.
+ **********************************************)
+
+Lemma erase_lzerobits_app:
+  forall (l1 l2:list t)
+         (HNOTIN:List.existsb nonzero l1 = true),
+    erase_lzerobits (l1 ++ l2) = (erase_lzerobits l1) ++ l2.
+Proof.
+  intros.
+  induction l1.
+  - simpl in HNOTIN. inversion HNOTIN.
+  - simpl in HNOTIN.
+    simpl.
+    destruct a.
+    + destruct b. simpl. reflexivity.
+      simpl in HNOTIN.
+      apply IHl1 in HNOTIN.
+      assumption.
+    + simpl. reflexivity.
+    + simpl. reflexivity.
+Qed.
+
+Lemma pos_to_bits_nonzero:
+  forall (p:positive), List.existsb nonzero (pos_to_bits p) = true.
+Proof.
+  intros.
+  induction p.
+  - unfold pos_to_bits.
+    simpl. reflexivity.
+  - unfold pos_to_bits. simpl. fold pos_to_bits. assumption.
+  - simpl. reflexivity.
+Qed.
+
+Lemma erase_hzerobits_pos_to_bits:
+  forall (p:positive), erase_hzerobits (pos_to_bits p) = pos_to_bits p.
+Proof.
+  intros.
+  induction p.
+  - unfold erase_hzerobits.
+    unfold pos_to_bits.
+    simpl.
+    rewrite erase_lzerobits_app.
+    + rewrite rev_app_distr.
+      simpl. fold pos_to_bits.
+      unfold erase_hzerobits in IHp.
+      rewrite IHp. reflexivity.
+    + fold pos_to_bits. rewrite existsb_rev.
+      apply pos_to_bits_nonzero.
+  - unfold erase_hzerobits.
+    simpl.
+    rewrite erase_lzerobits_app.
+    + rewrite rev_app_distr.
+      simpl. unfold erase_hzerobits in IHp. rewrite IHp. reflexivity.
+    + rewrite existsb_rev. apply pos_to_bits_nonzero.
+  - reflexivity.
+Qed.
+
+Lemma pos_to_bits_nonnil:
+  forall (p:positive), ~ (pos_to_bits p = nil).
+Proof.
+  intros.
+  destruct p; intros H; inversion H.
+Qed.
+
+Lemma pos_bits_pos:
+  forall (p:positive), bits_to_pos (pos_to_bits p) = p.
+Proof.
+  intros.
+  unfold bits_to_pos.
+  rewrite erase_hzerobits_pos_to_bits.
+  induction p.
+  - remember (pos_to_bits p) as bs.
+    destruct bs. exfalso. eapply pos_to_bits_nonnil. rewrite <- Heqbs. reflexivity.
+    simpl.
+    rewrite <- Heqbs.
+    simpl in *.
+    destruct t0.
+    + destruct b. rewrite IHp. reflexivity.
+      rewrite IHp. reflexivity.
+    + rewrite <- IHp. reflexivity.
+    + rewrite <- IHp. reflexivity.
+  - simpl.
+    rewrite IHp. reflexivity.
+  - reflexivity.
+Qed.
+
+Theorem N_bits_N:
+  forall (n:N), bits_to_N (N_to_bits n) = n.
+Proof.
+  intros.
+  destruct n.
+  - reflexivity.
+  - unfold bits_to_N.
+    unfold N_to_bits.
+    rewrite pos_bits_pos.
+    assert (~ pos_to_bits p = nil).
+    { apply pos_to_bits_nonnil. }
+    destruct (pos_to_bits p).
+    { exfalso. apply H. reflexivity. }
+    { reflexivity. }
+Qed.
+
+End Bit.
+
 
 Module Byte.
 
 Structure t := mk
- {b0:bit; b1:bit; b2:bit; b3:bit; b4:bit; b5:bit; b6:bit; b7:bit}.
+ {b0:Bit.t;
+  b1:Bit.t;
+  b2:Bit.t;
+  b3:Bit.t;
+  b4:Bit.t;
+  b5:Bit.t;
+  b6:Bit.t;
+  b7:Bit.t}.
 
-Definition zero := mk bit0 bit0 bit0 bit0 bit0 bit0 bit0 bit0.
-Definition one  := mk bit1 bit0 bit0 bit0 bit0 bit0 bit0 bit0.
-Definition mone := mk bit1 bit1 bit1 bit1 bit1 bit1 bit1 bit1.
-Definition imax := mk bit0 bit1 bit1 bit1 bit1 bit1 bit1 bit1.
-Definition imin := mk bit1 bit0 bit0 bit0 bit0 bit0 bit0 bit0.
+Definition zero := mk Bit.zero Bit.zero Bit.zero Bit.zero
+                      Bit.zero Bit.zero Bit.zero Bit.zero.
+Definition one  := mk Bit.one Bit.zero Bit.zero Bit.zero
+                      Bit.zero Bit.zero Bit.zero Bit.zero.
+Definition mone := mk Bit.one Bit.one Bit.one Bit.one
+                      Bit.one Bit.one Bit.one Bit.one.
+Definition imax := mk Bit.zero Bit.one Bit.one Bit.one
+                      Bit.one Bit.one Bit.one Bit.one.
+Definition imin := mk Bit.one Bit.zero Bit.zero Bit.zero
+                      Bit.zero Bit.zero Bit.zero Bit.zero.
 
-Definition null i := mk (bnull (8*i))   (bnull (8*i+1)) (bnull (8*i+2))
-                        (bnull (8*i+3)) (bnull (8*i+4)) (bnull (8*i+5))
-                        (bnull (8*i+6)) (bnull (8*i+7)).
+Definition null i := mk (Bit.null (8*i))   (Bit.null (8*i+1)) (Bit.null (8*i+2))
+                        (Bit.null (8*i+3)) (Bit.null (8*i+4)) (Bit.null (8*i+5))
+                        (Bit.null (8*i+6)) (Bit.null (8*i+7)).
 
-(* Check whether b has 8 integer bits.
-   If it has all integer bits, return the integer bits. *)
-Definition getibits (b: Byte.t): option (list bool) :=
-  match (b.(b0), b.(b1), b.(b2), b.(b3), b.(b4), b.(b5), b.(b6), b.(b7)) with
-  | (bint i0, bint i1, bint i2, bint i3, bint i4, bint i5, bint i6, bint i7) =>
-    Some (i0::i1::i2::i3::i4::i5::i6::i7::nil)
-  | (_, _, _, _, _, _, _, _) => None
+Fixpoint from_bits (bs:list Bit.t): list t :=
+  match bs with
+  | nil => nil
+  | b1::nil =>
+    (mk b1 Bit.bpoison Bit.bpoison Bit.bpoison
+        Bit.bpoison Bit.bpoison Bit.bpoison Bit.bpoison)::nil
+  | b1::b2::nil =>
+    (mk b1 b2 Bit.bpoison Bit.bpoison
+        Bit.bpoison Bit.bpoison Bit.bpoison Bit.bpoison)::nil
+  | b1::b2::b3::nil =>
+    (mk b1 b2 b3 Bit.bpoison
+        Bit.bpoison Bit.bpoison Bit.bpoison Bit.bpoison)::nil
+  | b1::b2::b3::b4::nil =>
+    (mk b1 b2 b3 b4
+        Bit.bpoison Bit.bpoison Bit.bpoison Bit.bpoison)::nil
+  | b1::b2::b3::b4::b5::nil =>
+    (mk b1 b2 b3 b4
+        b5 Bit.bpoison Bit.bpoison Bit.bpoison)::nil
+  | b1::b2::b3::b4::b5::b6::nil =>
+    (mk b1 b2 b3 b4
+        b5 b6 Bit.bpoison Bit.bpoison)::nil
+  | b1::b2::b3::b4::b5::b6::b7::nil =>
+    (mk b1 b2 b3 b4
+        b5 b6 b7 Bit.bpoison)::nil
+  | b1::b2::b3::b4::b5::b6::b7::b8::t =>
+    (mk b1 b2 b3 b4
+        b5 b6 b7 b8)::from_bits t
   end.
+
+Definition to_bits (bs:list t): list Bit.t :=
+  List.concat (List.map (fun b =>
+        b.(b0)::b.(b1)::b.(b2)::b.(b3)::b.(b4)::b.(b5)::b.(b6)::b.(b7)::nil)
+        bs).
 
 (* Check whether bs have all integer bits.
    If it have, return the integer. *)
-Definition getint (bs: list Byte.t): option N :=
-  let bs' := List.map getibits bs in
-  let bs2 := List.fold_left
-               (fun lowb highb =>
-                  match (lowb, highb) with
-                  | (None, _) => None
-                  | (_, None) => None
-                  | (Some lowb, Some highb) => Some (lowb ++ highb)
-                  end) bs' (Some nil) in
-  match bs2 with
-  | None => None
-  | Some b => Some (bits_to_N (erase_hzerobits b))
-  end.
+Definition getint (bs: list Byte.t) (bitsz:nat): option N :=
+  let bits := List.firstn bitsz (to_bits bs) in
+  if (List.forallb (fun b => match b with | Bit.bint _ => true | _ => false end)
+                   bits) then
+    Some (Bit.bits_to_N bits)
+  else None.
 
-Eval compute in getibits one.
-Eval compute in getint (zero::zero::nil).
-Eval compute in getint (one::zero::nil).
+Definition ofint (i:N) (bitsz:nat): list Byte.t :=
+  let bits := Bit.N_to_bits i in
+  from_bits (Bit.add_hzerobits bits (bitsz - List.length bits)).
+
+
+Eval compute in getint (zero::zero::nil) 2.
+Eval compute in getint (one::zero::nil) 2.
 Eval compute in getint (zero::one::nil).
 Eval compute in getint (one::one::nil).
+Eval compute in ofint (10%N) 9.
 
 (* Check whether b has 8 pointer bits (p, i), (p, i + 1, ..)
    If it has, this returns (p, i). *)
 Definition getpbits (b: Byte.t): option (ptrval * nat) :=
   match (b.(b0), b.(b1), b.(b2), b.(b3), b.(b4), b.(b5), b.(b6), b.(b7)) with
-  | (baddr p0 n0, baddr p1 n1, baddr p2 n2, baddr p3 n3,
-     baddr p4 n4, baddr p5 n5, baddr p6 n6, baddr p7 n7) =>
+  | (Bit.baddr p0 n0, Bit.baddr p1 n1,
+     Bit.baddr p2 n2, Bit.baddr p3 n3,
+     Bit.baddr p4 n4, Bit.baddr p5 n5,
+     Bit.baddr p6 n6, Bit.baddr p7 n7) =>
     if (Nat.eqb n1 (1 + n0)) && (Nat.eqb n2 (2 + n0)) && (Nat.eqb n3 (3 + n0)) &&
        (Nat.eqb n4 (4 + n0)) && (Nat.eqb n5 (5 + n0)) && (Nat.eqb n6 (6 + n0)) &&
        (Nat.eqb n7 (7 + n0)) &&
@@ -158,13 +376,472 @@ Definition getptr (bs:list Byte.t): option ptrval :=
     end
   else None.
 
+Definition ofptr (bs:ptrval): list Byte.t
+:= from_bits
+     (List.map (fun i => Bit.baddr i.(snd) i.(fst))
+               (number_list (List.repeat bs PTRSZ))).
+
 Eval compute in getpbits (null 0).
 Eval compute in getpbits (null 1).
 Eval compute in getptr ((null 0)::nil). (* None *)
 Eval compute in getptr ((null 0)::(null 1)::nil). (* Some (pphy (0, nil, None)). *)
 Eval compute in getptr ((null 0)::(null 1)::(null 2)::nil). (* None *)
 
+(********************************************
+         Lemmas about bits & bytes.
+ ********************************************)
+
+(*Lemma from_ibits_getibits:
+  forall (bs:list Bit.t),
+    merge (List.map getibits (from_bits bs)) = Some bs.
+Proof.
+  induction bs.
+  - reflexivity.
+  - 
+Qed.*)
+
+Lemma list_segmentize8_l {X:Type}:
+  forall (bs:list X),
+    exists b1 b2, bs = b1 ++ b2 /\
+                  Nat.modulo (List.length b2) 8 = 0 /\
+                  List.length b1 < 8.
+Proof.
+  intros.
+  induction bs.
+  - exists nil. eexists nil.
+    split. reflexivity. split. reflexivity. simpl. omega.
+  - inversion IHbs as [b1 [b2 IH]].
+    destruct IH as [H1 [H2 H3]].
+    destruct b1 as [ | h1 b1].
+    { eexists (a::nil). eexists b2. 
+      split. rewrite H1. reflexivity.
+      split. assumption.
+      simpl. omega. }
+    destruct b1 as [ | h2 b1].
+    { simpl in H1.
+      rewrite H1.
+      eexists (a::h1::nil). eexists b2.
+      split. reflexivity.
+      split. assumption.
+      simpl. omega. }
+    destruct b1 as [ | h3 b1].
+    { simpl in H1.
+      rewrite H1.
+      eexists (a::h1::h2::nil). eexists b2.
+      split. reflexivity.
+      split. assumption.
+      simpl. omega. }
+    destruct b1 as [ | h4 b1].
+    { simpl in H1.
+      rewrite H1.
+      eexists (a::h1::h2::h3::nil). eexists b2.
+      split. reflexivity.
+      split. assumption.
+      simpl. omega. }
+    destruct b1 as [ | h5 b1].
+    { simpl in H1.
+      rewrite H1.
+      eexists (a::h1::h2::h3::h4::nil). eexists b2.
+      split. reflexivity.
+      split. assumption.
+      simpl. omega. }
+    destruct b1 as [ | h6 b1].
+    { simpl in H1.
+      rewrite H1.
+      eexists (a::h1::h2::h3::h4::h5::nil). eexists b2.
+      split. reflexivity.
+      split. assumption.
+      simpl. omega. }
+    destruct b1 as [ | h7 b1].
+    { simpl in H1.
+      rewrite H1.
+      eexists (a::h1::h2::h3::h4::h5::h6::nil). eexists b2.
+      split. reflexivity.
+      split. assumption.
+      simpl. omega. }
+    simpl in H1.
+    rewrite H1.
+    eexists nil.
+    eexists (a::h1::h2::h3::h4::h5::h6::h7::b1 ++ b2).
+    split. reflexivity.
+    split.
+    assert (a :: h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: b1 ++ b2 =
+            (a :: h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: b1) ++ b2).
+    { reflexivity. }
+    rewrite H.
+    rewrite app_length.
+    replace (length (a :: h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: b1)) with
+            (8 + length b1).
+    simpl in H3.
+    destruct b1.
+    + rewrite <- Nat.add_mod_idemp_l.
+      simpl.
+      apply H2.
+      omega.
+    + simpl in H3.
+      omega.
+    + simpl. reflexivity.
+    + simpl. omega.
+Qed.
+
+Lemma list_segmentize8_r {X:Type}:
+  forall (bs:list X),
+    exists b1 b2, bs = b1 ++ b2 /\
+                  Nat.modulo (List.length b1) 8 = 0 /\
+                  List.length b2 < 8.
+Proof.
+  intros.
+  assert (exists b1' b2', (rev bs) = b1' ++ b2' /\
+                          Nat.modulo (List.length b2') 8 = 0 /\
+                          List.length b1' < 8).
+  { eapply list_segmentize8_l. }
+  destruct H as [b1' H].
+  destruct H as [b2' H].
+  destruct H as [H1 [H2 H3]].
+  rewrite <- rev_involutive with (l := b1') in H1.
+  rewrite <- rev_involutive with (l := b2') in H1.
+  rewrite <- rev_app_distr in H1.
+  assert (bs = rev b2' ++ rev b1').
+  { rewrite <- rev_involutive with (l := bs).
+    rewrite H1.
+    rewrite rev_involutive.
+    reflexivity. }
+  exists (rev b2').
+  exists (rev b1').
+  split.
+  - assumption.
+  - split.
+    rewrite rev_length. assumption.
+    rewrite rev_length. assumption.
+Qed.
+
+Lemma list_split8_l {X:Type}:
+  forall (bs:list X) n
+         (HLEN:n = List.length bs)
+         (HLEN2:Nat.modulo n 8 = 0)
+         (HNEQ:n <> 0),
+    exists b1 b2, bs = b1 ++ b2 /\
+                  List.length b1 = 8 /\
+                  Nat.modulo (List.length b2) 8 = 0.
+Proof.
+  intros.
+  destruct bs as [| h1 bs].
+  { simpl in HLEN. omega. }
+  destruct bs as [| h2 bs].
+  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
+  destruct bs as [| h3 bs].
+  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
+  destruct bs as [| h4 bs].
+  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
+  destruct bs as [| h5 bs].
+  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
+  destruct bs as [| h6 bs].
+  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
+  destruct bs as [| h7 bs].
+  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
+  destruct bs as [| h8 bs].
+  { simpl in HLEN. rewrite HLEN in HLEN2. inversion HLEN2. }
+ exists (h1::h2::h3::h4::h5::h6::h7::h8::nil).
+  exists bs.
+  split. reflexivity.
+  split. reflexivity.
+  assert (length (h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: h8 :: bs) =
+          8 + length bs).
+  { reflexivity. }
+  rewrite H in HLEN.
+  rewrite HLEN in HLEN2.
+  rewrite <- Nat.add_mod_idemp_l in HLEN2.
+  simpl in HLEN2.
+  simpl.
+  assumption.
+  omega.
+Qed.
+
+(*
+Theorem list_app_ind {X:Type} (P:list X -> Prop):
+  forall (H0:P nil)
+         (HIND:forall l1 l2 (HPREV:P l1),
+             P (l2++l1)),
+    forall l, P l.
+Proof.
+  intros.
+  induction l.
+  - assumption.
+  - assert (HIND' := HIND l (a::nil)).
+    simpl in HIND'.
+    apply HIND'. assumption.
+Qed.
+
+
+Lemma list8 {X:Type} :=
+| l8nil := list8
+| l8e1 := forall h1, list8
+| l8e2 := forall h1 h2, list8
+| l8e3 := forall h1 h2 h3, list8
+| l8e4 := forall h1 h2 h3 h4, list8
+| l8e5 := forall h1 h2 h3 h4 h5, list8
+| l8e6 := forall h1 h2 h3 h4 h5 h6, list8
+| l8e7 := forall h1 h2 h3 h4 h5 h6 h7, list8
+| l8cons := forall h1 h2 h3 h4 h5 h6 h7 h8 l,
+                
+
+
+Theorem list_2_ind {X:Type} (P:list X -> Prop):
+  forall (H0:P nil) (H1:forall a, P (a::nil))
+         (HIND:forall l (HPREV:P l),
+             forall a1 a2,
+               P (a1::a2::l)),
+    forall l,
+      P l.
+Proof.
+  induction l using list_app_ind.
+  assumption.
+  destruct l2.
+  simpl. assumption.
+  destruct l2. simpl. 
+  destruct l.
+  apply H1.
+  
+  destruct l as [|h1 l].
+  { intros. assumption. }
+  generalize dependent h1.
+  destruct l as [|h2 l].
+  { intros. apply H1. }
+  intros.
+  apply HIND.
+  apply HIND.
+  - admit.
+  - 
+  induction l as [|h3 l].
+  { intros. inversion H8. }
+  induction l as [|h4 l].
+  { inversion H8. }
+  induction l as [|h5 l].
+  { inversion H8. }
+  induction l as [|h6 l].
+  { inversion H8. }
+  induction l as [|h7 l].
+  { inversion H8. }
+  induction l as [|h8 l].
+  { inversion H8. }
+  clear IHl0.
+  apply HIND.
+  - assert (length (h1 :: h2 :: h3 :: h4 :: h5 :: h6 :: h7 :: h8 :: l) =
+            8 + length l).
+    { reflexivity. }
+    rewrite H in H8.
+    rewrite <- Nat.add_mod_idemp_l in H8.
+    simpl in H8.
+    simpl.
+    assumption.
+    omega.
+  - assumption.
+Qed.
+*)
+
+Lemma from_bits_nonnil:
+  forall b bs,
+    nil <> from_bits (b::bs).
+Proof.
+  intros.
+  destruct bs as [| b1 bs].
+  { intros H. simpl in H. inversion H. }
+  destruct bs as [| b2 bs].
+  { intros H. simpl in H. inversion H. }
+  destruct bs as [| b3 bs].
+  { intros H. simpl in H. inversion H. }
+  destruct bs as [| b4 bs].
+  { intros H. simpl in H. inversion H. }
+  destruct bs as [| b5 bs].
+  { intros H. simpl in H. inversion H. }
+  destruct bs as [| b6 bs].
+  { intros H. simpl in H. inversion H. }
+  destruct bs as [| b7 bs].
+  { intros H. simpl in H. inversion H. }
+  intros H. simpl in H. inversion H.
+Qed.
+
+Lemma from_bits_inv:
+  forall bytes l1 l2 a
+         (HLEN:List.length l1 = 8)
+         (H:a :: bytes = from_bits (l1 ++ l2)),
+  bytes = from_bits l2.
+Proof.
+  intros.
+  destruct l1 as [| h0 l1]. inversion HLEN.
+  destruct l1 as [| h1 l1]. inversion HLEN.
+  destruct l1 as [| h2 l1]. inversion HLEN.
+  destruct l1 as [| h3 l1]. inversion HLEN.
+  destruct l1 as [| h4 l1]. inversion HLEN.
+  destruct l1 as [| h5 l1]. inversion HLEN.
+  destruct l1 as [| h6 l1]. inversion HLEN.
+  destruct l1 as [| h7 l1]. inversion HLEN.
+  destruct l1 as [| h8 l1].
+  simpl.
+  simpl in H. inversion H. reflexivity.
+  simpl in HLEN. omega.
+Qed.
+
+Theorem from_bits_to_bits:
+  forall (ls:list Bit.t),
+    to_bits (from_bits ls) =
+    ls ++ List.repeat (Bit.bpoison)
+       (Nat.modulo ((8 - Nat.modulo (List.length ls) 8)) 8).
+Proof.
+  intros.
+  assert (HB:=list_segmentize8_r ls).
+  remember (from_bits ls) as bytes.
+  generalize dependent ls.
+  induction bytes.
+  - intros.
+    destruct ls.
+    + simpl. reflexivity.
+    + simpl in Heqbytes.
+      destruct ls as [ | h1 ls].
+      inversion Heqbytes.
+      destruct ls as [ | h2 ls].
+      inversion Heqbytes.
+      destruct ls as [ | h3 ls].
+      inversion Heqbytes.
+      destruct ls as [ | h4 ls].
+      inversion Heqbytes.
+      destruct ls as [ | h5 ls].
+      inversion Heqbytes.
+      destruct ls as [ | h6 ls].
+      inversion Heqbytes.
+      destruct ls as [ | h7 ls].
+      inversion Heqbytes.
+      inversion Heqbytes.
+  - intros.
+    assert (to_bits (a::bytes) = (to_bits (a::nil)) ++ to_bits bytes).
+    { unfold to_bits.
+      simpl. reflexivity. }
+    rewrite H. clear H.
+    (* ls is a list of bit. *)
+    destruct HB as [ls1 [ls2 [HB1 [HB2 HB3]]]].
+    (* ls = ls1 ++ ls2.
+       |ls2| < 8 *)
+    assert (ls1 = nil \/
+            (exists ls1' ls1'', List.length ls1' = 8 /\ ls1 = ls1' ++ ls1'')).
+    { remember (List.length ls1) as n1.
+      Check Nat.eq_dec.
+      assert (HN1 := Nat.eq_dec n1 0).
+      destruct HN1.
+      - left. rewrite Heqn1 in e.
+        rewrite length_zero_iff_nil in e. congruence. 
+      - Check list_split8_l.
+        assert (HSP:=list_split8_l ls1 n1 Heqn1 HB2).
+        destruct HSP as [ls1h [ls1t [HSP1 [HSP2 HSP3]]]].
+        assumption.
+        right.
+        exists ls1h.
+        exists ls1t.
+        split. assumption. assumption.
+    }
+    (* ls = ls1 ++ ls2
+       ls --from_bits--> a::bytes
+       |ls2| < 8 *)
+    destruct H as [H | H].
+    + rewrite H in HB1.
+      (* ls1 = nil
+         bytes = nil *)
+      simpl in HB1.
+      rewrite HB1 in *.
+      clear HB1.
+      destruct ls2 as [| h20 ls2].
+      { simpl in Heqbytes. inversion Heqbytes. }
+      destruct ls2 as [| h21 ls2].
+      { simpl in Heqbytes.
+        inversion Heqbytes.
+        rewrite H2 in *. clear H2.
+        reflexivity. }
+      destruct ls2 as [| h22 ls2].
+      { simpl in Heqbytes.
+        inversion Heqbytes.
+        rewrite H2 in *. clear H2.
+        reflexivity. }
+      destruct ls2 as [| h23 ls2].
+      { simpl in Heqbytes.
+        inversion Heqbytes.
+        rewrite H2 in *. clear H2.
+        reflexivity. }
+      destruct ls2 as [| h24 ls2].
+      { simpl in Heqbytes.
+        inversion Heqbytes.
+        rewrite H2 in *. clear H2.
+        reflexivity. }
+      destruct ls2 as [| h25 ls2].
+      { simpl in Heqbytes.
+        inversion Heqbytes.
+        rewrite H2 in *. clear H2.
+        reflexivity. }
+      destruct ls2 as [| h26 ls2].
+      { simpl in Heqbytes.
+        inversion Heqbytes.
+        rewrite H2 in *. clear H2.
+        reflexivity. }
+      destruct ls2 as [| h27 ls2].
+      { simpl in Heqbytes.
+        inversion Heqbytes.
+        rewrite H2 in *. clear H2.
+        reflexivity. }
+      simpl in HB3.
+      omega.
+    + destruct H as [ls1head [ls1tail H]].
+      destruct H as [H1 H2].
+      rewrite H2 in HB1.
+      rewrite HB1.
+      rewrite HB1 in Heqbytes.
+      (* l ++ m ++ n = (l ++ m) ++ n *)
+      rewrite <- app_assoc with (l := ls1head) (m := ls1tail)
+         (n := ls2).
+      rewrite <- app_assoc with (l := ls1head) (m := ls1tail ++ ls2).
+      replace (length (ls1head ++ ls1tail ++ ls2) mod 8) with
+              (length (ls1tail ++ ls2) mod 8).
+      rewrite <- IHbytes with (ls := ls1tail++ls2).
+      destruct ls1head as [| h0 ls1head].
+      { simpl in H1. inversion H1. }
+      destruct ls1head as [| h1 ls1head].
+      { simpl in H1. inversion H1. }
+      destruct ls1head as [| h2 ls1head].
+      { simpl in H1. inversion H1. }
+      destruct ls1head as [| h3 ls1head].
+      { simpl in H1. inversion H1. }
+      destruct ls1head as [| h4 ls1head].
+      { simpl in H1. inversion H1. }
+      destruct ls1head as [| h5 ls1head].
+      { simpl in H1. inversion H1. }
+      destruct ls1head as [| h6 ls1head].
+      { simpl in H1. inversion H1. }
+      destruct ls1head as [| h7 ls1head].
+      { simpl in H1. inversion H1. }
+      destruct ls1head as [| h8 ls1head].
+      { simpl in Heqbytes.
+        inversion Heqbytes.
+        simpl. reflexivity. }
+      { simpl in H1. inversion H1. }
+      exists ls1tail. exists ls2.
+      split. reflexivity.
+      split. rewrite H2 in HB2.
+      rewrite app_length in HB2.
+      rewrite H1 in HB2.
+      rewrite <- Nat.add_mod_idemp_l in HB2.
+      simpl in HB2.
+      simpl. assumption.
+      omega.
+      assumption.
+      eapply from_bits_inv.
+      eassumption. rewrite <- app_assoc in Heqbytes. eassumption.
+      rewrite app_length with (l := ls1head).
+      rewrite H1.
+      rewrite <- Nat.add_mod_idemp_l.
+      simpl. reflexivity.
+      omega.
+Qed.
+
+
 End Byte.
+
 
 
 Module MemBlock.
@@ -220,6 +897,73 @@ Definition inbounds_abs (ofs':nat) (mb:t): bool :=
 (* offset, len *)
 Definition bytes (mb:t) (ofs len:nat): list (Byte.t) :=
   List.firstn len (List.skipn ofs mb.(c)).
+
+Definition set_bytes (mb:t) (ofs:nat) (bytes:list (Byte.t)): t :=
+  mk mb.(bt) mb.(r) mb.(n) mb.(a)
+     (List.firstn ofs (mb.(c)) ++ bytes ++
+      List.skipn (ofs + List.length bytes) mb.(c))
+     mb.(P).
+
+
+(**********************************************
+      Lemmas&Theorems about MemBlock.
+ **********************************************)
+
+Lemma P_P0_range_lsubseq:
+  forall mb (HWF:wf mb),
+    lsubseq (P_ranges mb) ((P0_range mb)::nil).
+Proof.
+  intros.
+  unfold P_ranges.
+  unfold P0_range.
+  destruct (MemBlock.P mb) as [| P0 Pt] eqn:HP1.
+  { (* cannot be nil. *)
+    assert (List.length (MemBlock.P mb) = 0).
+    { rewrite HP1. reflexivity. }
+    rewrite (MemBlock.wf_twin) in H. inversion H. assumption.
+  }
+  unfold addr.
+  rewrite HP1. simpl.
+  constructor.
+  constructor.
+Qed.
+
+Lemma inbounds_inbounds_abs:
+  forall (mb:t) ofs ofs_abs
+         (HABS: ofs_abs = ofs + addr mb),
+    inbounds ofs mb = inbounds_abs ofs_abs mb.
+Proof.
+  intros.
+  unfold inbounds.
+  unfold inbounds_abs.
+  rewrite HABS.
+  unfold Common.in_range.
+  unfold Ir.MemBlock.P0_range.
+  remember (Ir.MemBlock.addr mb) as addr.
+  remember (Ir.MemBlock.n mb) as n.
+  simpl.
+  assert (PeanoNat.Nat.leb addr (ofs + addr) = true).
+  {
+    rewrite PeanoNat.Nat.leb_le.
+    apply Plus.le_plus_r.
+  }
+  rewrite H.
+  simpl.
+  rewrite PeanoNat.Nat.add_comm with (n := ofs) (m := addr).
+  remember (PeanoNat.Nat.leb (addr + ofs) (addr + n)) as flag.
+  symmetry in Heqflag.
+  destruct flag.
+  - rewrite PeanoNat.Nat.leb_le in Heqflag.
+    apply Plus.plus_le_reg_l in Heqflag.
+    rewrite PeanoNat.Nat.leb_le.
+    assumption.
+  - rewrite PeanoNat.Nat.leb_nle in Heqflag.
+    rewrite PeanoNat.Nat.leb_nle.
+    intros H'.
+    apply Heqflag.
+    apply Plus.plus_le_compat_l.
+    assumption.
+Qed.
 
 End MemBlock.
 
@@ -294,6 +1038,12 @@ Definition get (m:t) (i:blockid): option MemBlock.t :=
   | a::b => Some a.(snd)
   end.
 
+(* Replace the memory block which has id i. *)
+Definition set (m:t) (i:blockid) (mb:MemBlock.t): t :=
+  mk m.(mt)
+     (List.map (fun mbid => if Nat.eqb mbid.(fst) i then (i, mb) else mbid)
+               m.(blocks))
+     m.(calltimes) m.(fresh_bid).
 
 Definition incr_time (m:t): t :=
   mk (1 + m.(mt)) m.(blocks) m.(calltimes) m.(fresh_bid).
@@ -311,9 +1061,9 @@ Definition calltime (m:t) (cid:callid): option time :=
   end.
 
 
-(********************************
-             Lemmas
- ********************************)
+(**********************************************
+      Lemmas&Theorems about inboundness
+ **********************************************)
 
 (* Wellformedness, inversed direction - when a new block is added. *)
 Lemma wf_newblk_inv:
@@ -338,25 +1088,6 @@ Proof.
       destruct wf_disjoint0.
       assumption.
     + assumption.
-Qed.
-
-Lemma P_P0_range_lsubseq:
-  forall mb (HWF:MemBlock.wf mb),
-    lsubseq (MemBlock.P_ranges mb) ((MemBlock.P0_range mb)::nil).
-Proof.
-  intros.
-  unfold MemBlock.P_ranges.
-  unfold MemBlock.P0_range.
-  destruct (MemBlock.P mb) as [| P0 Pt] eqn:HP1.
-  { (* cannot be nil. *)
-    assert (List.length (MemBlock.P mb) = 0).
-    { rewrite HP1. reflexivity. }
-    rewrite (MemBlock.wf_twin) in H. inversion H. assumption.
-  }
-  unfold MemBlock.addr.
-  rewrite HP1. simpl.
-  constructor.
-  constructor.
 Qed.
 
 Lemma blocks_alive_blocks_lsubseq:
@@ -445,7 +1176,7 @@ Proof.
       rewrite H.
       apply lsubseq_append.
       {
-        apply P_P0_range_lsubseq.
+        apply MemBlock.P_P0_range_lsubseq.
         apply wf_blocks with (m := m) (i := newbid).
         rewrite HM.
         apply HWF.
@@ -462,42 +1193,6 @@ Proof.
       apply HWF. reflexivity.
 Qed.
 
-Lemma inbounds_inbounds_abs:
-  forall (mb:Ir.MemBlock.t) ofs ofs_abs
-         (HABS: ofs_abs = ofs + Ir.MemBlock.addr mb),
-    Ir.MemBlock.inbounds ofs mb = Ir.MemBlock.inbounds_abs ofs_abs mb.
-Proof.
-  intros.
-  unfold Ir.MemBlock.inbounds.
-  unfold Ir.MemBlock.inbounds_abs.
-  rewrite HABS.
-  unfold Common.in_range.
-  unfold Ir.MemBlock.P0_range.
-  remember (Ir.MemBlock.addr mb) as addr.
-  remember (Ir.MemBlock.n mb) as n.
-  simpl.
-  assert (PeanoNat.Nat.leb addr (ofs + addr) = true).
-  {
-    rewrite PeanoNat.Nat.leb_le.
-    apply Plus.le_plus_r.
-  }
-  rewrite H.
-  simpl.
-  rewrite PeanoNat.Nat.add_comm with (n := ofs) (m := addr).
-  remember (PeanoNat.Nat.leb (addr + ofs) (addr + n)) as flag.
-  symmetry in Heqflag.
-  destruct flag.
-  - rewrite PeanoNat.Nat.leb_le in Heqflag.
-    apply Plus.plus_le_reg_l in Heqflag.
-    rewrite PeanoNat.Nat.leb_le.
-    assumption.
-  - rewrite PeanoNat.Nat.leb_nle in Heqflag.
-    rewrite PeanoNat.Nat.leb_nle.
-    intros H'.
-    apply Heqflag.
-    apply Plus.plus_le_compat_l.
-    assumption.
-Qed.
 
 (* Theorem: there are at most 2 alive blocks
    which have abs_ofs as inbounds. *)
