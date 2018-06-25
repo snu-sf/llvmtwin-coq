@@ -1027,6 +1027,147 @@ Proof.
     destruct H. apply IHHLSS. assumption.
 Qed.
 
+Lemma lsubseq_NotIn {X:Type}:
+  forall (l l':list X) a
+         (HLSS:lsubseq l l')
+         (HNIN:~List.In a l),
+    ~List.In a l'.
+Proof.
+  intros. intros H.
+  apply HNIN.
+  eapply lsubseq_In. eassumption. assumption.
+Qed.
+
+Lemma lsubseq_NoDup {X:Type}:
+  forall (l l':list X)
+         (HLSS:lsubseq l l')
+         (HNDP:NoDup l),
+    NoDup l'.
+Proof.
+  intros.
+  induction HLSS.
+  - constructor.
+  - inversion HNDP.
+    apply IHHLSS in H2.
+    apply NoDup_cons.
+    eapply lsubseq_NotIn.
+    eassumption.
+    assumption. assumption.
+  - inversion HNDP.
+    apply IHHLSS. assumption.
+Qed.
+
+Lemma lsubseq_map {X Y:Type}:
+  forall (l l':list X) (lm lm':list Y) (f:X -> Y)
+         (HLSS:lsubseq l l')
+         (HLM:lm = List.map f l)
+         (HLM':lm' = List.map f l'),
+    lsubseq lm lm'.
+Proof.
+  intros.
+  generalize dependent lm.
+  generalize dependent lm'.
+  induction HLSS.
+  - intros. simpl in HLM'. rewrite HLM'.
+    constructor.
+  - intros. destruct lm. inversion HLM.
+    destruct lm'. inversion HLM'.
+    simpl in HLM. inversion HLM.
+    simpl in HLM'. inversion HLM'.
+    constructor.
+    apply IHHLSS.
+    reflexivity. reflexivity.
+  - intros. destruct lm. inversion HLM.
+    simpl in HLM. inversion HLM.
+    constructor.
+    apply IHHLSS.
+    assumption. reflexivity.
+Qed.
+
+Lemma map_fst_split {X Y:Type}:
+  forall (l:list (X * Y)),
+    List.map fst l = (List.split l).(fst).
+Proof.
+  intros.
+  induction l.
+  - reflexivity.
+  - simpl. destruct a.
+    remember (split l) as p.
+    destruct p. simpl. rewrite IHl. reflexivity.
+Qed.
+
+Lemma notIn_filter_nat:
+  forall (l:list nat) (key:nat)
+         (HNOTIN:~List.In key l),
+   filter (fun x => x =? key) l = nil.
+Proof.
+  intros.
+  induction l.
+  - reflexivity.
+  - simpl in HNOTIN.
+    apply Decidable.not_or in HNOTIN.
+    destruct HNOTIN.
+    apply IHl in H0.
+    simpl. rewrite H0.
+    destruct (a =? key) eqn:HD.
+    + apply beq_nat_true in HD. omega.
+    + reflexivity.
+Qed.
+    
+
+Lemma NoDup_key_filter {X:Type}:
+  forall (l res:list (nat * X)) (key:nat)
+         (HNODUP:NoDup (List.map fst l))
+         (HRES:res = List.filter (fun x => fst x =? key) l),
+    List.length res < 2.
+Proof.
+  intros.
+  remember (split l) as ls.
+  destruct ls as [lsk lsv].
+  rewrite map_fst_split in HNODUP.
+  rewrite <- Heqls in HNODUP. simpl in HNODUP.
+  assert (List.map fst (List.filter (fun x => fst x =? key) l) =
+          List.filter (fun x => x =? key) lsk).
+  {
+    clear HNODUP.
+    clear HRES.
+    generalize dependent lsk.
+    generalize dependent lsv.
+    induction l.
+    - intros. simpl in Heqls. inversion Heqls.
+      reflexivity.
+    - intros. destruct a. simpl in Heqls.
+      remember (split l) as l'.
+      destruct l'.
+      inversion Heqls. destruct lsk. inversion H0.
+      destruct lsv. inversion H1.
+      simpl.
+      destruct (n =? key) eqn:HKEY.
+      + simpl. erewrite IHl. reflexivity. reflexivity.
+      + erewrite IHl. reflexivity. reflexivity.
+  }
+  rewrite <- HRES in H.
+  rewrite map_fst_split in H.
+  remember (split res) as ress.
+  destruct ress as [resk resv].
+  simpl in H.
+  rewrite <- split_length_l.
+  rewrite <- Heqress. simpl.
+  clear HRES Heqls l Heqress.
+  (* assert (NoDup resk).
+  { apply lsubseq_NoDup with (l := lsk).
+    rewrite H. apply lsubseq_filter. assumption. } *)
+  induction HNODUP as [ | lskh lsht IH].
+  - simpl in H. rewrite H. simpl. omega.
+  - simpl in H.
+    destruct (lskh =? key) eqn: Hflag.
+    + apply beq_nat_true in Hflag.
+      rewrite <- Hflag in *.
+      apply notIn_filter_nat in IH.
+      rewrite IH in H. rewrite H. simpl. omega.
+    + apply IHHNODUP. assumption.
+Qed.
+
 
 (*******************************************
       Definition of range & disjointness.

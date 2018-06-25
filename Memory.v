@@ -766,8 +766,9 @@ Proof.
   }
   rewrite H.
   rewrite Heqc.
-  admit.
-Admitted.
+  destruct mb. simpl. reflexivity.
+  assumption.
+Qed.
 
 
 End MemBlock.
@@ -868,7 +869,7 @@ Definition calltime (m:t) (cid:callid): option time :=
 
 (**********************************************
     Lemmas&Theorems about get/set functions
- **********************************************)
+ **********************************************)      
 
 Lemma get_unique:
   forall m (HWF:wf m) bid mb res
@@ -876,14 +877,79 @@ Lemma get_unique:
                           (blocks m))
          (HGET:Some mb = get m bid),
     res = (bid, mb)::nil \/ res = nil.
-Admitted.
+Proof.
+  intros.
+  assert (List.length res < 2).
+  {
+    assert (HQ := wf_uniqueid m HWF).
+    remember (blocks m) as bs.
+    assert (HNODUP: NoDup (map fst (res))).
+    {
+      apply lsubseq_NoDup with (l := map fst bs).
+      eapply lsubseq_map with (l := bs) (l' := res).
+      rewrite HF. eapply lsubseq_filter.
+      reflexivity.
+      reflexivity.
+      assumption.
+    }
+    eapply NoDup_key_filter.
+    eapply HQ. eassumption.
+  }
+  destruct res.
+  - right. reflexivity.
+  - destruct res.
+    + assert (forallb (fun x => x.(fst) =? bid) (p::nil) = true).
+      { rewrite HF.
+        apply filter_forallb. }
+      simpl in H0.
+      rewrite andb_true_r in H0.
+      apply beq_nat_true in H0.
+      destruct p.
+      simpl in H0. rewrite H0.
+      unfold get in HGET.
+      rewrite <- HF in HGET.
+      simpl in HGET.
+      inversion HGET.
+      left. reflexivity.
+    + simpl in H.
+      omega.
+Qed.
 
 Lemma blocks_get:
   forall m (HWF:wf m) bs b
          (HBS:bs = blocks m)
          (HIN:List.In b bs),
     get m b.(fst) = Some b.(snd).
-Admitted.
+Proof.
+  intros.
+  destruct b as [bid mb].
+  remember (filter (fun i2 => fst i2 =? bid) (blocks m)) as fres.
+  assert (List.In (bid, mb) fres).
+  { rewrite Heqfres.
+    rewrite filter_In.
+    split. rewrite <- HBS. assumption.
+    simpl. symmetry. apply beq_nat_refl. }
+  remember (get m bid) as r.
+  destruct r.
+  - assert (fres = (bid, t0)::nil \/ fres = nil).
+    { apply get_unique with (m := m).
+      assumption.
+      assumption.
+      assumption. }
+    destruct fres.
+    + inversion H.
+    + destruct H0.
+      * inversion H0.
+        rewrite H3 in H.
+        inversion H.
+        rewrite H2 in H1. inversion H1. rewrite H5 in *.
+        simpl. congruence.
+        inversion H1.
+      * inversion H0.
+  - unfold get in Heqr.
+    rewrite <- Heqfres in Heqr.
+    destruct fres. inversion H. inversion Heqr.
+Qed.
 
 (**********************************************
       Lemmas&Theorems about inboundness
@@ -1752,8 +1818,41 @@ Proof.
   eapply in_combine_r.
   eassumption.
 Qed.
-  
 
+Theorem inbounds_blocks_all_In2:
+  forall m b t Is
+         (HBT: b::t = Ir.Memory.inbounds_blocks_all m Is),
+    List.In b (Ir.Memory.blocks m).
+Proof.
+  intros.
+  unfold inbounds_blocks_all in HBT.
+  remember (alive_P0_ranges m) as x.
+  remember (alive_blocks m) as y.
+  remember (fold_left
+             (fun (blks_and_ranges : list (nat * nat) * list (blockid * MemBlock.t))
+                (abs_ofs : nat) =>
+              disjoint_include2 (fst blks_and_ranges) (snd blks_and_ranges) abs_ofs) Is
+             (x, y)) as res.
+  assert (lsubseq (combine x y) (combine (fst res) (snd res))).
+  { eapply disjoint_include2_fold_left_lsubseq.
+    eassumption. }
+  apply lsubseq_combine in H.
+  destruct H.
+  rewrite <- HBT in H0.
+  assert (lsubseq (blocks m) (b::t0)).
+  { eapply lsubseq_trans.
+    apply blocks_alive_blocks_lsubseq.
+    rewrite Heqy in H0. assumption. }
+  apply lsubseq_In with (l' := b::t0).
+  + simpl. left. reflexivity.
+  + assumption.
+  + rewrite Heqx, Heqy.
+    apply alive_P0_ranges_blocks_len.
+  + apply disjoint_include2_fold_left_len with (rs := x) (data := y) (ofss := Is).
+    rewrite Heqx, Heqy.
+    apply alive_P0_ranges_blocks_len.
+    assumption.
+Qed.
 
 
 End Memory.

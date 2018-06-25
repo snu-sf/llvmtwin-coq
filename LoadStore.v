@@ -169,10 +169,18 @@ Proof.
       + simpl in HDEREF.
         destruct (Ir.MemBlock.alive_before cid' (snd b1)).
         * left. eexists. split.
-          rewrite HDEREF. reflexivity. 
+          rewrite HDEREF. reflexivity.
+          eapply Ir.Memory.blocks_get. assumption. reflexivity.
+          eapply Ir.Memory.inbounds_blocks_all_In2.
+          eassumption.
         * right. congruence.
-      + left. eexists. rewrite HDEREF. reflexivity.
-    - left. eexists. rewrite HDEREF. reflexivity.
+      + left. eexists. rewrite HDEREF.
+        split. reflexivity.
+        eapply Ir.Memory.blocks_get. assumption. reflexivity.
+        eapply Ir.Memory.inbounds_blocks_all_In2. eassumption.
+    - left. eexists. rewrite HDEREF.
+      split. reflexivity. eapply Ir.Memory.blocks_get. assumption. reflexivity.
+      eapply Ir.Memory.inbounds_blocks_all_In2. eassumption.
   }
   {
     simpl in H.
@@ -191,35 +199,40 @@ Theorem get_deref_singleton:
   forall (m:Ir.Memory.t) (m_wf:Ir.Memory.wf m) (p:Ir.ptrval) (sz:nat) bos
          (HSZ: 0 < sz)
          (HDEREF: get_deref m p sz = bos),
-  (exists bo, bos = bo::nil) \/ (bos = nil).
+  (exists bo, bos = bo::nil /\ Ir.Memory.get m bo.(fst).(fst) = Some bo.(fst).(snd))
+  \/ (bos = nil).
 Proof.
   intros.
   destruct p.
   - (* logical ptr *)
     destruct p as [bid ofs].
     unfold get_deref in HDEREF.
-    destruct (Ir.Memory.get m bid).
+    destruct (Ir.Memory.get m bid) eqn:HGET.
     remember (Ir.MemBlock.alive t && Ir.MemBlock.inbounds ofs t &&
               Ir.MemBlock.inbounds (ofs + sz) t) as cond in HDEREF.
     destruct cond; rewrite <- HDEREF.
-    + left. eexists. reflexivity.
+    + left. eexists. split. reflexivity.
+      simpl. assumption.
     + right. reflexivity.
     + right. congruence.
   - unfold get_deref in HDEREF.
     destruct p as (p', cid).
     destruct p' as (o, Is).
     remember (get_deref_blks_phyptr m o Is cid sz) as blks.
-    assert ((exists bo0, blks = bo0::nil) \/ (blks = nil)).
+    assert ((exists bo0, blks = bo0::nil /\
+                         Ir.Memory.get m bo0.(fst) = Some bo0.(snd))
+            \/ (blks = nil)).
     { eapply get_deref_blks_phyptr_singleton.
       eassumption.
       eassumption.
       rewrite <- Heqblks. reflexivity. }
     destruct H.
     { destruct H.
+      destruct H.
       rewrite H in HDEREF.
       simpl in HDEREF.
-      left. eexists. rewrite <- HDEREF.
-      reflexivity.
+      left. eexists. split. rewrite <- HDEREF.
+      reflexivity. simpl. assumption.
     }
     right. rewrite H in HDEREF. simpl in HDEREF. congruence.
 Qed.
