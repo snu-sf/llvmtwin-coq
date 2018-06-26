@@ -427,6 +427,17 @@ Proof.
     split. eassumption. simpl. right. assumption.
 Qed.
 
+Lemma In_notIn_neq {X:Type}:
+  forall (l:list X) (x1 x2:X)
+         (HNOTIN:~List.In x1 l)
+         (HIN:List.In x2 l),
+    x1 <> x2.
+Proof.
+  intros.
+  intros HEQ.
+  apply HNOTIN.
+  congruence.
+Qed.
 
 Lemma last_cons {X:Type}:
   forall (l:list X) h h' h'',

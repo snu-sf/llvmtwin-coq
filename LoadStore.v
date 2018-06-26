@@ -1,3 +1,4 @@
+Require Import Common.
 Require Import Lang.
 Require Import Memory.
 Require Import State.
@@ -133,6 +134,138 @@ Proof.
   destruct b1; destruct b2 ; destruct b3; simpl in HDEREF; try (inversion HDEREF; fail).
   reflexivity.
 Qed.
+
+Lemma get_deref_inv:
+  forall (m:Ir.Memory.t) p bid ofs sz blk
+         (HSZ:sz > 0)
+         (HWF:Ir.Memory.wf m)
+         (HDEREF: get_deref m p sz = (bid, blk, ofs)::nil)
+         (HBLK: Ir.Memory.get m bid = Some blk),
+    Ir.MemBlock.alive blk &&
+    Ir.MemBlock.inbounds ofs blk &&
+    Ir.MemBlock.inbounds (ofs + sz) blk = true.
+Proof.
+  intros.
+  destruct p.
+  - apply get_deref_log_inv with (m := m) (bid := bid).
+    destruct p.
+    assert (b = bid /\ n = ofs).
+    { unfold get_deref in HDEREF.
+      destruct (Ir.Memory.get m b).
+      destruct (Ir.MemBlock.alive t && Ir.MemBlock.inbounds n t &&
+                                  Ir.MemBlock.inbounds (n + sz) t).
+      inversion HDEREF. split; reflexivity.
+      inversion HDEREF. inversion HDEREF. }
+    destruct H as [H1 H2]. rewrite H1, H2 in HDEREF.
+    exists (bid, blk, ofs). assumption.
+    assumption.
+  - destruct p as [[o Is] cid].
+    unfold get_deref in HDEREF.
+    unfold get_deref_blks_phyptr in HDEREF.
+    remember (Ir.Memory.inbounds_blocks_all m (o::o+sz::Is)) as res.
+    symmetry in Heqres.
+    assert (HFORALL := Ir.Memory.inbounds_blocks_all_forallb2 m
+               (o::o+sz::Is) res Heqres).
+    simpl in HFORALL.
+    assert (List.length res < 2).
+    { apply Ir.Memory.inbounds_blocks_all_singleton2 with (m := m)
+          (ofs1 := o) (ofs2 := o+sz) (ofs' := Is).
+      assumption.
+      apply Nat.lt_neq.
+      apply Nat.lt_add_pos_r. assumption.
+      assumption. }
+    destruct res.
+    + simpl in HDEREF. inversion HDEREF.
+    + destruct res.
+      {
+        destruct cid.
+        {
+          remember (Ir.Memory.calltime m c) as t'.
+          destruct t'.
+          {
+            simpl in HDEREF.
+            destruct p.
+            {
+              simpl in *.              
+              destruct (Ir.MemBlock.alive_before t t0) eqn:HAB.
+              {
+                simpl in HDEREF.
+                inversion HDEREF.
+                rewrite H1, H2, H3 in *. clear H1 H2.
+                repeat (rewrite andb_true_r in HFORALL).
+                repeat (rewrite andb_true_iff in HFORALL).
+                destruct HFORALL as [HFORALL1 [HFORALL2 HFORALL3]].
+                assert (HFORALL1' := HFORALL1).
+                rewrite <- Ir.MemBlock.inbounds_inbounds_abs with (ofs := ofs) in HFORALL1.
+                rewrite <- Ir.MemBlock.inbounds_inbounds_abs with (ofs := ofs + sz) in HFORALL2.
+                rewrite HFORALL1, HFORALL2.
+                assert (HALIVE: List.forallb (fun b=> Ir.MemBlock.alive b.(snd))
+                                             ((bid, blk)::nil) = true).
+                { eapply Ir.Memory.inbounds_blocks_all_alive.
+                  eassumption. }
+                simpl in HALIVE. rewrite HALIVE. reflexivity.
+                rewrite Ir.MemBlock.inbounds_abs_addr
+                  with (o := o) (blk := blk) (ofs := ofs).
+                omega. assumption. assumption.
+                rewrite Nat.add_comm.
+                apply Ir.MemBlock.inbounds_abs_addr; assumption.
+              }
+              { simpl in HDEREF. inversion HDEREF. }
+            }
+          }
+          { destruct p.
+            simpl in *.
+            simpl in HDEREF.
+            inversion HDEREF.
+            rewrite H1, H2, H3 in *. clear H1 H2.
+            repeat (rewrite andb_true_r in HFORALL).
+            repeat (rewrite andb_true_iff in HFORALL).
+            destruct HFORALL as [HFORALL1 [HFORALL2 HFORALL3]].
+            assert (HFORALL1' := HFORALL1).
+            rewrite <- Ir.MemBlock.inbounds_inbounds_abs with (ofs := ofs) in HFORALL1.
+            rewrite <- Ir.MemBlock.inbounds_inbounds_abs with (ofs := ofs + sz) in HFORALL2.
+            rewrite HFORALL1, HFORALL2.
+            assert (HALIVE: List.forallb (fun b=> Ir.MemBlock.alive b.(snd))
+                                         ((bid, blk)::nil) = true).
+            { eapply Ir.Memory.inbounds_blocks_all_alive.
+              eassumption. }
+            simpl in HALIVE. rewrite HALIVE. reflexivity.
+            rewrite Ir.MemBlock.inbounds_abs_addr
+              with (o := o) (blk := blk) (ofs := ofs).
+            omega. assumption. assumption.
+            rewrite Nat.add_comm.
+            apply Ir.MemBlock.inbounds_abs_addr; assumption.
+          }
+        }
+        { destruct p.
+          simpl in *.
+          simpl in HDEREF.
+          inversion HDEREF.
+          rewrite H1, H2, H3 in *. clear H1 H2.
+          repeat (rewrite andb_true_r in HFORALL).
+          repeat (rewrite andb_true_iff in HFORALL).
+          destruct HFORALL as [HFORALL1 [HFORALL2 HFORALL3]].
+          assert (HFORALL1' := HFORALL1).
+          rewrite <- Ir.MemBlock.inbounds_inbounds_abs with (ofs := ofs) in HFORALL1.
+          rewrite <- Ir.MemBlock.inbounds_inbounds_abs with (ofs := ofs + sz) in HFORALL2.
+          rewrite HFORALL1, HFORALL2.
+          assert (HALIVE: List.forallb (fun b=> Ir.MemBlock.alive b.(snd))
+                                       ((bid, blk)::nil) = true).
+          { eapply Ir.Memory.inbounds_blocks_all_alive.
+            eassumption. }
+          simpl in HALIVE. rewrite HALIVE. reflexivity.
+          rewrite Ir.MemBlock.inbounds_abs_addr
+            with (o := o) (blk := blk) (ofs := ofs).
+          omega. assumption. assumption.
+          rewrite Nat.add_comm.
+          apply Ir.MemBlock.inbounds_abs_addr; assumption.
+        } 
+      }
+      { simpl in H.
+        omega.
+      }
+Qed.
+
 
 (* Lemma: get_deref_blks_byaddrs returns at most one alive block,
    if offsets have two disjoint numbers *)
@@ -397,9 +530,13 @@ Qed.
       Lemmas about load_bytes & store_bytes
  ***********************************************)
 
+(* Theorem:
+   storing loaded bytes into the same location doesn't
+   change memory. *)
 Theorem load_store_bytes:
   forall (m:Ir.Memory.t) (wf:Ir.Memory.wf m) (sz:nat)
          (p:Ir.ptrval)
+         (HSZ:sz > 0)
          (HDEREF:deref m p sz = true),
     store_bytes m p (load_bytes m p sz) = m.
 Proof.
@@ -410,24 +547,40 @@ Proof.
   remember (get_deref m p sz) as bos.
   destruct bos as [| [[bid mb] ofs] bos'].
   { inversion HDEREF. }
-  assert (Ir.Memory.get m bid = Some mb).
-  { unfold get_deref in Heqbos.
-    remember (Ir.Memory.get m bid) as blk.
-    destruct p as [[bid' ofs'] | [[o Is] cid]].
-    - remember (Ir.Memory.get m bid') as blk'.
-      destruct blk'.
-      + destruct (Ir.MemBlock.alive t && Ir.MemBlock.inbounds ofs' t &&
-             Ir.MemBlock.inbounds (ofs' + sz) t).
-        * inversion Heqbos.
-          congruence.
-        * inversion Heqbos.
-      + inversion Heqbos.
-    - unfold get_deref_blks_phyptr in Heqbos.
-      destruct cid.
-      destruct (Ir.Memory.calltime m c).
-    
-  rewrite bytes_length.
-  rewrite <- Heqbos.
-  rewrite set_bytes_self.
+  symmetry in Heqbos.
+  assert (HRES := get_deref_singleton m wf p sz ((bid, mb, ofs)::bos')
+                                      HSZ Heqbos).
+  destruct HRES.
+  - destruct H as [bo' [H1 H2]].
+    inversion H1.
+    rewrite H3 in *.
+    rewrite <- H0 in *. clear H0 H3.
+    simpl in H2.
+    assert (HINV:Ir.MemBlock.alive mb &&
+            Ir.MemBlock.inbounds ofs mb &&
+            Ir.MemBlock.inbounds (ofs+sz) mb = true).
+    { apply get_deref_inv with (m := m) (bid := bid) (p := p).
+      assumption. assumption. assumption. assumption. }
+    repeat (rewrite andb_true_iff in HINV).
+    destruct HINV as [[HA HB] HC].
+    unfold Ir.MemBlock.inbounds in *.
+
+    rewrite Ir.MemBlock.bytes_length.
+    rewrite Heqbos.
+    rewrite Ir.MemBlock.set_bytes_self.
+    apply Ir.Memory.set_get_id. assumption. assumption.
+
+    rewrite Ir.MemBlock.wf_clen.
+    apply leb_complete. assumption.
+    apply Ir.Memory.wf_blocks with (m := m) (i := bid).
+    assumption. apply Ir.Memory.get_In with (m := m). congruence.
+    reflexivity.
+    rewrite Ir.MemBlock.wf_clen.
+    apply leb_complete. assumption.
+    apply Ir.Memory.wf_blocks with (m := m) (i := bid).
+    assumption. apply Ir.Memory.get_In with (m := m). congruence.
+    reflexivity.
+  - inversion H.
+Qed.
 
 End Ir.

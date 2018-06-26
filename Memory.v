@@ -770,6 +770,25 @@ Proof.
   assumption.
 Qed.
 
+Lemma inbounds_abs_addr:
+  forall (blk:Ir.MemBlock.t) o ofs
+         (HABS:Ir.MemBlock.inbounds_abs o blk = true)
+         (HO:o - Ir.MemBlock.addr blk = ofs),
+    o = Ir.MemBlock.addr blk + ofs.
+Proof.
+  intros.
+  rewrite <- HO.
+  unfold Ir.MemBlock.inbounds_abs in HABS.
+  unfold Ir.MemBlock.P0_range in HABS.
+  unfold in_range in HABS.
+  simpl in HABS.
+  rewrite andb_true_iff in HABS.
+  destruct HABS.
+  rewrite le_plus_minus_r.
+  reflexivity.
+  apply leb_complete in H.
+  assumption.
+Qed.
 
 End MemBlock.
 
@@ -870,6 +889,104 @@ Definition calltime (m:t) (cid:callid): option time :=
 (**********************************************
     Lemmas&Theorems about get/set functions
  **********************************************)      
+
+Lemma map_key_In_id {X:Type}:
+  forall (l:list (nat * X)) (key:nat) (val:X)
+         (HIN:List.In (key, val) l)
+         (HNODUP:List.NoDup (List.map fst l)),
+  List.map (fun x => if fst x =? key then (key, val) else x)
+       l = l.
+Proof.
+  intros.
+  generalize dependent key.
+  generalize dependent val.
+  induction l.
+  - simpl. intros. inversion HIN.
+  - simpl. intros.
+    simpl in HNODUP.
+    inversion HNODUP.
+    destruct HIN as [HIN | HIN].
+    + rewrite HIN in H1. simpl in H1.
+      rewrite HIN. simpl. rewrite Nat.eqb_refl.
+      assert (HNE:~ List.Exists (fun x => x = key) (map fst l)).
+      { intros HX.
+        apply H1.
+        rewrite Exists_exists in HX.
+        destruct HX as [key' HX].
+        destruct HX as [HX1 HX2].
+        rewrite HX2 in HX1. assumption. }
+      rewrite <- Forall_Exists_neg in HNE.
+      clear H2 H1 IHl HNODUP H0.
+      induction l.
+      * reflexivity.
+      * simpl in HNE.
+        inversion HNE.
+        apply IHl in H3. simpl.
+        rewrite <- Nat.eqb_neq in H2.
+        rewrite H2.
+        inversion H3.
+        rewrite H5. rewrite H5. reflexivity.
+    + assert (fst a <> key).
+      {
+        apply in_split_l in HIN.
+        simpl in HIN.
+        rewrite map_fst_split in H1.
+        eapply In_notIn_neq.
+        eassumption. assumption.
+      }
+      rewrite <- Nat.eqb_neq in H3.
+      rewrite H3.
+      rewrite IHl. reflexivity. assumption. assumption.
+Qed.
+
+Lemma get_In:
+  forall (m:t) bid blk blks
+         (HGET:Some blk = get m bid)
+         (HBLK:blks = blocks m),
+    List.In (bid, blk) blks.
+Proof.
+  intros.
+  unfold get in HGET.
+  rewrite <- HBLK in *.
+  remember (filter (fun i2 : nat * MemBlock.t => Nat.eqb (fst i2) bid) blks)
+           as f.
+  destruct f.
+  - inversion HGET.
+  - inversion HGET.
+    assert (p.(fst) = bid).
+    { assert (List.forallb (fun i2 => Nat.eqb (fst i2) bid) (p::f) = true).
+      rewrite Heqf.
+      apply filter_forallb.
+      simpl in H.
+      rewrite andb_true_iff in H.
+      destruct H.
+      rewrite Nat.eqb_eq in H.
+      assumption.
+    }
+    rewrite <- H.
+    destruct p.
+    simpl.
+    apply lsubseq_In with (l':=(n,t0)::f).
+    simpl. left. reflexivity.
+    rewrite Heqf.
+    apply lsubseq_filter.
+Qed.    
+
+Lemma set_get_id:
+  forall m bid mb
+         (HWF:Ir.Memory.wf m)
+         (HGET:Ir.Memory.get m bid = Some mb),
+    Ir.Memory.set m bid mb = m.
+Proof.
+  intros.
+  unfold Ir.Memory.set.
+  unfold Ir.Memory.get in HGET.
+  rewrite map_key_In_id.
+  destruct m; simpl; reflexivity.
+  eapply Ir.Memory.get_In.
+  rewrite <- HGET. reflexivity. reflexivity.
+  apply Ir.Memory.wf_uniqueid. assumption.
+Qed.
 
 Lemma get_unique:
   forall m (HWF:wf m) bid mb res
@@ -991,38 +1108,6 @@ Proof.
   apply lsubseq_filter.
 Qed.
 
-Lemma get_In:
-  forall (m:t) bid blk blks
-         (HGET:Some blk = get m bid)
-         (HBLK:blks = blocks m),
-    List.In (bid, blk) blks.
-Proof.
-  intros.
-  unfold get in HGET.
-  rewrite <- HBLK in *.
-  remember (filter (fun i2 : nat * MemBlock.t => Nat.eqb (fst i2) bid) blks)
-           as f.
-  destruct f.
-  - inversion HGET.
-  - inversion HGET.
-    assert (p.(fst) = bid).
-    { assert (List.forallb (fun i2 => Nat.eqb (fst i2) bid) (p::f) = true).
-      rewrite Heqf.
-      apply filter_forallb.
-      simpl in H.
-      rewrite andb_true_iff in H.
-      destruct H.
-      rewrite Nat.eqb_eq in H.
-      assumption.
-    }
-    rewrite <- H.
-    destruct p.
-    simpl.
-    apply lsubseq_In with (l':=(n,t0)::f).
-    simpl. left. reflexivity.
-    rewrite Heqf.
-    apply lsubseq_filter.
-Qed.    
 
 Lemma alive_blocks_In:
   forall (m:t) bid blk blks
@@ -1375,6 +1460,36 @@ Proof.
     + assumption.
 Qed.
 
+(* Theorem: all blocks returned by inbounds_blocks_all are alive. *)
+Theorem inbounds_blocks_all_alive:
+  forall (m:t) abs_ofs blks
+         (HALL:inbounds_blocks_all m abs_ofs = blks),
+    List.forallb (fun blk => MemBlock.alive blk.(snd)) blks = true.
+Proof.
+  intros.
+  unfold inbounds_blocks_all in HALL.
+  remember (alive_P0_ranges m) as rs.
+  remember (alive_blocks m) as data.
+  assert (List.length rs = List.length data).
+  { rewrite Heqrs, Heqdata. apply alive_P0_ranges_blocks_len. }
+  remember (fold_left
+              (fun blks_and_ranges abs_ofs =>
+               disjoint_include2 (fst blks_and_ranges) (snd blks_and_ranges) abs_ofs)
+              abs_ofs (rs, data)) as fl.
+  assert (lsubseq (combine rs data) (combine (fst fl) (snd fl))).
+  { eapply disjoint_include2_fold_left_lsubseq.
+    apply Heqfl. }
+  apply lsubseq_combine in H0.
+  destruct H0.
+  rewrite HALL in H1.
+  apply lsubseq_forallb with (l := data).
+  unfold alive_blocks in Heqdata.
+  rewrite Heqdata.
+  apply filter_forallb. assumption.
+  assumption.
+  erewrite disjoint_include2_fold_left_len.
+  reflexivity. eassumption. eassumption.
+Qed.
 
 (* Lemma: there's no empty range in 'alive_P_ranges m'. *)
 Lemma no_empty_range_alive_P_ranges:
