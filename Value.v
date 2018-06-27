@@ -1,0 +1,11 @@
+Require Import BinPos.
+Require Import Memory.
+
+Module Ir.
+
+Inductive val :=
+| num: N -> val
+| ptr: Ir.ptrval -> val
+| poison: val.
+
+End Ir.

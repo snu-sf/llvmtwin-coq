@@ -8,7 +8,7 @@ Require Import Omega.
 Module Ir.
 
 Definition PTRSZ := 16.
-Definition MEMSZ := Nat.pow 2 PTRSZ.
+Definition MEMSZ := Nat.shiftl 1 PTRSZ.
 Definition TWINCNT := 3.
 
 Definition blockid := nat.
@@ -619,9 +619,12 @@ Structure wf (mb:t) := mkWf
   {
     wf_tcond: forall t (FREED:mb.(r).(snd) = Some t), mb.(r).(fst) < t;
     wf_clen: List.length mb.(c) = mb.(n);
+    (* wf_poslen: There's no zero-size block in the memory.
+       In this formalization, malloc(0) returns NULL, so this invariant
+       holds. *)
     wf_poslen: no_empty_range (P_ranges mb) = true;
     wf_align: forall p (HAS:List.In p mb.(P)), Nat.modulo p mb.(a) = 0;
-    wf_inmem: forall p (HAS:List.In p mb.(P)), p + mb.(n) < MEMSZ;
+    wf_inmem: forall p (HAS:List.In p mb.(P)), p + mb.(n) <= MEMSZ;
     wf_notnull: forall p (HAS:List.In p mb.(P)), ~ (p = 0);
     wf_disj: disjoint_ranges (P_ranges mb) = true;
     wf_twin: List.length mb.(P) = TWINCNT
@@ -651,6 +654,11 @@ Definition set_bytes (mb:t) (ofs:nat) (bytes:list (Byte.t)): t :=
       List.skipn (ofs + List.length bytes) mb.(c))
      mb.(P).
 
+Definition set_lifetime_end (mb:t) (newt:time): option t :=
+  if alive mb then
+    Some (mk mb.(bt) (mb.(r).(fst), Some newt)
+               mb.(n) mb.(a) mb.(c) mb.(P))
+  else None.
 
 (**********************************************
       Lemmas&Theorems about MemBlock.
@@ -826,8 +834,8 @@ Definition inbounds_blocks (m:t) (abs_ofs:nat)
 : list (blockid * MemBlock.t) :=
   snd (disjoint_include2 (alive_P0_ranges m) (alive_blocks m) abs_ofs).
 
-(* REturns blocks which are alive & has abs_ofss as inbounds. *)
-Definition inbounds_blocks_all (m:t) (abs_ofss:list nat)
+(* Returns blocks which are alive & has abs_ofss as inbounds. *)
+Definition inbounds_blocks2 (m:t) (abs_ofss:list nat)
 : list (blockid * MemBlock.t) :=
   snd
     (List.fold_left
@@ -835,6 +843,18 @@ Definition inbounds_blocks_all (m:t) (abs_ofss:list nat)
           disjoint_include2 blks_and_ranges.(fst) blks_and_ranges.(snd) abs_ofs)
        abs_ofss
        ((alive_P0_ranges m), (alive_blocks m))).
+
+(* Returns an alive block which have beginning address at abs_ofs. *)
+Definition zeroofs_block (m:t) (abs_ofs:nat)
+: option (blockid * MemBlock.t) :=
+  match (inbounds_blocks m abs_ofs) with
+  | nil => None
+  | t =>
+    match (List.filter (fun mb => Nat.eqb (MemBlock.addr mb.(snd)) abs_ofs) t) with
+    | nil => None
+    | h::t' => Some h
+    end
+  end.
 
 (* Well-formedness of memory. *)
 Structure wf (m:t) :=
@@ -872,6 +892,20 @@ Definition set (m:t) (i:blockid) (mb:MemBlock.t): t :=
 
 Definition incr_time (m:t): t :=
   mk (1 + m.(mt)) m.(blocks) m.(calltimes) m.(fresh_bid).
+
+(* Free existing block.
+   If free fails, returns None *)
+Definition free (m:t) (i:blockid): option t :=
+  match (get m i) with
+  | Some mb =>
+    if MemBlock.alive mb then
+      match (MemBlock.set_lifetime_end mb m.(mt)) with
+      | Some mb' => Some (incr_time (set m i mb'))
+      | None => None
+      end
+    else None
+  | None => None
+  end.
 
 Definition callbegin (m:t) (cid:callid): t :=
   mk m.(mt) m.(blocks) ((cid, Some m.(mt))::m.(calltimes)) m.(fresh_bid).
@@ -1253,14 +1287,14 @@ Proof.
 Qed.
 
 (* Lemma: inbounds_blocks ofs is equivalent to
-   inbounds_blocks_all [ofs]. *)
-Lemma inbounds_blocks_inbounds_blocks_all:
+   inbounds_blocks2 [ofs]. *)
+Lemma inbounds_blocks_inbounds_blocks2:
   forall (m:t) abs_ofs,
-    inbounds_blocks m abs_ofs = inbounds_blocks_all m (abs_ofs::nil).
+    inbounds_blocks m abs_ofs = inbounds_blocks2 m (abs_ofs::nil).
 Proof.
   intros.
   unfold inbounds_blocks.
-  unfold inbounds_blocks_all.
+  unfold inbounds_blocks2.
   simpl. reflexivity.
 Qed.
  
@@ -1328,13 +1362,13 @@ Proof.
   intros. reflexivity.
 Qed.
 
-Lemma inbounds_blocks_all_forallb:
+Lemma inbounds_blocks2_forallb:
   forall (m:t) a abs_ofs blks
-         (HALL:inbounds_blocks_all m (a::abs_ofs) = blks),
+         (HALL:inbounds_blocks2 m (a::abs_ofs) = blks),
     List.forallb (MemBlock.inbounds_abs a) (snd (List.split blks)) = true.
 Proof.
   intros.
-  unfold inbounds_blocks_all in HALL.
+  unfold inbounds_blocks2 in HALL.
   simpl in HALL.
   remember (disjoint_include2 (alive_P0_ranges m) (alive_blocks m) a) as init.
   destruct init as [init_rs init_blks].
@@ -1372,14 +1406,14 @@ Proof.
   eapply lsubseq_split_snd. assumption.
 Qed.
 
-Lemma inbounds_blocks_all_lsubseq:
+Lemma inbounds_blocks2_lsubseq:
   forall (m:t) a abs_ofs blks1 blks2
-         (HALL1:inbounds_blocks_all m (a::abs_ofs) = blks1)
-         (HALL2:inbounds_blocks_all m abs_ofs = blks2),
+         (HALL1:inbounds_blocks2 m (a::abs_ofs) = blks1)
+         (HALL2:inbounds_blocks2 m abs_ofs = blks2),
     lsubseq blks2 blks1.
 Proof.
   intros.
-  unfold inbounds_blocks_all in *.
+  unfold inbounds_blocks2 in *.
   simpl in HALL1.
   remember (alive_P0_ranges m) as P0s.
   remember (alive_blocks m) as blks.
@@ -1430,11 +1464,11 @@ Proof.
   assumption.
 Qed.
 
-(* Theorem: The results of inbounds_blocks_all,
+(* Theorem: The results of inbounds_blocks2,
    contain all input offsets. *)
-Theorem inbounds_blocks_all_forallb2:
+Theorem inbounds_blocks2_forallb2:
   forall (m:t) abs_ofs blks
-         (HALL:inbounds_blocks_all m abs_ofs = blks),
+         (HALL:inbounds_blocks2 m abs_ofs = blks),
     List.forallb (fun abs_ofs =>
                     List.forallb (MemBlock.inbounds_abs abs_ofs)
                                  (snd (List.split blks))) abs_ofs = true.
@@ -1444,11 +1478,11 @@ Proof.
   induction abs_ofs.
   - reflexivity.
   - simpl. intros.
-    rewrite inbounds_blocks_all_forallb with (m := m) (abs_ofs := abs_ofs).
+    rewrite inbounds_blocks2_forallb with (m := m) (abs_ofs := abs_ofs).
     simpl.
-    remember (inbounds_blocks_all m abs_ofs) as blks'.
+    remember (inbounds_blocks2 m abs_ofs) as blks'.
     assert (lsubseq blks' blks).
-    { apply inbounds_blocks_all_lsubseq with (m := m) (a := a) (abs_ofs := abs_ofs).
+    { apply inbounds_blocks2_lsubseq with (m := m) (a := a) (abs_ofs := abs_ofs).
       assumption. congruence. }
     apply forallb_implies with
       (fun o:nat => List.forallb (MemBlock.inbounds_abs o) (snd (List.split blks'))).
@@ -1460,14 +1494,14 @@ Proof.
     + assumption.
 Qed.
 
-(* Theorem: all blocks returned by inbounds_blocks_all are alive. *)
-Theorem inbounds_blocks_all_alive:
+(* Theorem: all blocks returned by inbounds_blocks2 are alive. *)
+Theorem inbounds_blocks2_alive:
   forall (m:t) abs_ofs blks
-         (HALL:inbounds_blocks_all m abs_ofs = blks),
+         (HALL:inbounds_blocks2 m abs_ofs = blks),
     List.forallb (fun blk => MemBlock.alive blk.(snd)) blks = true.
 Proof.
   intros.
-  unfold inbounds_blocks_all in HALL.
+  unfold inbounds_blocks2 in HALL.
   remember (alive_P0_ranges m) as rs.
   remember (alive_blocks m) as data.
   assert (List.length rs = List.length data).
@@ -1514,16 +1548,16 @@ Proof.
   apply blocks_alive_blocks_lsubseq.
 Qed.
 
-(* Theorem: inbounds_blocks_all with two different
+(* Theorem: inbounds_blocks2 with two different
    elements returns only one block. *)
-Theorem inbounds_blocks_all_singleton:
+Theorem inbounds_blocks2_singleton:
   forall (m:t) (ofs1 ofs2:nat) l (HWF:wf m)
          (HNEQ:~ (ofs1 = ofs2))
-         (HINB:inbounds_blocks_all m (ofs1::ofs2::nil) = l),
+         (HINB:inbounds_blocks2 m (ofs1::ofs2::nil) = l),
     List.length l < 2.
 Proof.
   intros.
-  unfold inbounds_blocks_all in HINB.
+  unfold inbounds_blocks2 in HINB.
   remember (alive_blocks m) as mbs.
   remember (alive_P0_ranges m) as P0s.
   assert (HLEN:List.length (alive_blocks m) = List.length (alive_P0_ranges m)).
@@ -1544,15 +1578,15 @@ Proof.
   {
     eapply inbounds_blocks_atmost_2.
     eassumption.
-    rewrite inbounds_blocks_inbounds_blocks_all.
-    unfold inbounds_blocks_all.
+    rewrite inbounds_blocks_inbounds_blocks2.
+    unfold inbounds_blocks2.
     simpl.
     rewrite <- HeqP0s.
     rewrite <- Heqmbs.
     rewrite Heqres1.
     reflexivity.
   }
-  (* Okay, we showed that inbounds_blocks_all m (ofs1::nil) has
+  (* Okay, we showed that inbounds_blocks2 m (ofs1::nil) has
      less than 3 blocks. *)
   destruct res1 as [P0s1 mbs1].
   simpl in *.
@@ -1577,7 +1611,7 @@ Proof.
   }
   destruct n.
   { (* length is 2. *)
-    (* show that inbounds_blocks_all m (ofs2::ofs1::nil) has less than
+    (* show that inbounds_blocks2 m (ofs2::ofs1::nil) has less than
        2 elements. *)
     remember (disjoint_include2 P0s1 mbs1 ofs2) as res2.
     remember (length l) as n' eqn:HLEN_MBS2.
@@ -1800,16 +1834,16 @@ Proof.
   }
 Qed.
 
-(* Theorem: inbounds_blocks_all with at least two different
+(* Theorem: inbounds_blocks2 with at least two different
    elements returns only one block. *)
-Theorem inbounds_blocks_all_singleton2:
+Theorem inbounds_blocks2_singleton2:
   forall (m:t) (ofs1 ofs2:nat) l ofs' (HWF:wf m)
          (HNEQ:~ (ofs1 = ofs2))
-         (HINB:inbounds_blocks_all m (ofs1::ofs2::ofs') = l),
+         (HINB:inbounds_blocks2 m (ofs1::ofs2::ofs') = l),
     List.length l < 2.
 Proof.
   intros.
-  unfold inbounds_blocks_all in HINB.
+  unfold inbounds_blocks2 in HINB.
   simpl in HINB.
   remember (alive_P0_ranges m) as P0.
   remember (alive_blocks m) as blks.
@@ -1854,9 +1888,9 @@ Proof.
     destruct res2. simpl. eapply Heqres3.
   }
 
-  assert (res2.(snd) = inbounds_blocks_all m (ofs1::ofs2::nil)).
+  assert (res2.(snd) = inbounds_blocks2 m (ofs1::ofs2::nil)).
   {
-    unfold inbounds_blocks_all.
+    unfold inbounds_blocks2.
     simpl.
     rewrite <- HeqP0.
     rewrite <- Heqblks.
@@ -1866,7 +1900,7 @@ Proof.
   }
   assert (length (snd res2) < 2).
   {
-    apply inbounds_blocks_all_singleton with (m := m) (ofs1 := ofs1) (ofs2 := ofs2).
+    apply inbounds_blocks2_singleton with (m := m) (ofs1 := ofs1) (ofs2 := ofs2).
     assumption.
     assumption.
     congruence.
@@ -1887,11 +1921,11 @@ Proof.
 Qed.
 
 (* Theorem: if there's alive block blk, which has abs_ofs1 & abs_ofs2
-   as its inbounds, blk must be included in the result of inbounds_blocks_all. *)
-Theorem inbounds_blocks_all_In:
+   as its inbounds, blk must be included in the result of inbounds_blocks2. *)
+Theorem inbounds_blocks2_In:
   forall (m:t) (bid:blockid) (blk:MemBlock.t) blks abs_ofs1 abs_ofs2
          (HBLK: Some blk = get m bid)
-         (HRES: blks = inbounds_blocks_all m (abs_ofs1::abs_ofs2::nil))
+         (HRES: blks = inbounds_blocks2 m (abs_ofs1::abs_ofs2::nil))
          (HALIVE: MemBlock.alive blk = true)
          (HINB1: MemBlock.inbounds_abs abs_ofs1 blk = true)
          (HINB2: MemBlock.inbounds_abs abs_ofs2 blk = true)
@@ -1899,7 +1933,7 @@ Theorem inbounds_blocks_all_In:
     List.In (bid, blk) blks.
 Proof.
   intros.
-  unfold inbounds_blocks_all in HRES.
+  unfold inbounds_blocks2 in HRES.
   unfold MemBlock.inbounds_abs in HINB1, HINB2.
   simpl in HRES.
   remember (disjoint_include2 (alive_P0_ranges m) (alive_blocks m) abs_ofs1) as res1.
@@ -1934,13 +1968,13 @@ Proof.
   eassumption.
 Qed.
 
-Theorem inbounds_blocks_all_In2:
+Theorem inbounds_blocks2_In2:
   forall m b t Is
-         (HBT: b::t = Ir.Memory.inbounds_blocks_all m Is),
+         (HBT: b::t = Ir.Memory.inbounds_blocks2 m Is),
     List.In b (Ir.Memory.blocks m).
 Proof.
   intros.
-  unfold inbounds_blocks_all in HBT.
+  unfold inbounds_blocks2 in HBT.
   remember (alive_P0_ranges m) as x.
   remember (alive_blocks m) as y.
   remember (fold_left

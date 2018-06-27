@@ -15,6 +15,8 @@ Definition ty_bitsz (t:ty):nat :=
   | ptrty _ => Ir.PTRSZ
   end.
 
+Definition ty_bytesz (t:ty):nat :=
+  Nat.div (7 + ty_bitsz t) 8.
 
 Inductive const :=
 | cnum: ty -> N -> const
@@ -60,13 +62,13 @@ Inductive t :=
                                            (* For simplicity, retty equals operand ty *)
 | iload: reg -> ty -> op -> t (* retty, retty, ptr *)
 | istore: ty -> op -> op -> t (* valty, val, ptr *)
-| imalloc: reg -> ty -> op -> t (* block size *)
+| imalloc: reg -> ty -> op -> t (* block size ty, block size *)
 | ifree: op -> t (* pointer *)
 | iptrtoint: reg -> op -> ty -> t (* lhs, ptr, retty *)
 | iinttoptr: reg -> op -> ty -> t (* rhs, int, retty *)
 | ievent: op -> t
-| iicmp_ptreq: reg -> ty -> op -> op -> t (* lhs, opty, ptr1, ptr2 *)
-| iicmp_ptrule: reg -> ty -> op -> op -> t (* lhs, ptr1, ptr2 *)
+| iicmp_eq: reg -> ty -> op -> op -> t (* lhs, opty, op1, op2 *)
+| iicmp_ule: reg -> ty -> op -> op -> t (* lhs, opty, op1, op2 *)
 .
 
 Definition regops (i:t) :=
@@ -82,8 +84,8 @@ Definition regops (i:t) :=
   | iptrtoint _ op1 _ => regop op1
   | iinttoptr _ op1 _ => regop op1
   | ievent op1 => regop op1
-  | iicmp_ptreq _ _ op1 op2 => (regop op1) ++ (regop op2)
-  | iicmp_ptrule _ _ op1 op2 => (regop op1) ++ (regop op2)
+  | iicmp_eq _ _ op1 op2 => (regop op1) ++ (regop op2)
+  | iicmp_ule _ _ op1 op2 => (regop op1) ++ (regop op2)
   end.
 
 Definition def (i:t): option (reg * ty) :=
@@ -99,8 +101,8 @@ Definition def (i:t): option (reg * ty) :=
   | iptrtoint r _ t => Some (r, t)
   | iinttoptr r _ t => Some (r, t)
   | ievent _ => None
-  | iicmp_ptreq r _ _ _ => Some (r, ity 1)
-  | iicmp_ptrule r _ _ _ => Some (r, ity 1)
+  | iicmp_eq r _ _ _ => Some (r, ity 1)
+  | iicmp_ule r _ _ _ => Some (r, ity 1)
   end.
 
 End Inst.
