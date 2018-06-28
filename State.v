@@ -8,8 +8,8 @@ Require Import Value.
 Module Ir.
 
 Definition regfile := list (nat * Ir.val).
-Definition stack := list Ir.callid.
-Definition pc := prod nat nat. (* block id, inst pos *)
+Definition stack := list (Ir.callid * Ir.IRFunction.pc).
+
 Inductive event :=
 | e_none: event
 | e_some (v:Ir.val): event.
@@ -18,10 +18,26 @@ Module Config.
 
 Structure t := mk
   {
-    r:regfile; m:Ir.Memory.t; s:stack; p:pc;
+    r:regfile;
+    m:Ir.Memory.t;
+    s:stack;
     cid_to_f:list (Ir.callid * nat); (*callid -> function id*)
-    cid_fresh: Ir.callid
+    cid_fresh: Ir.callid;
+    md:Ir.IRModule.t
   }.
+
+Structure wf (c:t) := mk_wf
+  {
+    wf_m: Ir.Memory.wf c.(m);
+    wf_cid_to_f: List.NoDup (List.map fst c.(cid_to_f));
+    wf_cid_to_f2: forall cf (HIN:List.In cf c.(cid_to_f)),
+        exists f, Ir.IRModule.getf cf.(snd) c.(md) = Some f;
+    wf_stack: forall curcid curpc funid f (HIN:List.In (curcid, curpc) c.(s))
+                     (HIN2:List.In (curcid, funid) c.(cid_to_f))
+                     (HF:Some f = Ir.IRModule.getf funid c.(md)),
+        Ir.IRFunction.valid_pc curpc f = true
+  }.
+
 
 Definition get_rval (c:t) (regid:nat): option Ir.val :=
   match (List.filter (fun x => Nat.eqb x.(fst) regid) c.(r)) with
@@ -42,15 +58,21 @@ Definition get_val (c:t) (o:Ir.op): option Ir.val:=
   end.
 
 Definition update_rval (c:t) (regid:nat) (v:Ir.val): t :=
-  mk ((regid, v)::c.(r)) c.(m) c.(s) c.(p) c.(cid_to_f) c.(cid_fresh).
+  mk ((regid, v)::c.(r)) c.(m) c.(s) c.(cid_to_f) c.(cid_fresh) c.(md).
 
 Definition update_m (c:t) (m:Ir.Memory.t): t :=
-  mk c.(r) m c.(s) c.(p) c.(cid_to_f) c.(cid_fresh).
+  mk c.(r) m c.(s) c.(cid_to_f) c.(cid_fresh) c.(md).
 
 Definition get_funid (c:t) (cid:Ir.callid): option nat :=
   match (List.filter (fun x => Nat.eqb x.(fst) cid) c.(cid_to_f)) with
   | nil => None
   | h::t => Some h.(snd)
+  end.
+
+Definition update_pc (c:t) (next_pc:Ir.IRFunction.pc): t :=
+  match c.(s) with
+  | (cid, pc0)::t => mk c.(r) c.(m) ((cid,next_pc)::t) c.(cid_to_f) c.(cid_fresh) c.(md)
+  | _ => c
   end.
 
 End Config.

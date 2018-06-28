@@ -2,6 +2,8 @@ Require Import List.
 Require Import BinPos.
 Require Import Common.
 Require Import Memory.
+Require Import Omega.
+
 
 Module Ir.
 
@@ -140,6 +142,7 @@ Definition has_dest (blockid:nat) (t:t):bool :=
 End Terminator.
 
 
+
 Module BasicBlock.
 
 Structure t := mkBB
@@ -190,13 +193,24 @@ Definition terminator_uses (r:reg) (bb:t): bool :=
 
 End BasicBlock.
 
+
+
 Module IRFunction.
 
-Structure t := mkFun
-    {retty:ty;
-     name:nat;
-     args:list (ty * nat);
-     body:list BasicBlock.t}.
+Structure t := mk
+  {
+    retty:ty;
+    name:nat;
+    args:list (ty * nat);
+    body:list BasicBlock.t
+  }.
+
+Structure wf (fdef:t):= mk_wf
+  {
+    wf_nonempty: List.length (body fdef) > 0;
+    wf_arg_nodup: List.NoDup (List.map snd (args fdef))
+  }.
+
 
 Definition getbb (bname:nat) (f:t): option BasicBlock.t :=
     match List.filter (fun b => Nat.eqb bname b.(BasicBlock.name)) f.(body) with
@@ -207,9 +221,9 @@ Definition getbb (bname:nat) (f:t): option BasicBlock.t :=
 
 (* program counter *)
 Inductive pc:Type :=
-| pc_phi (bid:nat) (pidx:nat)
-| pc_inst (bid:nat) (iidx:nat)
-| pc_terminator (bid:nat).
+| pc_phi (bbid:nat) (pidx:nat)
+| pc_inst (bbid:nat) (iidx:nat)
+| pc_terminator (bbid:nat).
 
 
 (* Get PCs of definitions of register r.
@@ -267,18 +281,64 @@ Definition get_begin_pc (f:t): pc :=
     end
   end.
 
+(* Returns the beginning PC of a basic block which has bbid. *)
+Definition get_begin_pc_bb (bbid:nat) (f:t): option pc :=
+  match (Ir.IRFunction.getbb bbid f) with
+  | Some bb =>
+    match (Ir.BasicBlock.phis bb) with
+    | nil =>
+      match (Ir.BasicBlock.insts bb) with
+      | nil => Some (Ir.IRFunction.pc_terminator bbid)
+      | _ => Some (Ir.IRFunction.pc_inst bbid 0)
+      end
+    | _ => Some (Ir.IRFunction.pc_phi bbid 0)
+    end
+  | None => None
+  end.
+
+(* Returns the next pc, if current pc is trivial.
+ 'Trivial' means: the pc is not pointing to a terminator. *)
+Definition next_trivial_pc (p:pc) (f:t): option pc :=
+  match p with
+  | pc_phi bbid pidx =>
+    match (getbb bbid f) with
+    | None => None
+    | Some bb =>
+      if Nat.leb (List.length bb.(BasicBlock.phis)) (1 + pidx) then
+        if Nat.eqb 0 (List.length bb.(BasicBlock.insts)) then
+          Some (pc_terminator bbid)
+        else
+          Some (pc_inst bbid 0)
+      else
+        Some (pc_phi bbid (1 + pidx))
+    end
+  | pc_inst bbid iidx =>
+    match (getbb bbid f) with
+    | None => None
+    | Some bb =>
+      if Nat.leb (List.length bb.(BasicBlock.insts)) (1 + iidx) then
+        Some (pc_terminator bbid)
+      else
+        Some (pc_inst bbid (1 + iidx))
+    end
+  | pc_terminator bbid =>
+    (* It's not trivial. *)
+    None
+  end.
+
+(* Returns true if the pc is valid. *)
 Definition valid_pc (p:pc) (f:t): bool :=
   match p with
-  | pc_phi bid pidx =>
-    match (getbb bid f) with
+  | pc_phi bbid pidx =>
+    match (getbb bbid f) with
     | None => false | Some bb => Nat.ltb pidx (List.length bb.(BasicBlock.phis))
     end
-  | pc_inst bid iidx =>
-    match (getbb bid f) with
+  | pc_inst bbid iidx =>
+    match (getbb bbid f) with
     | None => false | Some bb => Nat.ltb iidx (List.length bb.(BasicBlock.insts))
     end
-  | pc_terminator bid =>
-    match (getbb bid f) with
+  | pc_terminator bbid =>
+    match (getbb bbid f) with
     | None => false | Some _ => true
     end
   end.
@@ -328,14 +388,79 @@ Definition valid_next_pc (p1 p2:pc) (f:t): bool :=
     end
   | (_, _) => false
   end.
-  
+
+(* Lemmas about PC. *)
+
+Theorem next_trivial_pc_valid:
+  forall pc1 pc2 (f:t)
+         (HVALID:valid_pc pc1 f = true)
+         (HNEXT:next_trivial_pc pc1 f = Some pc2),
+    valid_pc pc2 f = true.
+Proof.
+  intros.
+  destruct pc1.
+  - (* phi *)
+    simpl in HVALID. simpl in HNEXT.
+    remember (getbb bbid f) as obb.
+    destruct obb as [bb | ].
+    + remember (List.length (BasicBlock.phis bb)) as n_phis.
+      remember (List.length (BasicBlock.insts bb)) as n_insts.
+      destruct n_phis.
+      * (* # of phis is 0. *)
+        destruct pidx; unfold Nat.ltb in HVALID; simpl in HVALID; inversion HVALID.
+      * simpl in HNEXT.
+        remember (Nat.leb n_phis pidx) as phi_end.
+        destruct phi_end.
+        { destruct n_insts.
+          - inversion HNEXT.
+            simpl. rewrite <- Heqobb. reflexivity.
+          - inversion HNEXT.
+            simpl. rewrite <- Heqobb. rewrite <- Heqn_insts.
+            reflexivity.
+        }
+        { inversion HNEXT.
+          simpl. rewrite <- Heqobb. rewrite <- Heqn_phis.
+          symmetry in Heqphi_end.
+          rewrite Nat.leb_nle in Heqphi_end.
+          rewrite Nat.ltb_lt. omega.
+        }
+    + inversion HNEXT.
+  - (* inst *)
+    simpl in HVALID. simpl in HNEXT.
+    remember (getbb bbid f) as obb.
+    destruct obb as [bb | ]; try (inversion HVALID; fail).
+    rewrite Nat.ltb_lt in HVALID.
+    remember (List.length (BasicBlock.insts bb)) as n_insts.
+    destruct n_insts.
+    + inversion HVALID.
+    + inversion HNEXT.
+      remember (n_insts <=? iidx) as inst_end.
+      destruct inst_end.
+      { inversion H0.
+        simpl. rewrite <- Heqobb. reflexivity. }
+      { inversion H0.
+        simpl. rewrite <- Heqobb.
+        symmetry in Heqinst_end.
+        rewrite Nat.leb_nle in Heqinst_end.
+        rewrite Nat.ltb_lt. omega.
+      }
+  - (* terminator *)
+    simpl in HNEXT. inversion HNEXT.
+Qed.
 
 End IRFunction.
+
 
 
 Module IRModule.
 
 Definition t := list (IRFunction.t).
+
+Structure wf (mdef:t) := mk_wf
+  {
+    wf_nonempty: List.length mdef > 0;
+    wf_all: forall fdef (HIN:List.In fdef mdef), Ir.IRFunction.wf fdef
+  }.
 
 Definition getf (fname2:nat) (m:t): option IRFunction.t :=
     match List.filter (fun f => Nat.eqb fname2 f.(IRFunction.name)) m with
