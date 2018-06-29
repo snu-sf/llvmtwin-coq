@@ -59,6 +59,18 @@ Definition to_num (b:bool): Ir.val :=
   Ir.num (if b then 1%N else 0%N).
 
 
+Inductive step_res :=
+| sr_success: Ir.event -> Ir.Config.t -> step_res
+| sr_goes_wrong: step_res (* went wrong. *)
+| sr_oom: step_res (* out-of-memory *)
+| sr_nondet: step_res (* has non-deterministic result. *)
+| sr_prog_finish: Ir.val -> step_res (* program has finished (with following integer). *)
+.
+
+(****************************************************
+             Semantics of instructions.
+ ****************************************************)
+
 (* Convert a pointer into N. *)
 Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):N :=
   match p with
@@ -183,18 +195,10 @@ Definition binop (bopc:Ir.Inst.bopcode) (i1 i2:N) (bsz:nat):N :=
   | Ir.Inst.bop_sub => twos_compl_sub i1 i2 bsz
   end.
 
-Inductive step_res :=
-| sr_success: Ir.event -> Ir.Config.t -> step_res
-| sr_goes_wrong: step_res (* went wrong. *)
-| sr_oom: step_res (* out-of-memory *)
-| sr_nondet: step_res (* has non-deterministic result. *)
-| sr_prog_finish: Ir.val -> step_res (* program has finished (with following integer). *)
-.
-
 (* Semantics of an instruction which behaves deterministically.
    If running the instruction raises nondeterministic result,
    this function returns sr_goes_wrong. *)
-Definition inst_det (c:Ir.Config.t) (i:Ir.Inst.t): step_res :=
+Definition inst_det_step (c:Ir.Config.t) (i:Ir.Inst.t): step_res :=
   match i with
   | ibinop r (Ir.ity bsz) bopc op1 op2 =>
     match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
@@ -330,7 +334,57 @@ Definition inst_det (c:Ir.Config.t) (i:Ir.Inst.t): step_res :=
   | _ => sr_goes_wrong (* Untyped IR *)
   end.
 
+(* Inductive definition of small-step semantics of instruction *)
+Inductive inst_step: Ir.Config.t -> Ir.Inst.t -> step_res -> Prop :=
+| s_binop: forall c i r retty bopc op1 op2
+                  (HINST:i = Ir.Inst.ibinop r retty bopc op1 op2),
+    inst_step c i (inst_det_step c i)
 
+| s_psub: forall c i r retty ptrty opptr1 opptr2
+                 (HINST:i = Ir.Inst.ipsub r retty ptrty opptr1 opptr2),
+    inst_step c i (inst_det_step c i)
+
+| s_gep: forall c i r retty opptr opidx inb
+                (HINST:i = Ir.Inst.igep r retty opptr opidx inb),
+    inst_step c i (inst_det_step c i)
+
+| s_load: forall c i r retty opptr
+                 (HINST:i = Ir.Inst.iload r retty opptr),
+    inst_step c i (inst_det_step c i)
+
+| s_store: forall c i valty opval opptr
+                  (HINST:i = Ir.Inst.istore valty opval opptr),
+    inst_step c i (inst_det_step c i)
+
+| s_malloc: forall c i,
+    inst_step c i (sr_success Ir.e_none c) (* fill this later *)
+
+| s_free: forall c i opptr
+                 (HINST:i = Ir.Inst.ifree opptr),
+    inst_step c i (inst_det_step c i)
+
+| s_ptrtoint: forall c i r opptr retty
+                     (HINST:i = Ir.Inst.iptrtoint r opptr retty),
+    inst_step c i (inst_det_step c i)
+
+| s_inttoptr: forall c i r opint retty
+                     (HINST:i = Ir.Inst.iinttoptr r opint retty),
+    inst_step c i (inst_det_step c i)
+
+| s_event: forall c i opval
+                  (HINST:i = Ir.Inst.ievent opval),
+    inst_step c i (inst_det_step c i)
+
+| s_icmp_eq: forall c i,
+    inst_step c i (sr_success Ir.e_none c) (* fill this later *)
+
+| s_icmp_ule: forall c i,
+    inst_step c i (sr_success Ir.e_none c) (* fill this later*)
+.
+
+(****************************************************
+             Semantics of terminator.
+ ****************************************************)
 Definition br (c:Ir.Config.t) (bbid:nat): step_res :=
   match (Ir.Config.cur_fdef_pc c) with
   | Some (fdef, pc0) =>
@@ -343,7 +397,6 @@ Definition br (c:Ir.Config.t) (bbid:nat): step_res :=
   | None => sr_goes_wrong
   end.
 
-(* Semantics of terminator. *)
 Definition t_step (c:Ir.Config.t) (t:Ir.Terminator.t): step_res :=
   match t with
   | Ir.Terminator.tbr bbid =>
@@ -378,7 +431,9 @@ Definition t_step (c:Ir.Config.t) (t:Ir.Terminator.t): step_res :=
 
   end.
 
-(* Semantics of phi nodes. *)
+(****************************************************
+             Semantics of phi node.
+ ****************************************************)
 Definition phi_step (bef_bbid:nat) (c:Ir.Config.t) (p:Ir.PhiNode.t): option Ir.Config.t :=
   match list_find_key p.(snd) bef_bbid with
   | (_, op0)::_ =>
@@ -388,6 +443,7 @@ Definition phi_step (bef_bbid:nat) (c:Ir.Config.t) (p:Ir.PhiNode.t): option Ir.C
     end
   | nil => None
   end.
+
 
 End SmallStep.
 

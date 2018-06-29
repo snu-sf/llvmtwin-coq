@@ -65,7 +65,7 @@ Inductive t :=
 | ipsub: reg -> ty -> ty -> op -> op -> t (* lhs, retty, ptrty, ptr1, ptr2 *)
 | igep: reg -> ty -> op -> op -> bool -> t (* lhs, retty, ptr, idx, inbounds *)
                                            (* For simplicity, retty equals operand ty *)
-| iload: reg -> ty -> op -> t (* retty, retty, ptr *)
+| iload: reg -> ty -> op -> t (* retty, ptr *)
 | istore: ty -> op -> op -> t (* valty, val, ptr *)
 | imalloc: reg -> ty -> op -> t (* block size ty, block size *)
 | ifree: op -> t (* pointer *)
