@@ -5,5 +5,6 @@ all:
 	coqc Value.v
 	coqc Lang.v
 	coqc State.v
+	coqc Behaviors.v
 	coqc LoadStore.v WellTyped.v
 	coqc SmallStep.v

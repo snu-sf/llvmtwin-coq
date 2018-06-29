@@ -56,9 +56,11 @@ End PhiNode.
 (* Instructions (which will be in the body of a basic block. *)
 Module Inst.
 
+Inductive bopcode :=
+| bop_add | bop_sub.
+
 Inductive t :=
-| iadd: reg -> ty -> op -> op -> t (* lhs, retty, op1, op2 *)
-| isub: reg -> ty -> op -> op -> t
+| ibinop: reg -> ty -> bopcode -> op -> op -> t (* lhs, retty, op1, op2 *)
 | ipsub: reg -> ty -> ty -> op -> op -> t (* lhs, retty, ptrty, ptr1, ptr2 *)
 | igep: reg -> ty -> op -> op -> bool -> t (* lhs, retty, ptr, idx, inbounds *)
                                            (* For simplicity, retty equals operand ty *)
@@ -75,8 +77,7 @@ Inductive t :=
 
 Definition regops (i:t) :=
   match i with
-  | iadd _ _ op1 op2 => (regop op1) ++ (regop op2)
-  | isub _ _ op1 op2 => (regop op1) ++ (regop op2)
+  | ibinop _ _ _ op1 op2 => (regop op1) ++ (regop op2)
   | ipsub _ _ _ op1 op2 => (regop op1) ++ (regop op2)
   | igep _ _ op1 op2 _ => (regop op1) ++ (regop op2)
   | iload _ _ op1 => regop op1
@@ -92,8 +93,7 @@ Definition regops (i:t) :=
 
 Definition def (i:t): option (reg * ty) :=
   match i with
-  | iadd r t _ _ => Some (r, t)
-  | isub r t _ _ => Some (r, t)
+  | ibinop r t _ _ _ => Some (r, t)
   | ipsub r t _ _ _ => Some (r, t)
   | igep r t _ _ _ => Some (r, t)
   | iload r t _ => Some (r, t)
