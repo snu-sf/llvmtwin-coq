@@ -179,4 +179,20 @@ Proof.
   - rewrite refines_trace_prefix_refl. reflexivity.
 Qed.
 
+Theorem refines_trace_none:
+  forall (t1 t2:trace)
+         (HREF:refines_trace t1 t2 = true),
+    refines_trace (e_none::t1) t2 = true.
+Proof. intros. unfold refines_trace in *.
+       simpl. assumption.
+Qed.
+
+Theorem refines_trace_none2:
+  forall (t1 t2:trace)
+         (HREF:refines_trace t1 t2 = true),
+    refines_trace t1 (e_none::t2) = true.
+Proof. intros. unfold refines_trace in *.
+       simpl. assumption.
+Qed.
+
 End Ir.

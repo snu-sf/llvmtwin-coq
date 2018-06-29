@@ -337,49 +337,106 @@ Definition inst_det_step (c:Ir.Config.t) (i:Ir.Inst.t): step_res :=
 (* Inductive definition of small-step semantics of instruction *)
 Inductive inst_step: Ir.Config.t -> Ir.Inst.t -> step_res -> Prop :=
 | s_binop: forall c i r retty bopc op1 op2
-                  (HINST:i = Ir.Inst.ibinop r retty bopc op1 op2),
+      (HINST:i = Ir.Inst.ibinop r retty bopc op1 op2),
     inst_step c i (inst_det_step c i)
 
 | s_psub: forall c i r retty ptrty opptr1 opptr2
-                 (HINST:i = Ir.Inst.ipsub r retty ptrty opptr1 opptr2),
+      (HINST:i = Ir.Inst.ipsub r retty ptrty opptr1 opptr2),
     inst_step c i (inst_det_step c i)
 
 | s_gep: forall c i r retty opptr opidx inb
-                (HINST:i = Ir.Inst.igep r retty opptr opidx inb),
+      (HINST:i = Ir.Inst.igep r retty opptr opidx inb),
     inst_step c i (inst_det_step c i)
 
 | s_load: forall c i r retty opptr
-                 (HINST:i = Ir.Inst.iload r retty opptr),
+      (HINST:i = Ir.Inst.iload r retty opptr),
     inst_step c i (inst_det_step c i)
 
 | s_store: forall c i valty opval opptr
-                  (HINST:i = Ir.Inst.istore valty opval opptr),
+      (HINST:i = Ir.Inst.istore valty opval opptr),
     inst_step c i (inst_det_step c i)
 
-| s_malloc: forall c i,
-    inst_step c i (sr_success Ir.e_none c) (* fill this later *)
+| s_malloc_zero: forall c i r szty opsz
+      (HINST:i = Ir.Inst.imalloc r szty opsz)
+      (HZERO:Ir.Config.get_val c opsz = Some (Ir.num 0%N)),
+    inst_step c i (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.ptr Ir.NULL)))
+
+| s_malloc_oom: forall c i r szty opsz nsz
+      (HINST:i = Ir.Inst.imalloc r szty opsz)
+      (HSZ:Some (Ir.num nsz) = Ir.Config.get_val c opsz)
+      (HNOSPACE:~exists (P:list nat),
+            Ir.Memory.allocatable (Ir.Config.m c) (List.map (fun addr => (addr, N.to_nat nsz)) P) = true),
+    inst_step c i sr_oom
+
+| s_malloc: forall c i r szty opsz nsz (P:list nat) (blkty:Ir.blockty) a m' l
+      (HINST:i = Ir.Inst.imalloc r szty opsz)
+      (HSZ:Some (Ir.num nsz) = Ir.Config.get_val c opsz)
+      (HSZ2:N.to_nat nsz > 0)
+      (HNOTNULL:forall p (HIN:List.In p P), ~(p = 0))
+      (HDISJ:Ir.Memory.allocatable (Ir.Config.m c)
+                                    (List.map (fun addr => (addr, N.to_nat nsz)) P) = true)
+      (HALIGN:forall p (HIN:List.In p P), Nat.modulo p a = 0)
+      (HNEW: (m', l) = Ir.Memory.new (Ir.Config.m c) (Ir.heap) (N.to_nat nsz) a
+                                     (List.repeat (Ir.Byte.poison) (N.to_nat nsz))
+                                     P HALIGN HDISJ),
+    inst_step c i (sr_success Ir.e_none (update_reg_and_incrpc c r
+                    (Ir.ptr (Ir.plog (l, 0)))))
 
 | s_free: forall c i opptr
-                 (HINST:i = Ir.Inst.ifree opptr),
+      (HINST:i = Ir.Inst.ifree opptr),
     inst_step c i (inst_det_step c i)
 
 | s_ptrtoint: forall c i r opptr retty
-                     (HINST:i = Ir.Inst.iptrtoint r opptr retty),
+      (HINST:i = Ir.Inst.iptrtoint r opptr retty),
     inst_step c i (inst_det_step c i)
 
 | s_inttoptr: forall c i r opint retty
-                     (HINST:i = Ir.Inst.iinttoptr r opint retty),
+      (HINST:i = Ir.Inst.iinttoptr r opint retty),
     inst_step c i (inst_det_step c i)
 
 | s_event: forall c i opval
-                  (HINST:i = Ir.Inst.ievent opval),
+      (HINST:i = Ir.Inst.ievent opval),
     inst_step c i (inst_det_step c i)
 
-| s_icmp_eq: forall c i,
-    inst_step c i (sr_success Ir.e_none c) (* fill this later *)
+| s_icmp_eq_nondet: forall c i r opty op1 op2 mb1 mb2 l1 o1 l2 o2 res
+      (HINST:i = Ir.Inst.iicmp_eq r opty op1 op2)
+      (HOP1:Some (Ir.ptr (Ir.plog (l1, o1))) = Ir.Config.get_val c op1)
+      (HOP2:Some (Ir.ptr (Ir.plog (l2, o2))) = Ir.Config.get_val c op2)
+      (HMB1:Some mb1 = Ir.Memory.get (Ir.Config.m c) l1)
+      (HMB2:Some mb2 = Ir.Memory.get (Ir.Config.m c) l2)
+      (HDIFF:~l1 = l2)
+      (HNOTINB:~(o1 < Ir.MemBlock.n mb1 /\ o2 < Ir.MemBlock.n mb2))
+      (HNONDET:res = 0%N \/ res = 1%N),
+    inst_step c i (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
 
-| s_icmp_ule: forall c i,
-    inst_step c i (sr_success Ir.e_none c) (* fill this later*)
+| s_icmp_eq: forall c i r opty op1 op2 c'
+      (HINST:i = Ir.Inst.iicmp_eq r opty op1 op2)
+      (HC':sr_success Ir.e_none c' = inst_det_step c i),
+    inst_step c i (sr_success Ir.e_none c')
+
+| s_icmp_ule_nondet_diff: forall c i r opty op1 op2 mb1 mb2 l1 l2 o1 o2 res
+      (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
+      (HOP1:Some (Ir.ptr (Ir.plog (l1, o1))) = Ir.Config.get_val c op1)
+      (HOP2:Some (Ir.ptr (Ir.plog (l2, o2))) = Ir.Config.get_val c op2)
+      (HMB1:Some mb1 = Ir.Memory.get (Ir.Config.m c) l1)
+      (HMB2:Some mb2 = Ir.Memory.get (Ir.Config.m c) l2)
+      (HDIFF:~l1 = l2)
+      (HNONDET:res = 0%N \/ res = 1%N),
+    inst_step c i (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
+
+| s_icmp_ule_nondet_same: forall c i r opty op1 op2 mb l o1 o2 res
+      (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
+      (HOP1:Some (Ir.ptr (Ir.plog (l, o1))) = Ir.Config.get_val c op1)
+      (HOP2:Some (Ir.ptr (Ir.plog (l, o2))) = Ir.Config.get_val c op2)
+      (HMB:Some mb = Ir.Memory.get (Ir.Config.m c) l)
+      (HNOTINB:~(o1 <= Ir.MemBlock.n mb /\ o2 <= Ir.MemBlock.n mb))
+      (HNONDET:res = 0%N \/ res = 1%N),
+    inst_step c i (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
+
+| s_icmp_ule: forall c i r opty op1 op2 c'
+      (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
+      (HC':sr_success Ir.e_none c' = inst_det_step c i),
+    inst_step c i (sr_success Ir.e_none c')
 .
 
 (****************************************************

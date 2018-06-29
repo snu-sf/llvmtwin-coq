@@ -286,6 +286,9 @@ Definition null i := mk (Bit.null (8*i))   (Bit.null (8*i+1)) (Bit.null (8*i+2))
                         (Bit.null (8*i+3)) (Bit.null (8*i+4)) (Bit.null (8*i+5))
                         (Bit.null (8*i+6)) (Bit.null (8*i+7)).
 
+Definition poison := mk Bit.bpoison Bit.bpoison Bit.bpoison Bit.bpoison
+                        Bit.bpoison Bit.bpoison Bit.bpoison Bit.bpoison.
+
 Fixpoint from_bits (bs:list Bit.t): list t :=
   match bs with
   | nil => nil
@@ -913,12 +916,16 @@ Definition incr_time (m:t): t :=
 Definition free (m:t) (i:blockid): option t :=
   match (get m i) with
   | Some mb =>
-    if MemBlock.alive mb then
-      match (MemBlock.set_lifetime_end mb m.(mt)) with
-      | Some mb' => Some (incr_time (set m i mb'))
-      | None => None
-      end
-    else None
+    match (MemBlock.bt mb) with
+    | heap =>
+      if MemBlock.alive mb then
+        match (MemBlock.set_lifetime_end mb m.(mt)) with
+        | Some mb' => Some (incr_time (set m i mb'))
+        | None => None
+        end
+      else None
+    | _ => None
+    end
   | None => None
   end.
 
