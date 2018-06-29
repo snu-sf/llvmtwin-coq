@@ -10,9 +10,6 @@ Module Ir.
 Definition regfile := list (nat * Ir.val).
 Definition stack := list (Ir.callid * Ir.IRFunction.pc).
 
-Inductive event :=
-| e_none: event
-| e_some (v:Ir.val): event.
 
 Module Config.
 
@@ -74,6 +71,23 @@ Definition update_pc (c:t) (next_pc:Ir.IRFunction.pc): t :=
   | (cid, pc0)::t => mk c.(r) c.(m) ((cid,next_pc)::t) c.(cid_to_f) c.(cid_fresh) c.(md)
   | _ => c
   end.
+
+Definition cur_fdef_pc (c:t): option (Ir.IRFunction.t * Ir.IRFunction.pc) :=
+  match (Ir.Config.s c) with
+  | (cid, pc0)::t =>
+    match Ir.Config.get_funid c cid with
+    | Some funid =>
+      match Ir.IRModule.getf funid c.(md) with
+      | Some fdef => Some (fdef, pc0)
+      | None => None
+      end
+    | None => None
+    end
+  | nil => None
+  end.
+
+Definition has_nestedcall (c:t): bool :=
+  Nat.ltb 1 (List.length (Ir.Config.s c)).
 
 End Config.
 
