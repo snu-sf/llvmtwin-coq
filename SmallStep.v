@@ -188,7 +188,7 @@ Inductive step_res :=
 | sr_goes_wrong: step_res (* went wrong. *)
 | sr_oom: step_res (* out-of-memory *)
 | sr_nondet: step_res (* has non-deterministic result. *)
-| sr_prog_finish: N -> step_res (* program has finished (with following integer). *)
+| sr_prog_finish: Ir.val -> step_res (* program has finished (with following integer). *)
 .
 
 (* Semantics of an instruction which behaves deterministically.
@@ -333,7 +333,8 @@ Definition inst_det (c:Ir.Config.t) (i:Ir.Inst.t): step_res :=
 
 Definition br (c:Ir.Config.t) (bbid:nat): step_res :=
   match (Ir.Config.cur_fdef_pc c) with
-  | Some (fdef, _) =>
+  | Some (fdef, pc0) =>
+    let bbid_old := pc_bbid pc0 in
     match (Ir.IRFunction.get_begin_pc_bb bbid fdef) with
     | Some pc_next =>
       sr_success Ir.e_none (Ir.Config.update_pc c pc_next)
@@ -366,6 +367,11 @@ Definition t_step (c:Ir.Config.t) (t:Ir.Terminator.t): step_res :=
   | Ir.Terminator.tret retop =>
     match (Ir.Config.get_val c retop) with
     | Some v =>
+      if Ir.Config.has_nestedcall c then
+        (* TODO: Will be revisited later, after 'call' instruction is added. *)
+        sr_goes_wrong
+      else
+        sr_prog_finish v
       (* is there only one activation record in a call stack? *)
     | None => sr_goes_wrong
     end
@@ -373,8 +379,15 @@ Definition t_step (c:Ir.Config.t) (t:Ir.Terminator.t): step_res :=
   end.
 
 (* Semantics of phi nodes. *)
-Definition phi_step (c:Ir.Config.t) (p:Ir.PhiNode.t): option Ir.Config.t :=
-  ..
+Definition phi_step (bef_bbid:nat) (c:Ir.Config.t) (p:Ir.PhiNode.t): option Ir.Config.t :=
+  match list_find_key p.(snd) bef_bbid with
+  | (_, op0)::_ =>
+    match Ir.Config.get_val c op0 with
+    | Some v => Some (Ir.Config.update_rval c p.(fst).(fst) v)
+    | None => None
+    end
+  | nil => None
+  end.
 
 End SmallStep.
 

@@ -324,6 +324,18 @@ Proof.
   rewrite HEQ. congruence.
 Qed.
 
+Lemma map_fst_split {X Y:Type}:
+  forall (l:list (X * Y)),
+    List.map fst l = (List.split l).(fst).
+Proof.
+  intros.
+  induction l.
+  - reflexivity.
+  - simpl. destruct a.
+    remember (split l) as p.
+    destruct p. simpl. rewrite IHl. reflexivity.
+Qed.
+
 Lemma existsb_rev:
   forall {X:Type} (f:X -> bool) (l:list X),
     List.existsb f (List.rev l) = List.existsb f l.
@@ -642,7 +654,9 @@ Qed.
 
 
 
-(* Function version of List.incl *)
+(*******************************************
+      Boolean version of List.incl
+ *******************************************)
 
 Definition list_inclb {X:Type}
            {eq_dec: forall x y : X, {x = y}+{x <> y}}
@@ -1117,18 +1131,6 @@ Proof.
     assumption. reflexivity.
 Qed.
 
-Lemma map_fst_split {X Y:Type}:
-  forall (l:list (X * Y)),
-    List.map fst l = (List.split l).(fst).
-Proof.
-  intros.
-  induction l.
-  - reflexivity.
-  - simpl. destruct a.
-    remember (split l) as p.
-    destruct p. simpl. rewrite IHl. reflexivity.
-Qed.
-
 Lemma notIn_filter_nat:
   forall (l:list nat) (key:nat)
          (HNOTIN:~List.In key l),
@@ -1146,12 +1148,19 @@ Proof.
     + apply beq_nat_true in HD. omega.
     + reflexivity.
 Qed.
-    
 
-Lemma NoDup_key_filter {X:Type}:
+(*******************************************
+   Finding a value by key (which is nat).
+ *******************************************)
+
+Definition list_find_key {X:Type} (l:list (nat * X)) (key:nat)
+:list (nat * X) :=
+  List.filter (fun x => fst x =? key) l.
+
+Lemma NoDup_find_key {X:Type}:
   forall (l res:list (nat * X)) (key:nat)
          (HNODUP:NoDup (List.map fst l))
-         (HRES:res = List.filter (fun x => fst x =? key) l),
+         (HRES:res = list_find_key l key),
     List.length res < 2.
 Proof.
   intros.
@@ -1179,6 +1188,7 @@ Proof.
       + simpl. erewrite IHl. reflexivity. reflexivity.
       + erewrite IHl. reflexivity. reflexivity.
   }
+  unfold list_find_key in HRES.
   rewrite <- HRES in H.
   rewrite map_fst_split in H.
   remember (split res) as ress.

@@ -42,10 +42,11 @@ Definition regop (o:op): list reg :=
 (* PHI Node. *)
 Module PhiNode.
 
-Definition t:Type := reg * ty * list op.
+(* register, reg.type, (basicblock id, value) list *)
+Definition t:Type := reg * ty * list (nat * op).
 
-Definition regops (p:t) :=
-  List.concat (List.map regop p.(snd)).
+Definition regops (p:t): list reg :=
+  List.concat (List.map regop (List.split p.(snd)).(snd)).
 
 Definition def (p:t):reg * ty :=
   p.(fst).

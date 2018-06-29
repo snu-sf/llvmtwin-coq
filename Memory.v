@@ -893,7 +893,7 @@ Definition new (m:t) (t:blockty) (n:nat) (a:nat) (c:list Byte.t) (P:list nat)
 
 (* Get the memory block which has id i. *)
 Definition get (m:t) (i:blockid): option MemBlock.t :=
-  match (List.filter (fun i2 => Nat.eqb i2.(fst) i) m.(blocks)) with
+  match (list_find_key m.(blocks) i) with
   | nil => None
   | a::b => Some a.(snd)
   end.
@@ -997,8 +997,7 @@ Proof.
   intros.
   unfold get in HGET.
   rewrite <- HBLK in *.
-  remember (filter (fun i2 : nat * MemBlock.t => Nat.eqb (fst i2) bid) blks)
-           as f.
+  remember (list_find_key blks bid) as f.
   destruct f.
   - inversion HGET.
   - inversion HGET.
@@ -1019,7 +1018,7 @@ Proof.
     simpl. left. reflexivity.
     rewrite Heqf.
     apply lsubseq_filter.
-Qed.    
+Qed.
 
 Lemma set_get_id:
   forall m bid mb
@@ -1039,8 +1038,7 @@ Qed.
 
 Lemma get_unique:
   forall m (HWF:wf m) bid mb res
-         (HF:res = filter (fun i2 : nat * MemBlock.t => Nat.eqb (fst i2) bid)
-                          (blocks m))
+         (HF:res = list_find_key (blocks m) bid)
          (HGET:Some mb = get m bid),
     res = (bid, mb)::nil \/ res = nil.
 Proof.
@@ -1058,7 +1056,7 @@ Proof.
       reflexivity.
       assumption.
     }
-    eapply NoDup_key_filter.
+    eapply NoDup_find_key.
     eapply HQ. eassumption.
   }
   destruct res.
@@ -1089,9 +1087,10 @@ Lemma blocks_get:
 Proof.
   intros.
   destruct b as [bid mb].
-  remember (filter (fun i2 => fst i2 =? bid) (blocks m)) as fres.
+  remember (list_find_key (blocks m) bid) as fres.
   assert (List.In (bid, mb) fres).
   { rewrite Heqfres.
+    unfold list_find_key.
     rewrite filter_In.
     split. rewrite <- HBS. assumption.
     simpl. symmetry. apply beq_nat_refl. }
