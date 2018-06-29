@@ -898,6 +898,8 @@ Structure wf (m:t) :=
     wf_newid: List.forallb (fun bid => Nat.ltb bid m.(fresh_bid))
                            (List.map fst m.(blocks)) = true;
     wf_disjoint: disjoint_ranges (alive_P_ranges m) = true;
+    wf_blocktime: forall i p (HAS:List.In (i, p) m.(blocks)),
+        p.(MemBlock.r).(fst) < (mt m)
   }.
 
 
@@ -1181,6 +1183,81 @@ Proof.
       unfold alive_blocks. reflexivity.
     }
     rewrite <- H. rewrite <- H0. apply lsubseq_refl.
+  - intros.
+    destruct HAS.
+    + inversion H. simpl. omega.
+    + apply Nat.lt_trans with (m := mt m).
+      eapply wf_blocktime0. eapply H. omega.
+Qed.
+
+
+Lemma NoDup_In_map_unique {X:Type}:
+  forall (l:list (nat * X)) (key:nat) (x x0:X)
+         (HIN:List.In (key, x0) (List.map
+                      (fun i => if i.(fst) =? key then (key, x) else i)
+                      l))
+         (HNODUP:List.NoDup (map fst l)),
+    x0 = x.
+Proof.
+  intros.
+  remember (map fst l) as l'.
+  generalize dependent l.
+  induction HNODUP.
+  - simpl. intros. destruct l; try (inversion Heql'; fail). simpl in HIN.
+    inversion HIN.
+  - intros.
+    destruct l0 as [ | h0 t0].
+    + inversion Heql'.
+    + destruct h0 as [key0 v0].
+      simpl in Heql'.
+      inversion Heql'.
+      simpl in HIN.
+      destruct HIN.
+      * destruct (key0 =? key) eqn:Hkey0.
+        inversion H0. reflexivity.
+        inversion H0. rewrite Nat.eqb_neq in Hkey0. omega.
+      * apply IHHNODUP with (l0 := t0). assumption.
+        assumption.
+Qed.
+
+Lemma In_map_not_In {X:Type}:
+  forall (l:list (nat * X)) (key key0:nat) (x x0:X)
+         (HIN:List.In (key0, x0) (List.map
+                      (fun i => if i.(fst) =? key then (key, x) else i)
+                      l))
+         (HNEQ:key0 <> key),
+    List.In (key0, x0) l.
+Proof.
+  intros.
+  induction l.
+  - simpl in HIN. inversion HIN.
+  - simpl in HIN.
+    destruct HIN.
+    + destruct a. simpl in H.
+      destruct (n =? key) eqn:Heq.
+      inversion H. omega.
+      rewrite Nat.eqb_neq in Heq. inversion H.
+      simpl. auto.
+    + apply IHl in H. simpl. right. assumption.
+Qed.
+
+Lemma map_fst_map {X:Type}:
+  forall (l l':list (nat * X)) key x
+         (HMAP:l' = List.map (fun i => if i.(fst) =? key then (key, x) else i) l),
+    List.map fst l' = List.map fst l.
+Proof.
+  intros.
+  generalize dependent l'.
+  induction l.
+  - simpl. intros. rewrite HMAP. reflexivity.
+  - simpl. intros.
+    destruct (fst a =? key) eqn:Heq.
+    + destruct l'. inversion HMAP.
+      inversion HMAP.
+      rewrite Nat.eqb_eq in Heq.
+      rewrite Heq. simpl. erewrite IHl. reflexivity. reflexivity.
+    + destruct l'. inversion HMAP.
+      inversion HMAP. simpl. erewrite IHl. reflexivity. reflexivity.
 Qed.
 
 Theorem free_wf:
@@ -1190,16 +1267,82 @@ Theorem free_wf:
 Proof.
   intros.
   unfold free in HFREE.
-  destruct (get m bid) eqn:Hget; try (inversion HFREE; fail).
-  destruct (MemBlock.bt t0) eqn:Hbt; try (inversion HFREE; fail).
-  destruct (MemBlock.alive t0) eqn:Halive; try (inversion HFREE; fail).
-  destruct (MemBlock.set_lifetime_end t0 (mt m)) eqn:Hlf; try (inversion HFREE; fail).
+  destruct (get m bid) as [blk | ] eqn:Hget; try (inversion HFREE; fail).
+  destruct (MemBlock.bt blk) eqn:Hbt; try (inversion HFREE; fail).
+  destruct (MemBlock.alive blk) eqn:Halive; try (inversion HFREE; fail).
+  destruct (MemBlock.set_lifetime_end blk (mt m)) as [blk' | ] eqn:Hlf;
+    try (inversion HFREE; fail).
+  assert (HMBWF:MemBlock.wf blk).
+  { inversion HWF.
+    eapply wf_blocks0. apply get_In with (m := m). rewrite Hget. reflexivity.
+    reflexivity. }
+  assert (HMBWF':MemBlock.wf blk').
+  { inversion HMBWF.
+    unfold MemBlock.set_lifetime_end in Hlf.
+    unfold MemBlock.alive in Hlf.
+    destruct (MemBlock.r blk) as [tfst tsnd] eqn:Hrblk.
+    destruct tsnd as [tsnd | ].
+    simpl in Hlf. inversion Hlf.
+    simpl in Hlf. inversion Hlf.
+    split; try (simpl; assumption; fail).
+    - simpl. inversion HWF.
+      intros.
+      inversion FREED.
+      replace tfst with (fst (MemBlock.r blk)).
+      eapply wf_blocktime0. eapply get_In. rewrite <- Hget. reflexivity. reflexivity.
+      rewrite Hrblk. reflexivity.
+  }
   inversion HFREE.
   unfold incr_time.
-
   inversion HWF.
   split.
-  - intros. eapply wf_blocks0. simpl in HAS.
+  - intros. simpl in HAS.
+    destruct (Nat.eqb i bid) eqn:Hbid.
+    + rewrite Nat.eqb_eq in Hbid.
+      assert (p = blk').
+      { eapply NoDup_In_map_unique with (key := i).
+        rewrite <- Hbid in HAS. eapply HAS.
+        assumption. }
+      rewrite H. assumption.
+    + rewrite Nat.eqb_neq in Hbid.
+      apply wf_blocks0 with (i := i). 
+      apply In_map_not_In in HAS. assumption. assumption.
+  - simpl. erewrite map_fst_map. eassumption. reflexivity.
+  - simpl. erewrite map_fst_map. eassumption. reflexivity.
+  - assert (MemBlock.P blk = MemBlock.P blk').
+    { unfold MemBlock.set_lifetime_end in Hlf.
+      destruct (MemBlock.alive blk).
+      inversion Hlf. reflexivity.
+      inversion Halive. }
+    assert (HLSS:lsubseq (alive_P_ranges m) (alive_P_ranges (set m bid blk'))).
+    { admit. }
+    eapply disjoint_lsubseq_disjoint.
+    eapply wf_disjoint0.
+    assumption.
+  - simpl. intros.
+    destruct (i =? bid) eqn:Hbid.
+    { rewrite Nat.eqb_eq in Hbid.
+      rewrite Hbid in HAS.
+      assert (p = blk').
+      { eapply NoDup_In_map_unique.
+        eassumption. assumption. }
+      rewrite H.
+      assert (HR:fst (MemBlock.r blk') = fst (MemBlock.r blk)).
+      { unfold MemBlock.set_lifetime_end in Hlf.
+        destruct (MemBlock.alive blk).
+        inversion Hlf. simpl. reflexivity. inversion Hlf. }
+      rewrite HR.
+      apply Nat.lt_trans with (m := mt m).
+      - eapply wf_blocktime0. eapply get_In. rewrite <- Hget. reflexivity.
+        reflexivity.
+      - omega.
+    }
+    { apply Nat.lt_trans with (m := mt m).
+      assert (In (i, p) (blocks m)).
+      { eapply In_map_not_In. eapply HAS. rewrite Nat.eqb_neq in Hbid.
+        assumption. }
+      eapply wf_blocktime0. eassumption. omega.
+    }
 Admitted.
 
 (**********************************************
