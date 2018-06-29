@@ -41,8 +41,8 @@ Definition ptr_eqb (p1 p2:ptrval): bool :=
     Nat.eqb bid1 bid2 && Nat.eqb ofs1 ofs2
   | (pphy (ofs1, I1, cid1), pphy (ofs2, I2, cid2)) =>
     Nat.eqb ofs1 ofs2 &&
-    @list_incl nat Nat.eq_dec I1 I2 &&
-    @list_incl nat Nat.eq_dec I2 I1 &&
+    @list_inclb nat Nat.eq_dec I1 I2 &&
+    @list_inclb nat Nat.eq_dec I2 I1 &&
     match (cid1, cid2) with
     | (Some c1, Some c2) => Nat.eqb c1 c2
     | (None, None) => true
@@ -50,6 +50,21 @@ Definition ptr_eqb (p1 p2:ptrval): bool :=
     end
   | (_, _) => false
   end.
+
+Lemma ptr_eqb_refl:
+  forall (p:ptrval), ptr_eqb p p = true.
+Proof.
+  intros.
+  destruct p; unfold ptr_eqb.
+  - destruct p.
+    repeat (rewrite Nat.eqb_refl). reflexivity.
+  - destruct p. destruct p.
+    rewrite Nat.eqb_refl.
+    rewrite list_inclb_refl.
+    destruct o. rewrite Nat.eqb_refl. reflexivity. reflexivity.
+Qed.
+
+
 
 Inductive blockty :=
 | stack | heap | global | function.

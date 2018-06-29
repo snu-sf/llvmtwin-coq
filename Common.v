@@ -644,7 +644,7 @@ Qed.
 
 (* Function version of List.incl *)
 
-Definition list_incl {X:Type}
+Definition list_inclb {X:Type}
            {eq_dec: forall x y : X, {x = y}+{x <> y}}
            (l1 l2: list X): bool :=
   List.forallb (fun x =>
@@ -653,6 +653,28 @@ Definition list_incl {X:Type}
                      | left _ => true
                      | right _ => false
                      end) l2) l1.
+
+Lemma list_inclb_refl {X:Type} {eq_dec:forall x y:X, {x = y}+{x<>y}}:
+  forall (l:list X), @list_inclb X eq_dec l l = true.
+Proof.
+  intros.
+  induction l.
+  - reflexivity.
+  - simpl.
+    destruct (eq_dec a a).
+    + unfold list_inclb.
+      simpl.
+      unfold list_inclb in IHl.
+      rewrite forallb_forall in *.
+      rewrite <- Forall_forall in *.
+      apply Forall_impl with (P :=
+        (fun x : X => existsb
+                        (fun y : X => if eq_dec x y then true else false) l = true)).
+      * intros.
+        rewrite H. rewrite orb_true_r. reflexivity.
+      * assumption.
+    + exfalso. auto.
+Qed.
 
 
 (*******************************************

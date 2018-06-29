@@ -285,8 +285,8 @@ Definition inst_det (c:Ir.Config.t) (i:Ir.Inst.t): step_res :=
 
   | ievent opval =>
     match (Ir.Config.get_val c opval) with
-    | Some v => sr_success (Ir.e_some v) (incrpc c)
-    | None => sr_goes_wrong
+    | Some (Ir.num n) => sr_success (Ir.e_some n) (incrpc c)
+    | _ => sr_goes_wrong
     end
 
   | iicmp_eq r opty op1 op2 =>
@@ -365,7 +365,10 @@ Definition t_step (c:Ir.Config.t) (t:Ir.Terminator.t): step_res :=
 
   | Ir.Terminator.tret retop =>
     match (Ir.Config.get_val c retop) with
-    | 
+    | Some v =>
+      (* is there only one activation record in a call stack? *)
+    | None => sr_goes_wrong
+    end
 
   end.
 
