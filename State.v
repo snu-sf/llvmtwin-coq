@@ -61,7 +61,7 @@ Definition update_m (c:t) (m:Ir.Memory.t): t :=
   mk c.(r) m c.(s) c.(cid_to_f) c.(cid_fresh) c.(md).
 
 Definition get_funid (c:t) (cid:Ir.callid): option nat :=
-  match (List.filter (fun x => Nat.eqb x.(fst) cid) c.(cid_to_f)) with
+  match (list_find_key c.(cid_to_f) cid) with
   | nil => None
   | h::t => Some h.(snd)
   end.

@@ -10,6 +10,10 @@ Module Ir.
 Definition PTRSZ := 16.
 Definition MEMSZ := Nat.shiftl 1 PTRSZ.
 Definition TWINCNT := 3.
+(* A maximum value of alignment that will guarantee
+   success of machine-level memory access in this target.
+   A pointer returned by malloc() will have this alignment. *)
+Definition SYSALIGN := 4.
 
 Definition blockid := nat.
 Definition callid := nat.
@@ -816,6 +820,18 @@ Proof.
   assumption.
 Qed.
 
+Lemma no_empty_range_P_ranges:
+  forall (mb:t) (HSZ:0 < mb.(n)),
+    no_empty_range (P_ranges mb) = true.
+Proof.
+  intros.
+  unfold P_ranges.
+  induction (P mb).
+  - reflexivity.
+  - simpl. rewrite <- Nat.ltb_lt in HSZ.
+    rewrite HSZ. rewrite IHl. reflexivity.
+Qed.
+
 End MemBlock.
 
 
@@ -879,13 +895,15 @@ Structure wf (m:t) :=
   {
     wf_blocks: forall i p (HAS:List.In (i, p) m.(blocks)), MemBlock.wf p;
     wf_uniqueid: List.NoDup (List.map fst m.(blocks));
+    wf_newid: List.forallb (fun bid => Nat.ltb bid m.(fresh_bid))
+                           (List.map fst m.(blocks)) = true;
     wf_disjoint: disjoint_ranges (alive_P_ranges m) = true;
   }.
 
 
 (* Add a new memory block. *)
 Definition new (m:t) (t:blockty) (n:nat) (a:nat) (c:list Byte.t) (P:list nat)
-           (HALIGN: forall n (HIN:List.In n P), Nat.modulo n a = 0)
+           (HWF:forall begt, MemBlock.wf (MemBlock.mk t (begt, None) n a c P))
            (HDISJ: allocatable m (List.map (fun x => (x, n)) P) = true)
 : Memory.t * blockid :=
   (mk (1 + m.(mt)) (* update time *)
@@ -942,8 +960,9 @@ Definition calltime (m:t) (cid:callid): option time :=
   end.
 
 
+
 (**********************************************
-    Lemmas&Theorems about get/set functions
+  Lemmas&Theorems about get/set/new/free functions
  **********************************************)      
 
 Lemma map_key_In_id {X:Type}:
@@ -1123,6 +1142,66 @@ Proof.
     destruct fres. inversion H. inversion Heqr.
 Qed.
 
+Theorem new_wf:
+  forall m (HWF:wf m) t n a c P HWF HDISJ m' mb
+         (HNEW:(m', mb) = new m t n a c P HWF HDISJ),
+    wf m'.
+Proof.
+  intros.
+  unfold new in HNEW.
+  inversion HNEW. clear HNEW.
+  inversion HWF.
+  split; simpl.
+  - intros. destruct HAS.
+    + inversion H. clear H. apply HWF0.
+    + eapply wf_blocks0. eassumption.
+  - rewrite NoDup_cons_iff. split; try assumption.
+    intros HIN.
+    rewrite forallb_forall in wf_newid0.
+    apply wf_newid0 in HIN.
+    rewrite Nat.ltb_lt in HIN. omega.
+  - assert (fresh_bid m <? S (fresh_bid m) = true).
+    { rewrite Nat.ltb_lt. omega. }
+    rewrite H. simpl.
+    rewrite forallb_forall. rewrite <- Forall_forall.
+    rewrite forallb_forall in wf_newid0. rewrite <- Forall_forall in wf_newid0.
+    apply Forall_impl with (P := (fun x:nat => (x <? fresh_bid m) = true)).
+    intros.
+    rewrite Nat.ltb_lt in H2.
+    rewrite Nat.ltb_lt. omega.
+    assumption.
+  - unfold allocatable in HDISJ.
+    apply disjoint_lsubseq_disjoint
+      with (rs := map (fun x : nat => (x, n)) P ++ alive_P_ranges m).
+    assumption.
+    assert (alive_P_ranges m' = (List.map (fun addr => (addr, n)) P)
+                                  ++ alive_P_ranges m).
+    { unfold alive_P_ranges. unfold MemBlock.P_ranges.
+      rewrite H0. simpl.
+      unfold alive_blocks. reflexivity.
+    }
+    rewrite <- H. rewrite <- H0. apply lsubseq_refl.
+Qed.
+
+Theorem free_wf:
+  forall m (HWF:wf m) bid m'
+         (HFREE:Some m' = free m bid),
+    wf m'.
+Proof.
+  intros.
+  unfold free in HFREE.
+  destruct (get m bid) eqn:Hget; try (inversion HFREE; fail).
+  destruct (MemBlock.bt t0) eqn:Hbt; try (inversion HFREE; fail).
+  destruct (MemBlock.alive t0) eqn:Halive; try (inversion HFREE; fail).
+  destruct (MemBlock.set_lifetime_end t0 (mt m)) eqn:Hlf; try (inversion HFREE; fail).
+  inversion HFREE.
+  unfold incr_time.
+
+  inversion HWF.
+  split.
+  - intros. eapply wf_blocks0. simpl in HAS.
+Admitted.
+
 (**********************************************
       Lemmas&Theorems about inboundness
  **********************************************)
@@ -1141,6 +1220,8 @@ Proof.
     simpl. simpl in HAS. right. assumption.
   - simpl. simpl in wf_uniqueid0.
     inversion wf_uniqueid0. assumption.
+  - simpl in *. rewrite andb_true_iff in wf_newid0.
+    destruct wf_newid0. assumption.
   - unfold alive_P_ranges in *.
     unfold alive_blocks in *.
     simpl in *.

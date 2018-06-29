@@ -1,6 +1,8 @@
 Require Import List.
 Require Import Bool.
 Require Import BinNatDef.
+Require Import Omega.
+Require Import sflib.
 
 Require Import Common.
 Require Import Memory.
@@ -368,18 +370,20 @@ Inductive inst_step: Ir.Config.t -> Ir.Inst.t -> step_res -> Prop :=
             Ir.Memory.allocatable (Ir.Config.m c) (List.map (fun addr => (addr, N.to_nat nsz)) P) = true),
     inst_step c i sr_oom
 
-| s_malloc: forall c i r szty opsz nsz (P:list nat) (blkty:Ir.blockty) a m' l
+| s_malloc: forall c i r szty opsz nsz (P:list nat) m' l contents
       (HINST:i = Ir.Inst.imalloc r szty opsz)
       (HSZ:Some (Ir.num nsz) = Ir.Config.get_val c opsz)
       (HSZ2:N.to_nat nsz > 0)
-      (HNOTNULL:forall p (HIN:List.In p P), ~(p = 0))
+      (HC:contents = List.repeat (Ir.Byte.poison) (N.to_nat nsz))
+      (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk
+                                            (Ir.heap) (begt, None) (N.to_nat nsz)
+                                            (Ir.SYSALIGN) contents P))
       (HDISJ:Ir.Memory.allocatable (Ir.Config.m c)
-                                    (List.map (fun addr => (addr, N.to_nat nsz)) P) = true)
-      (HALIGN:forall p (HIN:List.In p P), Nat.modulo p a = 0)
-      (HNEW: (m', l) = Ir.Memory.new (Ir.Config.m c) (Ir.heap) (N.to_nat nsz) a
-                                     (List.repeat (Ir.Byte.poison) (N.to_nat nsz))
-                                     P HALIGN HDISJ),
-    inst_step c i (sr_success Ir.e_none (update_reg_and_incrpc c r
+                       (List.map (fun addr => (addr, N.to_nat nsz)) P) = true)
+      (HNEW: (m', l) = Ir.Memory.new (Ir.Config.m c) (Ir.heap) (N.to_nat nsz)
+                                     (Ir.SYSALIGN) contents P HMBWF HDISJ),
+    inst_step c i (sr_success Ir.e_none (update_reg_and_incrpc
+                                           (Ir.Config.update_m c m') r
                     (Ir.ptr (Ir.plog (l, 0)))))
 
 | s_free: forall c i opptr
@@ -501,6 +505,237 @@ Definition phi_step (bef_bbid:nat) (c:Ir.Config.t) (p:Ir.PhiNode.t): option Ir.C
   | nil => None
   end.
 
+
+
+(****************************************************
+        Theorems about sstep of instruction.
+ ****************************************************)
+
+Lemma list_find_key_In {X:Type}:
+  forall (l:list (nat * X)) key val
+         (HIN:List.In (key,val) l),
+    List.In (key,val) (list_find_key l key).
+Proof.
+  intros.
+  unfold list_find_key.
+  apply filter_In.
+  split. assumption. simpl. rewrite PeanoNat.Nat.eqb_refl. auto.
+Qed.
+
+Lemma cid_to_f_In_get_funid:
+  forall curcid funid0 c
+         (HWF:Ir.Config.wf c)
+         (HIN:In (curcid, funid0) (Ir.Config.cid_to_f c)),
+    Some funid0 = Ir.Config.get_funid c curcid.
+Proof.
+  intros.
+  inversion HWF.
+  unfold Ir.Config.get_funid.
+  remember (list_find_key (Ir.Config.cid_to_f c) curcid) as res.
+  assert (List.length res < 2).
+  { eapply NoDup_find_key.
+    eassumption. eassumption. }
+  assert (List.In (curcid, funid0) res).
+  { rewrite Heqres. eapply list_find_key_In.
+    eassumption. }
+  destruct res; try (inversion H0; fail).
+  destruct res.
+  - inversion H0. rewrite H1. reflexivity. inversion H1.
+  - simpl in H. omega.
+Qed.
+
+Lemma incrpc_wf:
+  forall c c'
+         (HWF:Ir.Config.wf c)
+         (HC':c' = incrpc c),
+    Ir.Config.wf c'.
+Proof.
+  (* High-level proof: incrpc changes stack frame only, and
+     next_trivial_pc satisfies valid_pc. *) 
+  intros.
+  unfold incrpc in HC'.
+  destruct (Ir.Config.cur_fdef_pc c) eqn:HC.
+  - destruct p as [fdef pc0].
+    remember (Ir.IRFunction.next_trivial_pc pc0 fdef) as pc_next.
+    destruct pc_next as [pc_next | ].
+    unfold Ir.Config.update_pc in HC'.
+    remember (Ir.Config.s c) as s'.
+    destruct s' as [ | [cid pc0'] st] .
+    + congruence.
+    + (* show that pc0' = pc0 *)
+      unfold Ir.Config.cur_fdef_pc in HC.
+      rewrite <- Heqs' in HC.
+      remember (Ir.Config.get_funid c cid) as ofunid.
+      destruct ofunid as [funid | ]; try (inversion HC; fail).
+      remember (Ir.IRModule.getf funid (Ir.Config.md c)) as ofdef'.
+      destruct ofdef' as [fdef' | ]; try (inversion HC; fail).
+      inversion HC.
+      rewrite H0, H1 in *.
+      clear H0 H1 HC.
+      (* Now prove Ir.Config.wf c' *)
+      rewrite HC'.
+      inversion HWF.
+      split.
+      * assumption.
+      * assumption.
+      * assumption.
+      * simpl.
+        intros.
+        rewrite <- Heqs' in wf_stack.
+        simpl in wf_stack.
+        destruct HIN.
+        -- inversion H. rewrite H1, H2 in *. clear H H1 H2.
+           apply Ir.IRFunction.next_trivial_pc_valid with (pc1 := pc0).
+           apply wf_stack with (curcid0 := curcid) (funid := funid0).
+           left. reflexivity.
+           eassumption. assumption.
+           assert (HINCID:Some funid0 = Ir.Config.get_funid c curcid).
+           { apply cid_to_f_In_get_funid. assumption. assumption. }
+           rewrite <- Heqofunid in HINCID.
+           inversion HINCID.
+           rewrite H0 in HF. rewrite <- HF in Heqofdef'.
+           inversion Heqofdef'. rewrite <- H1. congruence.
+         -- apply wf_stack with (curcid := curcid) (funid := funid0).
+            right. assumption. assumption. assumption.
+    + congruence.
+  - congruence.
+Qed.
+
+Lemma update_rval_wf:
+  forall c c' r v
+         (HWF:Ir.Config.wf c)
+         (HC':c' = Ir.Config.update_rval c r v),
+    Ir.Config.wf c'.
+Proof.
+  intros.
+  inversion HWF.
+  unfold Ir.Config.update_rval in HC'.
+  rewrite HC'.
+  split; try assumption.
+Qed.
+
+Lemma update_reg_and_incrpc_wf:
+  forall c c' v r
+         (HWF:Ir.Config.wf c)
+         (HC':c' = update_reg_and_incrpc c r v),
+    Ir.Config.wf c'.
+Proof.
+  intros.
+  unfold update_reg_and_incrpc in HC'.
+  assert (Ir.Config.wf (Ir.Config.update_rval c r v)).
+  { eapply update_rval_wf. eassumption. reflexivity. }
+  rewrite HC'.
+  eapply incrpc_wf.
+  eapply H. reflexivity.  
+Qed.
+
+
+Ltac thats_it := eapply update_reg_and_incrpc_wf; eauto.
+Ltac des_op c op op' HINV :=
+  destruct (Ir.Config.get_val c op) as [op' | ]; try (inversion HINV; fail).
+
+
+Theorem inst_step_wf:
+  forall c i c' e
+         (HWF:Ir.Config.wf c)
+         (HSTEP:inst_step c i (sr_success e c')),
+    Ir.Config.wf c'.
+Proof.
+  intros.
+  inversion HSTEP.
+  - (* ibinop. *)
+    rewrite HINST in H2.
+    destruct bopc.
+    { simpl in H2.
+      destruct retty; try (inversion H2; fail).
+      des_op c op1 opv1 H2. des_op c op2 opv2 H2.
+      + destruct opv1; try (inversion H2; fail);
+          destruct opv2; try (inversion H2; fail);
+            inversion H2; thats_it.
+      + destruct opv1; try (inversion H2; fail).
+    }
+    { simpl in H2.
+      destruct retty; try (inversion H2; fail).
+      des_op c op1 opv1 H2. des_op c op2 opv2 H2.
+      + destruct opv1; try (inversion H2; fail);
+          destruct opv2; try (inversion H2; fail);
+            inversion H2; thats_it.
+      + destruct opv1; try (inversion H2; fail).
+    }
+  - (* ipsub. *)
+    rewrite HINST in H2.
+    simpl in H2.
+    destruct retty; try (inversion H2; fail).
+    destruct ptrty; try (inversion H2; fail).
+    des_op c opptr1 op1 H2.
+    destruct (op1) as [n1 | p1 | ]; try (inversion H2; fail).
+    + des_op c opptr2 op2 H2.
+      destruct (op2) as [n2 | p2 | ]; try (inversion H2; fail);
+      inversion H2; thats_it.
+    + des_op c opptr2 op2 H2.
+      destruct (op2) as [n2 | p2 | ]; try (inversion H2; fail);
+      inversion H2. thats_it.
+  - (* igep. *)
+    rewrite HINST in H2.
+    simpl in H2.
+    destruct retty; try (inversion H2; fail).
+    des_op c opptr op1 H2.
+    destruct (op1) as [n1 | ptr | _]; try (inversion H2; fail).
+    + des_op c opidx op2 H2.
+      destruct (op2) as [idx | ptr2 | _]; try (inversion H2; fail);
+        inversion H2; thats_it.
+    + des_op c opidx op2 H2.
+      destruct (op2) as [idx | ptr2 | _]; try (inversion H2; fail).
+        inversion H2; thats_it.
+  - (* iload. *)
+    rewrite HINST in H2.
+    simpl in H2.
+    des_op c opptr op1 H2.
+    destruct op1; try (inversion H2; fail).
+    des_ifH H2; try (inversion H2; fail).
+    inversion H2. thats_it.
+  - (* istore. *)
+    rewrite HINST in H2.
+    simpl in H2.
+    des_op c opval opv H2.
+    destruct opv; try (inversion H2; fail).
+    des_op c opptr opp H2.
+    des_ifH H2; try (inversion H2; fail).
+    inversion H2. admit.
+  - (* imalloc with size 0 *)
+    thats_it.
+  - (* imalloc, succeed *)
+    eapply update_reg_and_incrpc_wf with (c := Ir.Config.update_m c m').
+    + inversion HWF.
+      split.
+      * simpl. eapply Ir.Memory.new_wf.
+        eapply wf_m.
+        eapply HNEW.
+      * simpl. assumption.
+      * simpl. assumption.
+      * simpl. assumption.
+    + reflexivity.
+  - (* ifree *)
+    rewrite HINST in H2.
+    simpl in H2.
+    des_op c opptr opp H2.
+    destruct opp; try (inversion H2; fail).
+    destruct (free p (Ir.Config.m c)) as [m0 | ] eqn:Hfree; try (inversion H2; fail).
+    inversion H2.
+    unfold free in Hfree.
+    destruct p.
+    + destruct p. destruct n; try (inversion Hfree).
+      apply incrpc_wf with (c := Ir.Config.update_m c m0).
+      admit. reflexivity.
+    + destruct p. destruct p.
+      destruct (Ir.Memory.zeroofs_block (Ir.Config.m c) n) eqn:Hblk.
+      * destruct p.
+        des_ifH Hfree.
+        apply incrpc_wf with (c := Ir.Config.update_m c m0).
+        admit. reflexivity.
+        inversion Hfree.
+      * inversion Hfree.
+Admitted.
 
 End SmallStep.
 
