@@ -351,7 +351,8 @@ Definition inst_det_step (c:Ir.Config.t) (i:Ir.Inst.t): step_res :=
   | _ => sr_goes_wrong (* Untyped IR *)
   end.
 
-(* Inductive definition of small-step semantics of instruction *)
+(* Inductive definition of small-step semantics of instruction.
+   Note that sr_nondet is never used in inst_step. *)
 Inductive inst_step: Ir.Config.t -> Ir.Inst.t -> step_res -> Prop :=
 | s_binop: forall c i r retty bopc op1 op2
       (HINST:i = Ir.Inst.ibinop r retty bopc op1 op2),
@@ -461,6 +462,40 @@ Inductive inst_step: Ir.Config.t -> Ir.Inst.t -> step_res -> Prop :=
       (HC':sr_success Ir.e_none c' = inst_det_step c i),
     inst_step c i (sr_success Ir.e_none c')
 .
+
+(* Categorization of instructions. *)
+Definition changes_mem (i:Ir.Inst.t): bool :=
+  match i with
+  | ibinop _ _ _ _ _ => false
+  | ipsub _ _ _ _ _ => false
+  | igep _ _ _ _ _ => false
+  | iload _ _ _ => false
+  | istore _ _ _ => true
+  | imalloc _ _ _ => true
+  | ifree _ => true
+  | ibitcast _ _ _ => false
+  | iptrtoint _ _ _ => false
+  | iinttoptr _ _ _ => false
+  | ievent _ => false
+  | iicmp_eq _ _ _ _ => false
+  | iicmp_ule _ _ _ _ => false
+  end.
+Definition raises_event (i:Ir.Inst.t): bool :=
+  match i with
+  | ibinop _ _ _ _ _ => false
+  | ipsub _ _ _ _ _ => false
+  | igep _ _ _ _ _ => false
+  | iload _ _ _ => false
+  | istore _ _ _ => false
+  | imalloc _ _ _ => false
+  | ifree _ => false
+  | ibitcast _ _ _ => false
+  | iptrtoint _ _ _ => false
+  | iinttoptr _ _ _ => false
+  | ievent _ => true
+  | iicmp_eq _ _ _ _ => false
+  | iicmp_ule _ _ _ _ => false
+  end.
 
 (****************************************************
              Semantics of terminator.
@@ -654,7 +689,8 @@ Qed.
 Ltac thats_it := eapply update_reg_and_incrpc_wf; eauto.
 Ltac des_op c op op' HINV :=
   destruct (Ir.Config.get_val c op) as [op' | ]; try (inversion HINV; fail).
-
+Ltac des_inv v HINV :=
+  destruct (v); try (inversion HINV; fail).
 
 (* Theorem: inst_step preserves well-formedness of configuration. *)
 Theorem inst_step_wf:
@@ -669,59 +705,29 @@ Proof.
     rewrite HINST in H2.
     destruct bopc.
     { simpl in H2.
-      destruct retty; try (inversion H2; fail).
-      des_op c op1 opv1 H2. des_op c op2 opv2 H2.
-      + destruct opv1; try (inversion H2; fail);
-          destruct opv2; try (inversion H2; fail);
-            inversion H2; thats_it.
-      + destruct opv1; try (inversion H2; fail).
+      des_inv retty H2. des_op c op1 opv1 H2. des_op c op2 opv2 H2.
+      + des_inv opv1 H2; des_inv opv2 H2; inversion H2; thats_it.
+      + des_inv opv1 H2.
     }
     { simpl in H2.
-      destruct retty; try (inversion H2; fail).
-      des_op c op1 opv1 H2. des_op c op2 opv2 H2.
-      + destruct opv1; try (inversion H2; fail);
-          destruct opv2; try (inversion H2; fail);
-            inversion H2; thats_it.
-      + destruct opv1; try (inversion H2; fail).
+      des_inv retty H2. des_op c op1 opv1 H2. des_op c op2 opv2 H2.
+      + des_inv opv1 H2; des_inv opv2 H2; inversion H2; thats_it.
+      + des_inv opv1 H2.
     }
   - (* ipsub. *)
-    rewrite HINST in H2.
-    simpl in H2.
-    destruct retty; try (inversion H2; fail).
-    destruct ptrty; try (inversion H2; fail).
-    des_op c opptr1 op1 H2.
-    destruct (op1) as [n1 | p1 | ]; try (inversion H2; fail).
-    + des_op c opptr2 op2 H2.
-      destruct (op2) as [n2 | p2 | ]; try (inversion H2; fail);
-      inversion H2; thats_it.
-    + des_op c opptr2 op2 H2.
-      destruct (op2) as [n2 | p2 | ]; try (inversion H2; fail);
-      inversion H2. thats_it.
+    rewrite HINST in H2. simpl in H2.
+    des_inv retty H2. des_inv ptrty H2. des_op c opptr1 op1 H2.
+    des_inv op1 H2; des_op c opptr2 op2 H2; des_inv op2 H2; inversion H2; thats_it.
   - (* igep. *)
-    rewrite HINST in H2.
-    simpl in H2.
-    destruct retty; try (inversion H2; fail).
-    des_op c opptr op1 H2.
-    destruct (op1) as [n1 | ptr | _]; try (inversion H2; fail).
-    + des_op c opidx op2 H2.
-      destruct (op2) as [idx | ptr2 | _]; try (inversion H2; fail);
-        inversion H2; thats_it.
-    + des_op c opidx op2 H2.
-      destruct (op2) as [idx | ptr2 | _]; try (inversion H2; fail).
-        inversion H2; thats_it.
+    rewrite HINST in H2. simpl in H2.
+    des_inv retty H2. des_op c opptr op1 H2.
+    des_inv op1 H2; des_op c opidx op2 H2; des_inv op2 H2; inversion H2; thats_it.
   - (* iload. *)
-    rewrite HINST in H2.
-    simpl in H2.
-    des_op c opptr op1 H2.
-    destruct op1; try (inversion H2; fail).
-    des_ifH H2; try (inversion H2; fail).
-    inversion H2. thats_it.
+    rewrite HINST in H2. simpl in H2. des_op c opptr op1 H2.
+    des_inv op1 H2. des_ifH H2; try (inversion H2; fail). inversion H2. thats_it.
   - (* istore. *)
-    rewrite HINST in H2.
-    simpl in H2.
-    des_op c opval opv H2.
-    destruct opv; try (inversion H2; fail).
-    des_op c opptr opp H2.
+    rewrite HINST in H2. simpl in H2.
+    des_op c opval opv H2. des_inv opv H2. des_op c opptr opp H2.
     destruct (Ir.deref (Ir.Config.m c) p (Ir.ty_bytesz valty)) eqn:Hderef;
       try (inversion H2; fail).
     inversion H2.
@@ -735,20 +741,14 @@ Proof.
   - (* imalloc, succeed *)
     eapply update_reg_and_incrpc_wf with (c := Ir.Config.update_m c m').
     + inversion HWF.
-      split.
+      split; try (simpl; assumption).
       * simpl. eapply Ir.Memory.new_wf.
         eapply wf_m.
         eapply HNEW.
-      * simpl. assumption.
-      * simpl. assumption.
-      * simpl. assumption.
     + reflexivity.
   - (* ifree *)
-    destruct HWF.
-    rewrite HINST in H2.
-    simpl in H2.
-    des_op c opptr opp H2.
-    destruct opp; try (inversion H2; fail).
+    destruct HWF. rewrite HINST in H2. simpl in H2.
+    des_op c opptr opp H2. des_inv opp H2.
     destruct (free p (Ir.Config.m c)) as [m0 | ] eqn:Hfree; try (inversion H2; fail).
     inversion H2.
     unfold free in Hfree.
@@ -770,28 +770,16 @@ Proof.
       * inversion Hfree.
   - (* ibitcast. *)
     rewrite HINST in H2. simpl in H2.
-    des_op c opval opv H2.
-    destruct opv; try (inversion H2; fail).
-    + destruct retty; try (inversion H2; fail).
-      inversion H2; thats_it.
-    + destruct retty; try (inversion H2; fail).
-      inversion H2; thats_it.
+    des_op c opval opv H2. des_inv opv H2; des_inv retty H2; inversion H2; thats_it.
   - (* iptrtoint. *)
-    rewrite HINST in H2. simpl in H2.
-    destruct retty; try (inversion H2; fail).
-    des_op c opptr opp H2.
-    destruct opp; try (inversion H2; fail);
-    inversion H2; thats_it.
+    rewrite HINST in H2. simpl in H2. des_inv retty H2.
+    des_op c opptr opp H2. des_inv opp H2; inversion H2; thats_it.
   - (* iinttoptr *)
-    rewrite HINST in H2. simpl in H2.
-    destruct retty; try (inversion H2; fail).
-    des_op c opint opi H2.
-    destruct opi; try (inversion H2; fail);
-    inversion H2; thats_it.
+    rewrite HINST in H2. simpl in H2. des_inv retty H2.
+    des_op c opint opi H2. des_inv opi H2; inversion H2; thats_it.
   - (* ievent *)
     rewrite HINST in H2. simpl in H2.
-    des_op c opval opv H2.
-    destruct opv; try (inversion H2; fail).
+    des_op c opval opv H2. des_inv opv H2.
     inversion H2. eapply incrpc_wf. eassumption. reflexivity.
   - (* iicmp_eq, nondet *)
     eapply update_reg_and_incrpc_wf.
@@ -819,19 +807,123 @@ Proof.
   - (* icmp_ule, det *)
     rewrite HINST in HC'. simpl in HC'.
     des_op c op1 op1v HC'.
-    + destruct op1v; try (inversion HC'; fail);
+    + des_inv op1v HC';
       des_op c op2 op2v HC'.
-      * destruct op2v; try (inversion HC'; fail);
-        inversion HC'; thats_it.
-      * destruct op2v; try (inversion HC'; fail).
+      * des_inv op2v HC'; inversion HC'; thats_it.
+      * des_inv op2v HC'.
         -- destruct (icmp_ule_ptr p p0 (Ir.Config.m c)) eqn:Huleptr; try (inversion HC'; fail).
            inversion HC'. thats_it.
         -- inversion HC'. thats_it.
       * inversion HC'. thats_it.
       * inversion HC'. thats_it.
-    + des_op c op2 op2v HC'.
-      destruct op2v; try (inversion HC'; fail).
-      inversion HC'. thats_it.
+    + des_op c op2 op2v HC'. des_inv op2v HC'. inversion HC'. thats_it.
+Qed.
+
+(****************************************************
+   Theorems regarding categorization of instruction.
+ ****************************************************)
+
+Lemma no_mem_change_after_incrpc:
+  forall c,
+    Ir.Config.m c = Ir.Config.m (incrpc c).
+Proof.
+  intros.
+  unfold incrpc.
+  destruct (Ir.Config.cur_fdef_pc c).
+  destruct p.
+  { des_ifs. unfold Ir.Config.update_pc.
+    des_ifs. }
+  reflexivity.
+Qed.
+
+Lemma no_mem_change_after_update:
+  forall c r v,
+    Ir.Config.m c = Ir.Config.m (update_reg_and_incrpc c r v).
+Proof.
+  intros.
+  unfold update_reg_and_incrpc.
+  rewrite <- no_mem_change_after_incrpc.
+  unfold Ir.Config.update_rval.
+  des_ifs.
+Qed.
+
+(* Theorem: if changes_mem returns false, memory isn't
+   changed after inst_step. *)
+Theorem changes_mem_spec:
+  forall c i c' e
+         (HWF:Ir.Config.wf c)
+         (HNOMEMCHG:changes_mem i = false)
+         (HSTEP:inst_step c i (sr_success e c')),
+    c.(Ir.Config.m) = c'.(Ir.Config.m).
+Proof.
+  intros.
+  inversion HSTEP; try (rewrite HINST in HNOMEMCHG; inversion HNOMEMCHG; fail).
+  - (* ibinop. *)
+    rewrite HINST in H2.
+    destruct bopc.
+    { simpl in H2.
+      des_inv retty H2. des_op c op1 opv1 H2. des_op c op2 opv2 H2.
+      + des_inv opv1 H2; des_inv opv2 H2; inversion H2; apply no_mem_change_after_update.
+      + des_inv opv1 H2.
+    }
+    { simpl in H2.
+      des_inv retty H2. des_op c op1 opv1 H2. des_op c op2 opv2 H2.
+      + des_inv opv1 H2; des_inv opv2 H2; inversion H2; apply no_mem_change_after_update.
+      + des_inv opv1 H2.
+    }
+  - (* ipsub. *)
+    rewrite HINST in H2. simpl in H2.
+    des_inv retty H2. des_inv ptrty H2. des_op c opptr1 op1 H2.
+    des_inv op1 H2; des_op c opptr2 op2 H2; des_inv op2 H2; inversion H2; apply no_mem_change_after_update.
+  - (* igep. *)
+    rewrite HINST in H2. simpl in H2.
+    des_inv retty H2. des_op c opptr op1 H2.
+    des_inv op1 H2; des_op c opidx op2 H2; des_inv op2 H2; inversion H2; apply no_mem_change_after_update.
+  - (* iload. *)
+    rewrite HINST in H2. simpl in H2. des_op c opptr op1 H2.
+    des_inv op1 H2. des_ifH H2; try (inversion H2; fail). inversion H2. apply no_mem_change_after_update.
+  - (* ibitcast. *)
+    rewrite HINST in H2. simpl in H2.
+    des_op c opval opv H2. des_inv opv H2; des_inv retty H2; inversion H2; apply no_mem_change_after_update.
+  - (* iptrtoint. *)
+    rewrite HINST in H2. simpl in H2. des_inv retty H2.
+    des_op c opptr opp H2. des_inv opp H2; inversion H2; apply no_mem_change_after_update.
+  - (* iinttoptr *)
+    rewrite HINST in H2. simpl in H2. des_inv retty H2.
+    des_op c opint opi H2. des_inv opi H2; inversion H2; apply no_mem_change_after_update.
+  - (* ievent *)
+    rewrite HINST in H2. simpl in H2.
+    des_op c opval opv H2. des_inv opv H2.
+    inversion H2. apply no_mem_change_after_incrpc.
+  - (* iicmp_eq, nondet *) apply no_mem_change_after_update.
+  - (* iicmp_eq, det *)
+    rewrite HINST in HC'. simpl in HC'.
+    des_op c op1 op1v HC'.
+    + destruct op1v.
+      * des_op c op2 op2v HC'.
+        destruct op2v; inversion HC'; apply no_mem_change_after_update.
+      * des_op c op2 op2v HC'. des_inv op2v HC'.
+        destruct (icmp_eq_ptr p p0 (Ir.Config.m c)) eqn:Heq_ptr; try (inversion HC'; fail);
+        inversion HC'; apply no_mem_change_after_update.
+        inversion HC'. apply no_mem_change_after_update.
+      * inversion HC'. apply no_mem_change_after_update.
+    + des_op c op2 op2v HC'. des_inv op2v HC'.
+      inversion HC'. apply no_mem_change_after_update.
+  - (* icmp_ule, nondet *) apply no_mem_change_after_update.
+  - (* icmp_ule, nondet 2 *) apply no_mem_change_after_update.
+  - (* icmp_ule, det *)
+    rewrite HINST in HC'. simpl in HC'.
+    des_op c op1 op1v HC'.
+    + des_inv op1v HC';
+      des_op c op2 op2v HC'.
+      * des_inv op2v HC'; inversion HC'; apply no_mem_change_after_update.
+      * des_inv op2v HC'.
+        -- destruct (icmp_ule_ptr p p0 (Ir.Config.m c)) eqn:Huleptr; try (inversion HC'; fail).
+           inversion HC'. apply no_mem_change_after_update.
+        -- inversion HC'. apply no_mem_change_after_update.
+      * inversion HC'. apply no_mem_change_after_update.
+      * inversion HC'. apply no_mem_change_after_update.
+    + des_op c op2 op2v HC'. des_inv op2v HC'. inversion HC'. apply no_mem_change_after_update.
 Qed.
 
 End SmallStep.

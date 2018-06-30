@@ -1,16 +1,91 @@
+Require Import BinPos.
+Require Import List.
+Require Import Omega.
+
 Require Import Common.
 Require Import Lang.
 Require Import Memory.
-Require Import BinPos.
-Require Import List.
 Require Import Value.
+
 
 Module Ir.
 
+Module Regfile.
 (* Definition of a register file. *)
-Definition regfile := list (nat * Ir.val).
+Definition t := list (nat * Ir.val).
+
+Definition get (rf:t) (regid:nat): option Ir.val :=
+  match (list_find_key rf regid) with
+  | nil => None
+  | h::t => Some h.(snd)
+  end.
+
+Definition update (rf:t) (regid:nat) (v:Ir.val): t :=
+  (regid,v)::rf.
+
+(* Definition of two regfiles. *)
+Definition eq (r1 r2:t): Prop :=
+  forall regid, get r1 regid = get r2 regid.
+
+
+(***************************************************
+              Lemmas about Regfile.
+ ***************************************************)
+
+Theorem update_eq:
+  forall (r1 r2:t) (HEQ:eq r1 r2)
+         (regid:nat) (v:Ir.val),
+    eq (update r1 regid v) (update r2 regid v).
+Proof.
+  unfold eq in *.
+  intros.
+  unfold update.
+  unfold get.
+  simpl.
+  destruct (regid =? regid0) eqn:Heqid.
+  - simpl. reflexivity.
+  - unfold get in HEQ.
+    rewrite HEQ. reflexivity.
+Qed.
+
+Theorem update_reordered_eq:
+  forall (rf:t) (rid1 rid2:nat) (v1 v2:Ir.val)
+         (HNEQ:Nat.eqb rid1 rid2 = false),
+    eq (update (update rf rid1 v1) rid2 v2)
+       (update (update rf rid2 v2) rid1 v1).
+Proof.
+  intros.
+  unfold update.
+  simpl.
+  unfold eq.
+  intros.
+  unfold get.
+  simpl.
+  destruct (rid2 =? regid) eqn:Heqid2;
+    destruct (rid1 =? regid) eqn:Heqid1;
+    try (rewrite Nat.eqb_eq in *);
+    try (rewrite Nat.eqb_neq in *).
+  - omega.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+End Regfile.
+
+
+Module Stack.
+
 (* Definition of a call stack. *)
-Definition stack := list (Ir.callid * (Ir.IRFunction.pc * regfile)).
+Definition t := list (Ir.callid * (Ir.IRFunction.pc * Regfile.t)).
+
+Definition eq (s1 s2:t):Prop :=
+  List.Forall2 (fun itm1 itm2 =>
+                  itm1.(fst) = itm2.(fst) /\ itm1.(snd).(fst) = itm2.(snd).(fst) /\
+                  Regfile.eq itm1.(snd).(snd) itm2.(snd).(snd))
+               s1 s2.
+
+End Stack.
 
 
 Module Config.
@@ -19,7 +94,7 @@ Module Config.
 Structure t := mk
   {
     m:Ir.Memory.t; (* a memory *)
-    s:stack; (* a call stack *)
+    s:Stack.t; (* a call stack *)
     cid_to_f:list (Ir.callid * nat); (*callid -> function id*)
     cid_fresh: Ir.callid; (* Fresh, unused call id. *)
     md:Ir.IRModule.t (* IR module *)
@@ -53,11 +128,7 @@ Structure wf (c:t) := mk_wf
 Definition get_rval (c:t) (regid:nat): option Ir.val :=
   match c.(s) with
   | nil => None
-  | (_, (_, r))::_ =>
-    match (List.filter (fun x => Nat.eqb x.(fst) regid) r) with
-    | nil => None
-    | h::t => Some h.(snd)
-    end
+  | (_, (_, r))::_ => Regfile.get r regid
   end.
 
 (* Get value of the operand o. *)
@@ -78,7 +149,7 @@ Definition update_rval (c:t) (regid:nat) (v:Ir.val): t :=
   match c.(s) with
   | nil => c
   | (cid, (pc0, r))::s' =>
-    mk c.(m) ((cid, (pc0, (regid, v)::r))::s') c.(cid_to_f) c.(cid_fresh) c.(md)
+    mk c.(m) ((cid, (pc0, Regfile.update r regid v))::s') c.(cid_to_f) c.(cid_fresh) c.(md)
   end.
 
 (* Update memory. *)
@@ -117,6 +188,17 @@ Definition cur_fdef_pc (c:t): option (Ir.IRFunction.t * Ir.IRFunction.pc) :=
 (* Returns true if the call stack has more than one entry, false otherwise. *)
 Definition has_nestedcall (c:t): bool :=
   Nat.ltb 1 (List.length (Ir.Config.s c)).
+
+
+(* Definition of equality. *)
+(*     m:Ir.Memory.t; (* a memory *)
+    s:Stack.t; (* a call stack *)
+    cid_to_f:list (Ir.callid * nat); (*callid -> function id*)
+    cid_fresh: Ir.callid; (* Fresh, unused call id. *)
+    md:Ir.IRModule.t (* IR module *)*)
+Definition eq (c1 c2:t): Prop :=
+  c1.(m) = c2.(m) /\ Stack.eq c1.(s) c2.(s) /\ c1.(cid_to_f) = c2.(cid_to_f) /\
+  c1.(cid_fresh) = c2.(cid_fresh) /\ c1.(md) = c2.(md).
 
 End Config.
 
