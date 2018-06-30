@@ -185,6 +185,13 @@ Definition cur_fdef_pc (c:t): option (Ir.IRFunction.t * Ir.IRFunction.pc) :=
   | nil => None
   end.
 
+(* Returns the instruction pc is pointing to. *)
+Definition cur_inst (c:t): option (Ir.Inst.t) :=
+  match cur_fdef_pc c with
+  | Some (fdef, pc0) => Ir.IRFunction.get_inst pc0 fdef
+  | None => None
+  end.
+
 (* Returns true if the call stack has more than one entry, false otherwise. *)
 Definition has_nestedcall (c:t): bool :=
   Nat.ltb 1 (List.length (Ir.Config.s c)).

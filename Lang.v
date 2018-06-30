@@ -330,6 +330,22 @@ Definition next_trivial_pc (p:pc) (f:t): option pc :=
     None
   end.
 
+(* Returns the instruction pc is pointing to.
+   If there's no such instruction, returns None. *)
+Definition get_inst (p:pc) (f:t): option Inst.t :=
+  match p with
+  | pc_inst bbid iidx =>
+    match (getbb bbid f) with
+    | None => None
+    | Some bb =>
+      if Nat.ltb iidx (List.length bb.(BasicBlock.insts)) then
+        Some (List.nth iidx bb.(BasicBlock.insts) (Ir.Inst.ievent (Ir.opreg 0)))
+      else (* unreachable *)
+        None
+    end
+  | _ => None
+  end.
+
 (* Returns true if the pc is valid. *)
 Definition valid_pc (p:pc) (f:t): bool :=
   match p with
