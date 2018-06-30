@@ -246,6 +246,38 @@ Proof.
       assumption.
 Qed.
 
+Lemma app_equal {X:Type}:
+  forall (l1' l2' l1 l2:list X) (x x':X)
+         (HNOTIN1:~List.In x' l1)
+         (HNOTIN1':~List.In x l1')
+         (HEQ:l1' ++ x' :: l2' = l1 ++ x :: l2),
+    l1 = l1' /\ l2 = l2' /\ x' = x.
+Proof.
+  intros.
+  generalize dependent l1'.
+  induction l1.
+  - intros. simpl in HEQ.
+    destruct l1'. simpl in HEQ.
+    inversion HEQ. split. reflexivity. split; congruence.
+    simpl in HEQ. inversion HEQ. rewrite H0 in HNOTIN1'.
+    exfalso. apply HNOTIN1'. constructor.
+    reflexivity.
+  - simpl. intros.
+    destruct l1'.
+    + simpl in HEQ. inversion HEQ. rewrite H0 in HNOTIN1.
+      exfalso. apply HNOTIN1. constructor. reflexivity.
+    + simpl in HEQ.
+      inversion HEQ. rewrite H0 in *. clear H0.
+      assert (l1 = l1' /\ l2 = l2' /\ x' = x).
+      { apply IHl1. simpl in HNOTIN1.
+        apply Decidable.not_or in HNOTIN1. destruct HNOTIN1. assumption.
+        simpl in HNOTIN1'. apply Decidable.not_or in HNOTIN1'.
+        destruct HNOTIN1'. assumption.
+        assumption. }
+      destruct H. destruct H0.
+      split. congruence. split; congruence.
+Qed.
+
 (* the result of List.filter satisfies forallb. *)
 Lemma filter_forallb: forall {X:Type} (l:list X) f,
     List.forallb f (List.filter f l) = true.
@@ -254,6 +286,17 @@ Proof.
   induction l. reflexivity. simpl.
   destruct (f a) eqn:H. simpl. rewrite H. rewrite IHl. auto.
   assumption.
+Qed.
+
+Lemma filter_app {X:Type}:
+  forall (l1 l2:list X) (f:X -> bool),
+    List.filter f (l1++l2) = (List.filter f l1) ++ (List.filter f l2).
+Proof.
+  intros.
+  induction l1.
+  - simpl. reflexivity.
+  - simpl. destruct (f a). rewrite IHl1. reflexivity.
+    assumption.
 Qed.
 
 Lemma forallb_map:
@@ -955,6 +998,16 @@ Proof.
   - simpl. constructor. assumption.
 Qed.
 
+Lemma lsubseq_append2: forall {X:Type} (l0 l1 l2:list X)
+                             (H1:lsubseq l1 l2),
+    lsubseq (l0++l1) (l2).
+Proof.
+  intros.
+  induction l0.
+  - simpl. assumption.
+  - simpl. constructor. assumption.
+Qed.
+
 Lemma lsubseq_combine:
   forall {X Y:Type} (a1 a2:list X) (b1 b2:list Y)
          (HLEN1:List.length a1 = List.length b1)
@@ -1315,6 +1368,24 @@ Proof.
   eassumption.
 Qed.
 
+Lemma list_set_notIn_key {X:Type}:
+  forall (l:list (nat * X)) key v
+         (HNODUP: ~List.In key (list_keys l)),
+    l = list_set l key v.
+Proof.
+  intros.
+  induction l.
+  - intros. reflexivity.
+  - intros. simpl.
+    simpl in HNODUP.
+    destruct (fst a =? key) eqn:Heq.
+    + rewrite Nat.eqb_eq in Heq. rewrite Heq in HNODUP. omega.
+    + rewrite Nat.eqb_neq in Heq.
+      rewrite <- IHl.
+      reflexivity.
+      apply Decidable.not_or in HNODUP. destruct HNODUP. assumption.
+Qed.
+
 Lemma list_set_NoDup_In_unique {X:Type}:
   forall (l:list (nat * X)) (key:nat) (x x0:X)
          (HIN:List.In (key, x0) (list_set l key x))
@@ -1361,6 +1432,7 @@ Proof.
     apply IHl in H0. assumption. assumption.
 Qed.
 
+
 Lemma list_set_decompose {X:Type}:
   forall (l l':list (nat * X)) key v
          (HNODUP:NoDup (list_keys l))
@@ -1381,21 +1453,32 @@ Proof.
   assert (HD':= decompose_by_key l' key H H0).
   destruct HD' as [l1' [l2' [v0' [HD'1 [HD'2 HD'3]]]]].
   destruct HD as [l1 [l2 [v0 [HD1 [HD2 HD3]]]]].
-  exists l1', l2'.
+  assert (H12: l1 = l1' /\ l2 = l2' /\ (key, v0') = (key, v)).
+  { rewrite HD'1, HD1 in HSET.
+    unfold list_set in HSET.
+    rewrite map_app in HSET.
+    simpl in HSET. rewrite Nat.eqb_refl in HSET.
+    assert (H11:l1 = list_set l1 key v).
+    { apply list_set_notIn_key. assumption. }
+    assert (H12:l2 = list_set l2 key v).
+    { apply list_set_notIn_key. assumption. }
+    unfold list_set in H11, H12.
+    rewrite <- H11, <- H12 in HSET.
+    apply app_equal with (x := (key, v)) (x' := (key, v0')).
+    { intros H00.
+      eapply list_keys_In_False. eapply HD2. eassumption. }
+    { intros H00.
+      eapply list_keys_In_False. eapply HD'2. eassumption. }
+    assumption.
+  }
+  destruct H12 as [H1 [H2 HITM]].
+  inversion HITM. rewrite H4 in *. clear H4 HITM.
+  exists l1', l2', v0.
   split.
-  - assert (List.In (key, v) l').
-    { eapply list_set_In. eapply HIN. assumption. }
-    rewrite HD1 in H1.
-    rewrite List.in_app_iff in H1.
-    destruct H1 as [H1 | H1].
-    assert (HFALSE := list_keys_In_False l1' key v HD2 H1).
-    omega.
-    simpl in H1.
-    destruct H1 as [H1 | H1].
-    + inversion H1. congruence.
-    + assert (HFALSE := list_keys_In_False l2' key v HD3 H1).
-      omega.
- - split; assumption.
+  - congruence.
+  - split.
+    assumption.
+    split; assumption.
 Qed.
 
 Lemma list_find_key_NoDup {X:Type}:
@@ -1451,6 +1534,17 @@ Proof.
       apply notIn_filter_nat in IH.
       rewrite IH in H. rewrite H. simpl. omega.
     + apply IHHNODUP. assumption.
+Qed.
+
+Lemma list_find_key_In {X:Type}:
+  forall (l:list (nat * X)) key val
+         (HIN:List.In (key,val) l),
+    List.In (key,val) (list_find_key l key).
+Proof.
+  intros.
+  unfold list_find_key.
+  apply filter_In.
+  split. assumption. simpl. rewrite PeanoNat.Nat.eqb_refl. auto.
 Qed.
 
 Lemma list_set_In_not_In {X:Type}:

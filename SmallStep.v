@@ -511,17 +511,6 @@ Definition phi_step (bef_bbid:nat) (c:Ir.Config.t) (p:Ir.PhiNode.t): option Ir.C
         Theorems about sstep of instruction.
  ****************************************************)
 
-Lemma list_find_key_In {X:Type}:
-  forall (l:list (nat * X)) key val
-         (HIN:List.In (key,val) l),
-    List.In (key,val) (list_find_key l key).
-Proof.
-  intros.
-  unfold list_find_key.
-  apply filter_In.
-  split. assumption. simpl. rewrite PeanoNat.Nat.eqb_refl. auto.
-Qed.
-
 Lemma cid_to_f_In_get_funid:
   forall curcid funid0 c
          (HWF:Ir.Config.wf c)
@@ -533,7 +522,7 @@ Proof.
   unfold Ir.Config.get_funid.
   remember (list_find_key (Ir.Config.cid_to_f c) curcid) as res.
   assert (List.length res < 2).
-  { eapply NoDup_find_key.
+  { eapply list_find_key_NoDup.
     eassumption. eassumption. }
   assert (List.In (curcid, funid0) res).
   { rewrite Heqres. eapply list_find_key_In.

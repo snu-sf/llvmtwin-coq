@@ -1165,7 +1165,6 @@ Proof.
       eapply wf_blocktime0. eapply H. omega.
 Qed.
 
-
 Theorem free_wf:
   forall m (HWF:wf m) bid m'
          (HFREE:Some m' = free m bid),
@@ -1227,12 +1226,40 @@ Proof.
       remember (list_set (blocks m) bid blk') as blocks'.
       assert (HDEC := list_set_decompose (blocks m) blocks'
                                          bid blk' wf_uniqueid0 HINKEY Heqblocks').
-      destruct HDEC as [l1 [l2 [HDEC1 [HDEC2 HDEC3]]]].
+      destruct HDEC as [l1 [l2 [mb [HDEC1 [HDEC2 [HDEC3 HDEC4]]]]]].
+      assert (HMB: mb = blk).
+      { (* from get m bid = Some blk, and List.In (bid, mb) (l1++(bid,mb)::l2). *)
+        assert (HIN:List.In (bid, blk) (blocks m)).
+        { eapply get_In. rewrite <- Hget. reflexivity. reflexivity. }
+        rewrite HDEC1 in HIN.
+        apply in_app_or in HIN.
+        destruct HIN as [HIN | HIN].
+        - eapply list_keys_In_False in HDEC3. omega. eapply HIN.
+        - simpl in HIN.
+          destruct HIN as [HIN | HIN]. congruence.
+          eapply list_keys_In_False in HDEC4. omega. eapply HIN.
+      }
+      rewrite HMB in *. clear HMB.
       unfold alive_P_ranges.
       unfold alive_blocks.
       rewrite HDEC1.
+      rewrite HDEC2.
       simpl.
-      rewrite app_filter.
+      rewrite filter_app.
+      rewrite filter_app.
+      simpl.
+      rewrite map_app.
+      rewrite map_app.
+      (* show that  MemBlock.alive mb is true, but
+         MemBlock.alive blk' is false. *)
+      rewrite Halive.
+      unfold MemBlock.set_lifetime_end in Hlf.
+      rewrite Halive in Hlf. inversion Hlf as [Hlf'].
+      simpl.
+      rewrite concat_app. rewrite concat_app.
+      apply lsubseq_append.
+      - apply lsubseq_refl.
+      - simpl. apply lsubseq_append2. apply lsubseq_refl.
    }
     eapply disjoint_lsubseq_disjoint.
     eapply wf_disjoint0.
@@ -1261,7 +1288,7 @@ Proof.
         assumption. }
       eapply wf_blocktime0. eassumption. omega.
     }
-Admitted.
+Qed.
 
 (**********************************************
       Lemmas&Theorems about inboundness
@@ -1292,6 +1319,8 @@ Proof.
       destruct wf_disjoint0.
       assumption.
     + assumption.
+  - simpl in *. intros.
+    eapply wf_blocktime0. right. eassumption.
 Qed.
 
 Lemma blocks_alive_blocks_lsubseq:
