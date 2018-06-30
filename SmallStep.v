@@ -61,12 +61,31 @@ Definition to_num (b:bool): Ir.val :=
   Ir.num (if b then 1%N else 0%N).
 
 
+(* Definition of the result after a step. *)
 Inductive step_res :=
 | sr_success: Ir.event -> Ir.Config.t -> step_res
 | sr_goes_wrong: step_res (* went wrong. *)
 | sr_oom: step_res (* out-of-memory *)
 | sr_prog_finish: Ir.val -> step_res (* program has finished (with a return value). *)
 .
+
+(* refines_step_res <tgt> <src> *)
+Inductive refines_step_res: step_res -> step_res -> Prop :=
+| srref_tgt_oom:
+    forall sr_src,
+      refines_step_res sr_oom sr_src
+| srref_src_goes_wrong:
+    forall sr_tgt,
+      refines_step_res sr_tgt sr_goes_wrong
+| srref_finish:
+    forall v_tgt v_src
+           (HREFV:Ir.refines_value v_tgt v_src),
+    refines_step_res (sr_prog_finish v_tgt) (sr_prog_finish v_src)
+| srref_success:
+    forall e_tgt e_src s_tgt s_src
+           (HREFE:Ir.refines_event e_tgt e_src)
+           (HREFS:Ir.refines_state s_tgt s_src),
+      refines_step_res (sr_success e_tgt s_tgt) (sr_success e_src s_src).
 
 (****************************************************
              Semantics of instructions.
@@ -426,6 +445,21 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
       (HNONDET:res = 0%N \/ res = 1%N),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
 .
+
+(* Result of N small steps on instructions. *)
+Inductive inst_nstep: Ir.Config.t -> nat -> Ir.trace * step_res -> Prop :=
+| ns_zero: forall c, inst_nstep c 0 (nil, sr_success Ir.e_none c)
+| ns_oom: forall c n tr (HOOM: inst_nstep c n (tr, sr_oom)),
+    inst_nstep c (S n) (tr, sr_oom)
+| ns_goes_wrong: forall c n tr (HGW: inst_nstep c n (tr, sr_goes_wrong)),
+    inst_nstep c (S n) (tr, sr_goes_wrong)
+| ns_success:
+    forall c n c' tr e sr
+           (HSUCC: inst_nstep c n (tr, sr_success e c'))
+           (HSINGLE: inst_step c' sr),
+      inst_nstep c (S n) (e::tr, sr).
+
+
 
 (* Categorization of instructions. *)
 Definition changes_mem (i:Ir.Inst.t): bool :=

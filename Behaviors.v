@@ -44,6 +44,26 @@ Definition refines_value (v_tgt v_src:Ir.val): bool :=
   | (_, _) => false
   end.
 
+Definition refines_bit (b_tgt b_src:Ir.Bit.t): bool :=
+  match (b_src, b_tgt) with
+  | (Ir.Bit.bpoison, _) => true
+  | (_, Ir.Bit.bpoison) => false
+  | (Ir.Bit.bint b1, Ir.Bit.bint b2) => Bool.eqb b1 b2
+  | (Ir.Bit.baddr p1 o1, Ir.Bit.baddr p2 o2) =>
+    Nat.eqb o1 o2 && Ir.ptr_eqb p1 p2
+  | (_, _) => false
+  end.
+
+Definition refines_byte (b_tgt b_src:Ir.Byte.t): bool :=
+  refines_bit b_tgt.(Ir.Byte.b0) b_src.(Ir.Byte.b0) &&
+  refines_bit b_tgt.(Ir.Byte.b1) b_src.(Ir.Byte.b1) &&
+  refines_bit b_tgt.(Ir.Byte.b2) b_src.(Ir.Byte.b2) &&
+  refines_bit b_tgt.(Ir.Byte.b3) b_src.(Ir.Byte.b3) &&
+  refines_bit b_tgt.(Ir.Byte.b4) b_src.(Ir.Byte.b4) &&
+  refines_bit b_tgt.(Ir.Byte.b5) b_src.(Ir.Byte.b5) &&
+  refines_bit b_tgt.(Ir.Byte.b6) b_src.(Ir.Byte.b6) &&
+  refines_bit b_tgt.(Ir.Byte.b7) b_src.(Ir.Byte.b7).
+
 Definition refines_event (e_tgt e_src:event): bool :=
   match (e_tgt, e_src) with
   | (e_some vtgt, e_some vsrc) => N.eqb vtgt vsrc
@@ -120,7 +140,54 @@ Definition refines (pb_tgt pb_src:program_behavior):bool :=
   | (_, _) => false
   end.
 
+(***********************************************************
+   Propositional definition of refinements on memory, state
+ ***********************************************************)
 
+Definition refines_memblock (mb_tgt mb_src:Ir.MemBlock.t) :=
+  mb_tgt.(Ir.MemBlock.bt) = mb_src.(Ir.MemBlock.bt) /\
+  mb_tgt.(Ir.MemBlock.r) = mb_src.(Ir.MemBlock.r) /\
+  mb_tgt.(Ir.MemBlock.n) = mb_src.(Ir.MemBlock.n) /\
+  mb_tgt.(Ir.MemBlock.a) = mb_src.(Ir.MemBlock.a) /\
+  List.Forall2 refines_byte mb_tgt.(Ir.MemBlock.c) mb_src.(Ir.MemBlock.c) /\
+  mb_tgt.(Ir.MemBlock.P) = mb_src.(Ir.MemBlock.P).
+
+Definition refines_memory (m_tgt m_src:Ir.Memory.t) :=
+  m_tgt.(Ir.Memory.mt) = m_src.(Ir.Memory.mt) /\
+  List.Forall2 (fun mbid_tgt mbid_src =>
+                  fst mbid_tgt = fst mbid_src /\
+                  refines_memblock (snd mbid_tgt) (snd mbid_src))
+               m_tgt.(Ir.Memory.blocks) m_src.(Ir.Memory.blocks) /\
+  m_tgt.(Ir.Memory.calltimes) = m_src.(Ir.Memory.calltimes) /\
+  m_tgt.(Ir.Memory.fresh_bid) = m_src.(Ir.Memory.fresh_bid).
+
+Definition refines_regfile (rf_tgt rf_src:Ir.Regfile.t) :=
+  forall regid,
+    (Ir.Regfile.get rf_tgt regid = None <-> Ir.Regfile.get rf_src regid = None) /\
+    (forall vtgt
+            (HGET:Ir.Regfile.get rf_tgt regid = Some vtgt),
+        exists vsrc, Ir.Regfile.get rf_src regid = Some vsrc /\
+                     refines_value vtgt vsrc = true).
+
+Definition refines_stack (s_tgt s_src:Ir.Stack.t) :=
+  List.Forall2 (fun itm_tgt itm_src =>
+                  fst itm_tgt = fst itm_src /\
+                  fst (snd itm_tgt) = fst (snd itm_src) /\
+                  refines_regfile (snd (snd itm_tgt)) (snd (snd itm_src)))
+               s_tgt s_src.
+
+Definition refines_state (s_tgt s_src:Ir.Config.t) :=
+  refines_memory s_tgt.(Ir.Config.m) s_src.(Ir.Config.m) /\
+  refines_stack s_tgt.(Ir.Config.s) s_src.(Ir.Config.s) /\
+  s_tgt.(Ir.Config.cid_to_f) = s_src.(Ir.Config.cid_to_f) /\
+  s_tgt.(Ir.Config.cid_fresh) = s_src.(Ir.Config.cid_fresh) /\
+  s_tgt.(Ir.Config.md) = s_src.(Ir.Config.md).
+
+
+
+(***********************************************************
+               Lemmas about refinement.
+ ***********************************************************)
 
 Theorem refines_value_refl:
   forall (v:Ir.val), refines_value v v = true.
