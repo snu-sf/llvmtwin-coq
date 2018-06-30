@@ -624,6 +624,7 @@ Ltac des_op c op op' HINV :=
   destruct (Ir.Config.get_val c op) as [op' | ]; try (inversion HINV; fail).
 
 
+(* Theorem: inst_step preserves well-formedness of configuration. *)
 Theorem inst_step_wf:
   forall c i c' e
          (HWF:Ir.Config.wf c)
@@ -689,8 +690,14 @@ Proof.
     des_op c opval opv H2.
     destruct opv; try (inversion H2; fail).
     des_op c opptr opp H2.
-    des_ifH H2; try (inversion H2; fail).
-    inversion H2. admit.
+    destruct (Ir.deref (Ir.Config.m c) p (Ir.ty_bytesz valty)) eqn:Hderef;
+      try (inversion H2; fail).
+    inversion H2.
+    apply incrpc_wf with (c := Ir.Config.update_m c (Ir.store_val (Ir.Config.m c) p opp valty));
+      try reflexivity.
+    destruct HWF.
+    split; simpl; try assumption.
+    eapply Ir.store_val_wf. eassumption. reflexivity.  congruence.
   - (* imalloc with size 0 *)
     thats_it.
   - (* imalloc, succeed *)
@@ -705,6 +712,7 @@ Proof.
       * simpl. assumption.
     + reflexivity.
   - (* ifree *)
+    destruct HWF.
     rewrite HINST in H2.
     simpl in H2.
     des_op c opptr opp H2.
@@ -715,16 +723,76 @@ Proof.
     destruct p.
     + destruct p. destruct n; try (inversion Hfree).
       apply incrpc_wf with (c := Ir.Config.update_m c m0).
-      admit. reflexivity.
+      assert (HWF':Ir.Memory.wf m0).
+      { eapply Ir.Memory.free_wf. eapply wf_m. erewrite Hfree. reflexivity. }
+      split; try (simpl; assumption). reflexivity.
     + destruct p. destruct p.
       destruct (Ir.Memory.zeroofs_block (Ir.Config.m c) n) eqn:Hblk.
       * destruct p.
         des_ifH Hfree.
         apply incrpc_wf with (c := Ir.Config.update_m c m0).
-        admit. reflexivity.
+        assert (HWF':Ir.Memory.wf m0).
+        { eapply Ir.Memory.free_wf. eapply wf_m. erewrite Hfree. reflexivity. }
+        split; try (simpl; assumption). reflexivity.
         inversion Hfree.
       * inversion Hfree.
-Admitted.
+  - (* iptrtoint. *)
+    rewrite HINST in H2. simpl in H2.
+    destruct retty; try (inversion H2; fail).
+    des_op c opptr opp H2.
+    destruct opp; try (inversion H2; fail);
+    inversion H2; thats_it.
+  - (* iinttoptr *)
+    rewrite HINST in H2. simpl in H2.
+    destruct retty; try (inversion H2; fail).
+    des_op c opint opi H2.
+    destruct opi; try (inversion H2; fail);
+    inversion H2; thats_it.
+  - (* ievent *)
+    rewrite HINST in H2. simpl in H2.
+    des_op c opval opv H2.
+    destruct opv; try (inversion H2; fail).
+    inversion H2. eapply incrpc_wf. eassumption. reflexivity.
+  - (* iicmp_eq, nondet *)
+    eapply update_reg_and_incrpc_wf.
+    eassumption.
+    reflexivity.
+  - (* iicmp_eq, det *)
+    rewrite HINST in HC'. simpl in HC'.
+    des_op c op1 op1v HC'.
+    + destruct op1v.
+      * des_op c op2 op2v HC'.
+        destruct op2v; inversion HC'; thats_it.
+      * des_op c op2 op2v HC'.
+        destruct op2v; try (inversion HC'; fail).
+        destruct (icmp_eq_ptr p p0 (Ir.Config.m c)) eqn:Heq_ptr; try (inversion HC'; fail);
+        inversion HC'; thats_it.
+        inversion HC'. thats_it.
+      * inversion HC'. thats_it.
+    + des_op c op2 op2v HC'.
+      destruct op2v; try (inversion HC'; fail).
+      inversion HC'. thats_it.
+  - (* icmp_ule, nondet *)
+    eapply update_reg_and_incrpc_wf. eassumption. reflexivity.
+  - (* icmp_ule, nondet 2 *)
+    eapply update_reg_and_incrpc_wf. eassumption. reflexivity.
+  - (* icmp_ule, det *)
+    rewrite HINST in HC'. simpl in HC'.
+    des_op c op1 op1v HC'.
+    + destruct op1v; try (inversion HC'; fail);
+      des_op c op2 op2v HC'.
+      * destruct op2v; try (inversion HC'; fail);
+        inversion HC'; thats_it.
+      * destruct op2v; try (inversion HC'; fail).
+        -- destruct (icmp_ule_ptr p p0 (Ir.Config.m c)) eqn:Huleptr; try (inversion HC'; fail).
+           inversion HC'. thats_it.
+        -- inversion HC'. thats_it.
+      * inversion HC'. thats_it.
+      * inversion HC'. thats_it.
+    + des_op c op2 op2v HC'.
+      destruct op2v; try (inversion HC'; fail).
+      inversion HC'. thats_it.
+Qed.
 
 End SmallStep.
 

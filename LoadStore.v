@@ -63,7 +63,7 @@ Definition load_bytes (m:Ir.Memory.t) (p:Ir.ptrval) (sz:nat): list Ir.Byte.t :=
   end.
 
 Definition load_val (m:Ir.Memory.t) (p:Ir.ptrval) (t:Ir.ty): Ir.val :=
-  let bytes := load_bytes m p (Nat.div (7 + Ir.ty_bitsz t) 8) in
+  let bytes := load_bytes m p (Ir.ty_bytesz t) in
   match t with
   | Ir.ity bitsz =>
     match Ir.Byte.getint bytes bitsz with
@@ -579,9 +579,9 @@ Qed.
            }
 *)
 
-(***********************************************
-      Lemmas about load_bytes & store_bytes
- ***********************************************)
+(**************************************************
+ Lemmas about load_bytes & store_bytes & store_val
+ **************************************************)
 
 (* Theorem:
    storing loaded bytes into the same location doesn't
@@ -635,5 +635,15 @@ Proof.
     reflexivity.
   - inversion H.
 Qed.
+
+(* Theorem:
+   storing loaded bytes into the same location doesn't
+   change memory. *)
+Theorem store_val_wf:
+  forall m m' (HWF:Ir.Memory.wf m) p v t
+      (HSTORE:m' = store_val m p v t)
+      (HDEREF:deref m p (Ir.ty_bytesz t) = true),
+    Ir.Memory.wf m'.
+Admitted.
 
 End Ir.
