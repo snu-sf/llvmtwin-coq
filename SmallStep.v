@@ -568,7 +568,7 @@ Proof.
     destruct pc_next as [pc_next | ].
     unfold Ir.Config.update_pc in HC'.
     remember (Ir.Config.s c) as s'.
-    destruct s' as [ | [cid pc0'] st] .
+    destruct s' as [ | [cid [pc0' r0']] st] .
     + congruence.
     + (* show that pc0' = pc0 *)
       unfold Ir.Config.cur_fdef_pc in HC.
@@ -592,9 +592,9 @@ Proof.
         rewrite <- Heqs' in wf_stack.
         simpl in wf_stack.
         destruct HIN.
-        -- inversion H. rewrite H1, H2 in *. clear H H1 H2.
+        -- inversion H. rewrite H1, H2, H3 in *. clear H H1 H2 H3.
            apply Ir.IRFunction.next_trivial_pc_valid with (pc1 := pc0).
-           apply wf_stack with (curcid0 := curcid) (funid := funid0).
+           apply wf_stack with (curcid0 := curcid) (funid := funid0) (curregfile0 := curregfile).
            left. reflexivity.
            eassumption. assumption.
            assert (HINCID:Some funid0 = Ir.Config.get_funid c curcid).
@@ -603,7 +603,7 @@ Proof.
            inversion HINCID.
            rewrite H0 in HF. rewrite <- HF in Heqofdef'.
            inversion Heqofdef'. rewrite <- H1. congruence.
-         -- apply wf_stack with (curcid := curcid) (funid := funid0).
+         -- apply wf_stack with (curcid := curcid) (funid := funid0) (curregfile := curregfile).
             right. assumption. assumption. assumption.
     + congruence.
   - congruence.
@@ -618,8 +618,21 @@ Proof.
   intros.
   inversion HWF.
   unfold Ir.Config.update_rval in HC'.
-  rewrite HC'.
-  split; try assumption.
+  rewrite HC'. clear HC'.
+  destruct (Ir.Config.s c) as [ | [cid0 [pc0 reg0]] s'] eqn:Hs.
+  { split; try assumption.
+    intros. rewrite Hs in HIN. inversion HIN. }
+  { split; try (simpl; assumption).
+    simpl. intros.
+    destruct HIN.
+    - inversion H.
+      destruct curregfile; inversion H3.
+      rewrite H1, H2 in *. clear H1 H2.
+      eapply wf_stack with (curcid0 := curcid). simpl. left. reflexivity.
+      eassumption. assumption.
+    - eapply wf_stack.
+      simpl. right. eassumption. eassumption. assumption.
+  }
 Qed.
 
 Lemma update_reg_and_incrpc_wf:
