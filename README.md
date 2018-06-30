@@ -6,7 +6,7 @@ This is a Coq formalization of OOPSLA'18 LLVM memory model.
 ### Definition of Memory
 
 - Definition of memory: `Ir.Memory.t` in [Memory.v](Memory.v)
-    + `Ir.Memory.t` means `t` in `Mdoule Memory` in `Module Ir`.
+    + `Ir.Memory.t` means `t` in `Module Memory` in `Module Ir`.
 
 - Well-formedness of a memory: `Ir.Memory.wf` in [Memory.v](Memory.v)
 
