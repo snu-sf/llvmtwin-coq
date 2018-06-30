@@ -64,11 +64,12 @@ Inductive t :=
 | ibinop: reg -> ty -> bopcode -> op -> op -> t (* lhs, retty, op1, op2 *)
 | ipsub: reg -> ty -> ty -> op -> op -> t (* lhs, retty, ptrty, ptr1, ptr2 *)
 | igep: reg -> ty -> op -> op -> bool -> t (* lhs, retty, ptr, idx, inbounds *)
-                                           (* For simplicity, retty equals operand ty *)
+                                           (* For simplicity, retty equals first operand ty *)
 | iload: reg -> ty -> op -> t (* retty, ptr *)
 | istore: ty -> op -> op -> t (* valty, val, ptr *)
 | imalloc: reg -> ty -> op -> t (* block size ty, block size *)
 | ifree: op -> t (* pointer *)
+| ibitcast: reg -> op -> ty -> t (* lhs, val, ty, retty *)
 | iptrtoint: reg -> op -> ty -> t (* lhs, ptr, retty *)
 | iinttoptr: reg -> op -> ty -> t (* rhs, int, retty *)
 | ievent: op -> t
@@ -85,6 +86,7 @@ Definition regops (i:t) :=
   | istore _ op1 op2 => (regop op1) ++ (regop op2)
   | imalloc _ _ op1 => regop op1
   | ifree op1 => regop op1
+  | ibitcast _ op1 _ => regop op1
   | iptrtoint _ op1 _ => regop op1
   | iinttoptr _ op1 _ => regop op1
   | ievent op1 => regop op1
@@ -101,6 +103,7 @@ Definition def (i:t): option (reg * ty) :=
   | istore _ _ _ => None
   | imalloc r t _ => Some (r, t)
   | ifree _ => None
+  | ibitcast r _ t => Some (r, t)
   | iptrtoint r _ t => Some (r, t)
   | iinttoptr r _ t => Some (r, t)
   | ievent _ => None

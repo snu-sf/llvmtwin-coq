@@ -269,6 +269,21 @@ Definition inst_det_step (c:Ir.Config.t) (i:Ir.Inst.t): step_res :=
     | _ => sr_goes_wrong
     end
 
+  | ibitcast r opval retty =>
+    match (Ir.Config.get_val c opval) with
+    | Some (Ir.ptr p) =>
+      match retty with
+      | Ir.ptrty _ => sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.ptr p))
+      | _ => sr_goes_wrong
+      end
+    | Some (Ir.num n) =>
+      match retty with
+      | Ir.ity _ => sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num n))
+      | _ => sr_goes_wrong
+      end
+    | _ => sr_goes_wrong
+    end
+
   | iptrtoint r opptr (Ir.ity retty) =>
     match (Ir.Config.get_val c opptr) with
     | Some (Ir.ptr p) =>
@@ -388,6 +403,10 @@ Inductive inst_step: Ir.Config.t -> Ir.Inst.t -> step_res -> Prop :=
 
 | s_free: forall c i opptr
       (HINST:i = Ir.Inst.ifree opptr),
+    inst_step c i (inst_det_step c i)
+
+| s_bitcast: forall c i r opval retty
+      (HINST:i = Ir.Inst.ibitcast r opval retty),
     inst_step c i (inst_det_step c i)
 
 | s_ptrtoint: forall c i r opptr retty
@@ -736,6 +755,14 @@ Proof.
         split; try (simpl; assumption). reflexivity.
         inversion Hfree.
       * inversion Hfree.
+  - (* ibitcast. *)
+    rewrite HINST in H2. simpl in H2.
+    des_op c opval opv H2.
+    destruct opv; try (inversion H2; fail).
+    + destruct retty; try (inversion H2; fail).
+      inversion H2; thats_it.
+    + destruct retty; try (inversion H2; fail).
+      inversion H2; thats_it.
   - (* iptrtoint. *)
     rewrite HINST in H2. simpl in H2.
     destruct retty; try (inversion H2; fail).
