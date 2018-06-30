@@ -894,9 +894,9 @@ Definition zeroofs_block (m:t) (abs_ofs:nat)
 Structure wf (m:t) :=
   {
     wf_blocks: forall i p (HAS:List.In (i, p) m.(blocks)), MemBlock.wf p;
-    wf_uniqueid: List.NoDup (List.map fst m.(blocks));
+    wf_uniqueid: List.NoDup (list_keys m.(blocks));
     wf_newid: List.forallb (fun bid => Nat.ltb bid m.(fresh_bid))
-                           (List.map fst m.(blocks)) = true;
+                           (list_keys m.(blocks)) = true;
     wf_disjoint: disjoint_ranges (alive_P_ranges m) = true;
     wf_blocktime: forall i p (HAS:List.In (i, p) m.(blocks)),
         p.(MemBlock.r).(fst) < (mt m)
@@ -924,8 +924,7 @@ Definition get (m:t) (i:blockid): option MemBlock.t :=
 (* Replace the memory block which has id i. *)
 Definition set (m:t) (i:blockid) (mb:MemBlock.t): t :=
   mk m.(mt)
-     (List.map (fun mbid => if Nat.eqb mbid.(fst) i then (i, mb) else mbid)
-               m.(blocks))
+     (list_set m.(blocks) i mb)
      m.(calltimes) m.(fresh_bid).
 
 Definition incr_time (m:t): t :=
@@ -967,55 +966,6 @@ Definition calltime (m:t) (cid:callid): option time :=
   Lemmas&Theorems about get/set/new/free functions
  **********************************************)      
 
-Lemma map_key_In_id {X:Type}:
-  forall (l:list (nat * X)) (key:nat) (val:X)
-         (HIN:List.In (key, val) l)
-         (HNODUP:List.NoDup (List.map fst l)),
-  List.map (fun x => if fst x =? key then (key, val) else x)
-       l = l.
-Proof.
-  intros.
-  generalize dependent key.
-  generalize dependent val.
-  induction l.
-  - simpl. intros. inversion HIN.
-  - simpl. intros.
-    simpl in HNODUP.
-    inversion HNODUP.
-    destruct HIN as [HIN | HIN].
-    + rewrite HIN in H1. simpl in H1.
-      rewrite HIN. simpl. rewrite Nat.eqb_refl.
-      assert (HNE:~ List.Exists (fun x => x = key) (map fst l)).
-      { intros HX.
-        apply H1.
-        rewrite Exists_exists in HX.
-        destruct HX as [key' HX].
-        destruct HX as [HX1 HX2].
-        rewrite HX2 in HX1. assumption. }
-      rewrite <- Forall_Exists_neg in HNE.
-      clear H2 H1 IHl HNODUP H0.
-      induction l.
-      * reflexivity.
-      * simpl in HNE.
-        inversion HNE.
-        apply IHl in H3. simpl.
-        rewrite <- Nat.eqb_neq in H2.
-        rewrite H2.
-        inversion H3.
-        rewrite H5. rewrite H5. reflexivity.
-    + assert (fst a <> key).
-      {
-        apply in_split_l in HIN.
-        simpl in HIN.
-        rewrite map_fst_split in H1.
-        eapply In_notIn_neq.
-        eassumption. assumption.
-      }
-      rewrite <- Nat.eqb_neq in H3.
-      rewrite H3.
-      rewrite IHl. reflexivity. assumption. assumption.
-Qed.
-
 Lemma get_In:
   forall (m:t) bid blk blks
          (HGET:Some blk = get m bid)
@@ -1048,6 +998,31 @@ Proof.
     apply lsubseq_filter.
 Qed.
 
+Lemma list_keys_In {X:Type}:
+  forall (l:list (nat * X)) key v
+         (HIN:List.In (key, v) l),
+    List.In key (list_keys l).
+Proof.
+  intros.
+  induction l.
+  - inversion HIN.
+  - simpl in HIN. simpl.
+    destruct HIN. left. rewrite H. reflexivity.
+    right. apply IHl. assumption.
+Qed.
+
+Lemma get_In_key:
+  forall (m:t) bid blk blks
+         (HGET:Some blk = get m bid)
+         (HBLK:blks = blocks m),
+    List.In bid (list_keys blks).
+Proof.
+  intros.
+  assert (List.In (bid, blk) blks).
+  { eapply get_In; eassumption. }
+  eapply list_keys_In. eassumption.
+Qed.
+
 Lemma set_get_id:
   forall m bid mb
          (HWF:Ir.Memory.wf m)
@@ -1057,7 +1032,7 @@ Proof.
   intros.
   unfold Ir.Memory.set.
   unfold Ir.Memory.get in HGET.
-  rewrite map_key_In_id.
+  rewrite list_set_eq.
   destruct m; simpl; reflexivity.
   eapply Ir.Memory.get_In.
   rewrite <- HGET. reflexivity. reflexivity.
@@ -1075,7 +1050,7 @@ Proof.
   {
     assert (HQ := wf_uniqueid m HWF).
     remember (blocks m) as bs.
-    assert (HNODUP: NoDup (map fst (res))).
+    assert (HNODUP: NoDup (list_keys (res))).
     {
       apply lsubseq_NoDup with (l := map fst bs).
       eapply lsubseq_map with (l := bs) (l' := res).
@@ -1084,7 +1059,7 @@ Proof.
       reflexivity.
       assumption.
     }
-    eapply NoDup_find_key.
+    eapply list_find_key_NoDup.
     eapply HQ. eassumption.
   }
   destruct res.
@@ -1231,22 +1206,34 @@ Proof.
     destruct (Nat.eqb i bid) eqn:Hbid.
     + rewrite Nat.eqb_eq in Hbid.
       assert (p = blk').
-      { eapply NoDup_In_map_unique with (key := i).
+      { eapply list_set_NoDup_In_unique with (key := i).
         rewrite <- Hbid in HAS. eapply HAS.
         assumption. }
       rewrite H. assumption.
     + rewrite Nat.eqb_neq in Hbid.
       apply wf_blocks0 with (i := i). 
-      apply In_map_not_In in HAS. assumption. assumption.
-  - simpl. erewrite map_fst_map. eassumption. reflexivity.
-  - simpl. erewrite map_fst_map. eassumption. reflexivity.
+      apply list_set_In_not_In in HAS. assumption. assumption.
+  - simpl. erewrite list_set_keys_eq. eassumption. reflexivity.
+  - simpl. erewrite list_set_keys_eq. eassumption. reflexivity.
   - assert (MemBlock.P blk = MemBlock.P blk').
     { unfold MemBlock.set_lifetime_end in Hlf.
       destruct (MemBlock.alive blk).
       inversion Hlf. reflexivity.
       inversion Halive. }
     assert (HLSS:lsubseq (alive_P_ranges m) (alive_P_ranges (set m bid blk'))).
-    { admit. }
+    { unfold set.
+      assert (HINKEY:List.In bid (list_keys (blocks m))).
+      { eapply get_In_key. rewrite Hget. reflexivity. reflexivity. }
+      remember (list_set (blocks m) bid blk') as blocks'.
+      assert (HDEC := list_set_decompose (blocks m) blocks'
+                                         bid blk' wf_uniqueid0 HINKEY Heqblocks').
+      destruct HDEC as [l1 [l2 [HDEC1 [HDEC2 HDEC3]]]].
+      unfold alive_P_ranges.
+      unfold alive_blocks.
+      rewrite HDEC1.
+      simpl.
+      rewrite app_filter.
+   }
     eapply disjoint_lsubseq_disjoint.
     eapply wf_disjoint0.
     assumption.
@@ -1255,7 +1242,7 @@ Proof.
     { rewrite Nat.eqb_eq in Hbid.
       rewrite Hbid in HAS.
       assert (p = blk').
-      { eapply NoDup_In_map_unique.
+      { eapply list_set_NoDup_In_unique.
         eassumption. assumption. }
       rewrite H.
       assert (HR:fst (MemBlock.r blk') = fst (MemBlock.r blk)).
@@ -1270,7 +1257,7 @@ Proof.
     }
     { apply Nat.lt_trans with (m := mt m).
       assert (In (i, p) (blocks m)).
-      { eapply In_map_not_In. eapply HAS. rewrite Nat.eqb_neq in Hbid.
+      { eapply list_set_In_not_In. eapply HAS. rewrite Nat.eqb_neq in Hbid.
         assumption. }
       eapply wf_blocktime0. eassumption. omega.
     }

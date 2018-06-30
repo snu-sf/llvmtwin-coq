@@ -1204,7 +1204,7 @@ Proof.
       assumption.
 Qed.
 
-Lemma list_keys_set_eq {X:Type}:
+Lemma list_set_keys_eq {X:Type}:
   forall (l l':list (nat * X)) key x
          (HMAP:l' = list_set l key x),
     list_keys l' = list_keys l.
@@ -1223,30 +1223,99 @@ Proof.
       inversion HMAP. simpl. erewrite IHl. reflexivity. reflexivity.
 Qed.
 
-Lemma set_NoDup {X:Type}:
+Lemma list_set_eq {X:Type}:
+  forall (l:list (nat * X)) (key:nat) (val:X)
+         (HIN:List.In (key, val) l)
+         (HNODUP:List.NoDup (List.map fst l)),
+  list_set l key val = l.
+Proof.
+  intros.
+  unfold list_set.
+  generalize dependent key.
+  generalize dependent val.
+  induction l.
+  - simpl. intros. inversion HIN.
+  - simpl. intros.
+    simpl in HNODUP.
+    inversion HNODUP.
+    destruct HIN as [HIN | HIN].
+    + rewrite HIN in H1. simpl in H1.
+      rewrite HIN. simpl. rewrite Nat.eqb_refl.
+      assert (HNE:~ List.Exists (fun x => x = key) (map fst l)).
+      { intros HX.
+        apply H1.
+        rewrite Exists_exists in HX.
+        destruct HX as [key' HX].
+        destruct HX as [HX1 HX2].
+        rewrite HX2 in HX1. assumption. }
+      rewrite <- Forall_Exists_neg in HNE.
+      clear H2 H1 IHl HNODUP H0.
+      induction l.
+      * reflexivity.
+      * simpl in HNE.
+        inversion HNE.
+        apply IHl in H3. simpl.
+        rewrite <- Nat.eqb_neq in H2.
+        rewrite H2.
+        inversion H3.
+        rewrite H5. rewrite H5. reflexivity.
+    + assert (fst a <> key).
+      {
+        apply in_split_l in HIN.
+        simpl in HIN.
+        rewrite map_fst_split in H1.
+        eapply In_notIn_neq.
+        eassumption. assumption.
+      }
+      rewrite <- Nat.eqb_neq in H3.
+      rewrite H3.
+      rewrite IHl. reflexivity. assumption. assumption.
+Qed.
+
+Lemma list_set_NoDup_key {X:Type}:
   forall (l l':list (nat * X)) key v
          (HNODUP:NoDup (list_keys l))
          (HSET:l' = list_set l key v),
     NoDup (list_keys l').
 Proof.
   intros.
-  erewrite list_keys_set_eq.
+  erewrite list_set_keys_eq.
   eassumption. eassumption.
 Qed.
 
-Lemma set_In {X:Type}:
+Lemma list_set_In {X:Type}:
+  forall (l l':list (nat * X)) key v
+         (HKEYIN:List.In key (list_keys l))
+         (HSET:l' = list_set l key v),
+    List.In (key, v) l'.
+Proof.
+  intros.
+  generalize dependent l'.
+  induction l; try (inversion HKEYIN; fail).
+  intros.
+  simpl in HSET.
+  destruct (fst a =? key) eqn:HEQ.
+  - rewrite HSET. auto. simpl. auto.
+  - simpl in HKEYIN.
+    destruct HKEYIN as [HKEYIN | HKEYIN].
+    + rewrite Nat.eqb_neq in HEQ. omega.
+    + rewrite HSET. simpl. right.
+      apply IHl. assumption. reflexivity.
+Qed.
+
+Lemma list_set_In_key {X:Type}:
   forall (l l':list (nat * X)) key v
          (HNODUP:List.In key (list_keys l))
          (HSET:l' = list_set l key v),
     List.In key (list_keys l').
 Proof.
   intros.
-  erewrite list_keys_set_eq.
+  erewrite list_set_keys_eq.
   eassumption.
   eassumption.
 Qed.
 
-Lemma set_NoDup_In_unique {X:Type}:
+Lemma list_set_NoDup_In_unique {X:Type}:
   forall (l:list (nat * X)) (key:nat) (x x0:X)
          (HIN:List.In (key, x0) (list_set l key x))
          (HNODUP:List.NoDup (list_keys l)),
@@ -1274,28 +1343,62 @@ Proof.
         assumption.
 Qed.
 
-Lemma set_decompose {X:Type}:
+Lemma list_keys_In_False {X:Type}:
+  forall (l:list (nat * X)) key x
+         (HNOTIN:~ In key (list_keys l))
+         (HIN:In (key, x) l),
+    False.
+Proof.
+  intros.
+  induction l.
+  - inversion HIN.
+  - simpl in HIN. simpl in HNOTIN.
+    destruct HIN as [HIN | HIN].
+    rewrite HIN in HNOTIN.
+    apply HNOTIN. left. reflexivity.
+    apply Decidable.not_or in HNOTIN.
+    destruct HNOTIN.
+    apply IHl in H0. assumption. assumption.
+Qed.
+
+Lemma list_set_decompose {X:Type}:
   forall (l l':list (nat * X)) key v
          (HNODUP:NoDup (list_keys l))
          (HIN:List.In key (list_keys l))
          (HSET:l' = list_set l key v),
-    exists l1 l2, (l' = l1 ++ (key, v)::l2 /\
-                   ~List.In key (list_keys l1) /\
-                   ~List.In key (list_keys l2)).
+    exists l1 l2 v0,
+       (l = l1 ++ (key, v0)::l2 /\
+        l' = l1 ++ (key, v)::l2 /\
+       ~List.In key (list_keys l1) /\
+       ~List.In key (list_keys l2)).
 Proof.
   intros.
   assert (NoDup (list_keys l')).
-  { eapply set_NoDup; eassumption. }
+  { eapply list_set_NoDup_key; eassumption. }
   assert (List.In key (list_keys l')).
-  { eapply set_In; eassumption. }
-  Check decompose_by_key.
-  assert (HD:=decompose_by_key l' key H H0).
-  destruct HD as [l1' [l2' [v0 [HD1 [HD2 HD3]]]]].
+  { eapply list_set_In_key; eassumption. }
+  assert (HD := decompose_by_key l key HNODUP HIN).
+  assert (HD':= decompose_by_key l' key H H0).
+  destruct HD' as [l1' [l2' [v0' [HD'1 [HD'2 HD'3]]]]].
+  destruct HD as [l1 [l2 [v0 [HD1 [HD2 HD3]]]]].
   exists l1', l2'.
-  split. admit. admit.
+  split.
+  - assert (List.In (key, v) l').
+    { eapply list_set_In. eapply HIN. assumption. }
+    rewrite HD1 in H1.
+    rewrite List.in_app_iff in H1.
+    destruct H1 as [H1 | H1].
+    assert (HFALSE := list_keys_In_False l1' key v HD2 H1).
+    omega.
+    simpl in H1.
+    destruct H1 as [H1 | H1].
+    + inversion H1. congruence.
+    + assert (HFALSE := list_keys_In_False l2' key v HD3 H1).
+      omega.
+ - split; assumption.
+Qed.
 
-
-Lemma find_key_NoDup {X:Type}:
+Lemma list_find_key_NoDup {X:Type}:
   forall (l res:list (nat * X)) (key:nat)
          (HNODUP:NoDup (list_keys l))
          (HRES:res = list_find_key l key),
@@ -1350,9 +1453,7 @@ Proof.
     + apply IHHNODUP. assumption.
 Qed.
 
-
-
-Lemma set_In_not_In {X:Type}:
+Lemma list_set_In_not_In {X:Type}:
   forall (l:list (nat * X)) (key key0:nat) (x x0:X)
          (HIN:List.In (key0, x0) (list_set l key x))
          (HNEQ:key0 <> key),
