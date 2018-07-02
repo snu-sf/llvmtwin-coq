@@ -176,12 +176,16 @@ Definition refines_stack (s_tgt s_src:Ir.Stack.t) :=
                   refines_regfile (snd (snd itm_tgt)) (snd (snd itm_src)))
                s_tgt s_src.
 
+(* Note that refines_state does not compare two modules. *)
 Definition refines_state (s_tgt s_src:Ir.Config.t) :=
   refines_memory s_tgt.(Ir.Config.m) s_src.(Ir.Config.m) /\
   refines_stack s_tgt.(Ir.Config.s) s_src.(Ir.Config.s) /\
   s_tgt.(Ir.Config.cid_to_f) = s_src.(Ir.Config.cid_to_f) /\
-  s_tgt.(Ir.Config.cid_fresh) = s_src.(Ir.Config.cid_fresh) /\
-  s_tgt.(Ir.Config.md) = s_src.(Ir.Config.md).
+  s_tgt.(Ir.Config.cid_fresh) = s_src.(Ir.Config.cid_fresh).
+(* Want to show:
+   (1) if target state t and source state s are related,
+   and source & target have same instructions to execute,
+       equivalent, final states after execution
 
 
 

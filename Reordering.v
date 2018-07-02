@@ -24,17 +24,36 @@ Definition has_data_dependency (i1 i2:Ir.Inst.t): bool :=
   | Some (r1, _) => (List.existsb (fun r => Nat.eqb r r1) (Ir.Inst.regops i2))
   end.
 
+(* Analogous to Ir.SmallStep.incrpc, except that it returns None if there's no
+   trivial next pc. *)
+Definition incrpc' (c:Ir.Config.t):option Ir.Config.t :=
+  match (Ir.Config.cur_fdef_pc c) with
+  | Some (fdef, pc0) =>
+    match (Ir.IRFunction.next_trivial_pc pc0 fdef) with
+    | Some pc' =>
+      Some (Ir.Config.update_pc c pc')
+    | None => None (* Cannot happen..! *)
+    end
+  | None => None (* Cannot happen *)
+  end.
+
+Definition inst_locates_at (c:Ir.Config.t) (i1 i2:Ir.Inst.t):Prop :=
+  exists c',
+    Ir.Config.cur_inst c = Some i1 /\
+    Some c' = incrpc' c /\
+    Ir.Config.cur_inst c' = Some i2.
+
+
 (* Is it valid to reorder 'i1;i2' into 'i2;i1'? *)
 Definition inst_reorderable_unidir (i1 i2:Ir.Inst.t): Prop :=
   (* If there's no data dependency from i1 to i2 *)
   forall (HNODEP:has_data_dependency i1 i2 = false),
     (* 'i1;i2' -> 'i2;i1' is allowed *)
-    forall (st0 st1 st2:Ir.Config.t) (* Initial state, state after i1, state after 'i1;i2' *)
-           (e1 e2:Ir.event) (* i1's event, i2's event *)
-           (HWF:Ir.Config.wf st0) (* Well-formedness of st0 *)
-           (HSTEP1:Ir.SmallStep.inst_step st0 i1 (Ir.SmallStep.sr_success e1 st1))
-           (HSTEP2:Ir.SmallStep.inst_step st1 i2 (Ir.SmallStep.sr_success e2 st2)),
-      exists st1' st2' (* state after i2, state after 'i2;i1' *)
+    forall (st st':Ir.Config.t) (* Initial state, state after 'i1;i2' *)
+           (HWF:Ir.Config.wf st) (* Well-formedness of st0 *)
+           (HLOCATE:inst_locates_at st i1 i2)
+           (HSTEP:Ir.SmallStep.inst_nstep st 2 sr),
+      exists st'' (* state after 'i2;i1' *)
              e1' e2', (* i2's event, i1's event *)
         Ir.SmallStep.inst_step st0  i2 (Ir.SmallStep.sr_success e1' st1') /\
         Ir.SmallStep.inst_step st1' i1 (Ir.SmallStep.sr_success e2' st2') /\
