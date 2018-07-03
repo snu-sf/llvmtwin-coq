@@ -8,4 +8,5 @@ all:
 	coqc Behaviors.v
 	coqc LoadStore.v WellTyped.v
 	coqc SmallStep.v
+	coqc Refinement.v
 	coqc Reordering.v

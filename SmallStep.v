@@ -17,8 +17,10 @@ Module Ir.
 
 Module SmallStep.
 
-Import Ir.Inst.
+Section SMALLSTEP.
 
+Import Ir.Inst.
+Variable md:Ir.IRModule.t.
 
 (* Returns basic block id of pc *)
 Definition pc_bbid (p:Ir.IRFunction.pc): nat :=
@@ -30,7 +32,7 @@ Definition pc_bbid (p:Ir.IRFunction.pc): nat :=
 
 (* Increment pc of the config. *)
 Definition incrpc (c:Ir.Config.t) :=
-  match (Ir.Config.cur_fdef_pc c) with
+  match (Ir.Config.cur_fdef_pc md c) with
   | Some (fdef, pc0) =>
     match (Ir.IRFunction.next_trivial_pc pc0 fdef) with
     | Some pc' =>
@@ -69,23 +71,6 @@ Inductive step_res :=
 | sr_prog_finish: Ir.val -> step_res (* program has finished (with a return value). *)
 .
 
-(* refines_step_res <tgt> <src> *)
-Inductive refines_step_res: step_res -> step_res -> Prop :=
-| srref_tgt_oom:
-    forall sr_src,
-      refines_step_res sr_oom sr_src
-| srref_src_goes_wrong:
-    forall sr_tgt,
-      refines_step_res sr_tgt sr_goes_wrong
-| srref_finish:
-    forall v_tgt v_src
-           (HREFV:Ir.refines_value v_tgt v_src),
-    refines_step_res (sr_prog_finish v_tgt) (sr_prog_finish v_src)
-| srref_success:
-    forall e_tgt e_src s_tgt s_src
-           (HREFE:Ir.refines_event e_tgt e_src)
-           (HREFS:Ir.refines_state s_tgt s_src),
-      refines_step_res (sr_success e_tgt s_tgt) (sr_success e_src s_src).
 
 (****************************************************
              Semantics of instructions.
@@ -221,7 +206,7 @@ Definition binop (bopc:Ir.Inst.bopcode) (i1 i2:N) (bsz:nat):N :=
    If running the instruction raises nondeterministic result,
    this function returns None. *)
 Definition inst_det_step (c:Ir.Config.t): option step_res :=
-  match (Ir.Config.cur_inst c) with
+  match (Ir.Config.cur_inst md c) with
   | Some i =>
     match i with
     | ibinop r (Ir.ity bsz) bopc op1 op2 =>
@@ -382,13 +367,13 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
       (HNEXT:Some sr = inst_det_step c), inst_step c sr
 
 | s_malloc_zero: forall c i r szty opsz
-      (HCUR:Some i = Ir.Config.cur_inst c)
+      (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.imalloc r szty opsz)
       (HZERO:Ir.Config.get_val c opsz = Some (Ir.num 0%N)),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.ptr Ir.NULL)))
 
 | s_malloc_oom: forall c i r szty opsz nsz
-      (HCUR:Some i = Ir.Config.cur_inst c)
+      (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.imalloc r szty opsz)
       (HSZ:Some (Ir.num nsz) = Ir.Config.get_val c opsz)
       (HNOSPACE:~exists (P:list nat),
@@ -396,7 +381,7 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
     inst_step c sr_oom
 
 | s_malloc: forall c i r szty opsz nsz (P:list nat) m' l contents
-      (HCUR:Some i = Ir.Config.cur_inst c)
+      (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.imalloc r szty opsz)
       (HSZ:Some (Ir.num nsz) = Ir.Config.get_val c opsz)
       (HSZ2:N.to_nat nsz > 0)
@@ -413,7 +398,7 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
                     (Ir.ptr (Ir.plog (l, 0)))))
 
 | s_icmp_eq_nondet: forall c i r opty op1 op2 mb1 mb2 l1 o1 l2 o2 res
-      (HCUR:Some i = Ir.Config.cur_inst c)
+      (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.iicmp_eq r opty op1 op2)
       (HOP1:Some (Ir.ptr (Ir.plog (l1, o1))) = Ir.Config.get_val c op1)
       (HOP2:Some (Ir.ptr (Ir.plog (l2, o2))) = Ir.Config.get_val c op2)
@@ -425,7 +410,7 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
 
 | s_icmp_ule_nondet_diff: forall c i r opty op1 op2 mb1 mb2 l1 l2 o1 o2 res
-      (HCUR:Some i = Ir.Config.cur_inst c)
+      (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
       (HOP1:Some (Ir.ptr (Ir.plog (l1, o1))) = Ir.Config.get_val c op1)
       (HOP2:Some (Ir.ptr (Ir.plog (l2, o2))) = Ir.Config.get_val c op2)
@@ -436,7 +421,7 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
 
 | s_icmp_ule_nondet_same: forall c i r opty op1 op2 mb l o1 o2 res
-      (HCUR:Some i = Ir.Config.cur_inst c)
+      (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
       (HOP1:Some (Ir.ptr (Ir.plog (l, o1))) = Ir.Config.get_val c op1)
       (HOP2:Some (Ir.ptr (Ir.plog (l, o2))) = Ir.Config.get_val c op2)
@@ -499,7 +484,7 @@ Definition raises_event (i:Ir.Inst.t): bool :=
              Semantics of terminator.
  ****************************************************)
 Definition br (c:Ir.Config.t) (bbid:nat): step_res :=
-  match (Ir.Config.cur_fdef_pc c) with
+  match (Ir.Config.cur_fdef_pc md c) with
   | Some (fdef, pc0) =>
     let bbid_old := pc_bbid pc0 in
     match (Ir.IRFunction.get_begin_pc_bb bbid fdef) with
@@ -565,7 +550,7 @@ Definition phi_step (bef_bbid:nat) (c:Ir.Config.t) (p:Ir.PhiNode.t): option Ir.C
 
 Lemma cid_to_f_In_get_funid:
   forall curcid funid0 c
-         (HWF:Ir.Config.wf c)
+         (HWF:Ir.Config.wf md c)
          (HIN:In (curcid, funid0) (Ir.Config.cid_to_f c)),
     Some funid0 = Ir.Config.get_funid c curcid.
 Proof.
@@ -587,15 +572,15 @@ Qed.
 
 Lemma incrpc_wf:
   forall c c'
-         (HWF:Ir.Config.wf c)
+         (HWF:Ir.Config.wf md c)
          (HC':c' = incrpc c),
-    Ir.Config.wf c'.
+    Ir.Config.wf md c'.
 Proof.
   (* High-level proof: incrpc changes stack frame only, and
      next_trivial_pc satisfies valid_pc. *) 
   intros.
   unfold incrpc in HC'.
-  destruct (Ir.Config.cur_fdef_pc c) eqn:HC.
+  destruct (Ir.Config.cur_fdef_pc md c) eqn:HC.
   - destruct p as [fdef pc0].
     remember (Ir.IRFunction.next_trivial_pc pc0 fdef) as pc_next.
     destruct pc_next as [pc_next | ].
@@ -608,7 +593,7 @@ Proof.
       rewrite <- Heqs' in HC.
       remember (Ir.Config.get_funid c cid) as ofunid.
       destruct ofunid as [funid | ]; try (inversion HC; fail).
-      remember (Ir.IRModule.getf funid (Ir.Config.md c)) as ofdef'.
+      remember (Ir.IRModule.getf funid md) as ofdef'.
       destruct ofdef' as [fdef' | ]; try (inversion HC; fail).
       inversion HC.
       rewrite H0, H1 in *.
@@ -644,9 +629,9 @@ Qed.
 
 Lemma update_rval_wf:
   forall c c' r v
-         (HWF:Ir.Config.wf c)
+         (HWF:Ir.Config.wf md c)
          (HC':c' = Ir.Config.update_rval c r v),
-    Ir.Config.wf c'.
+    Ir.Config.wf md c'.
 Proof.
   intros.
   inversion HWF.
@@ -670,13 +655,13 @@ Qed.
 
 Lemma update_reg_and_incrpc_wf:
   forall c c' v r
-         (HWF:Ir.Config.wf c)
+         (HWF:Ir.Config.wf md c)
          (HC':c' = update_reg_and_incrpc c r v),
-    Ir.Config.wf c'.
+    Ir.Config.wf md c'.
 Proof.
   intros.
   unfold update_reg_and_incrpc in HC'.
-  assert (Ir.Config.wf (Ir.Config.update_rval c r v)).
+  assert (Ir.Config.wf md (Ir.Config.update_rval c r v)).
   { eapply update_rval_wf. eassumption. reflexivity. }
   rewrite HC'.
   eapply incrpc_wf.
@@ -693,10 +678,10 @@ Ltac des_inv v HINV :=
 (* Lemma: inst_det_step preserves well-formedness of configuration. *)
 Lemma inst_det_step_wf:
   forall c c' i e
-         (HWF:Ir.Config.wf c)
-         (HCUR:Some i = Ir.Config.cur_inst c)
+         (HWF:Ir.Config.wf md c)
+         (HCUR:Some i = Ir.Config.cur_inst md c)
          (HNEXT:Some (sr_success e c') = inst_det_step c),
-    Ir.Config.wf c'.
+    Ir.Config.wf md c'.
 Proof.
     intros.
     unfold inst_det_step in HNEXT. (* ibinop. *)
@@ -817,14 +802,14 @@ Qed.
 (* Theorem: inst_step preserves well-formedness of configuration. *)
 Theorem inst_step_wf:
   forall c c' e
-         (HWF:Ir.Config.wf c)
+         (HWF:Ir.Config.wf md c)
          (HSTEP:inst_step c (sr_success e c')),
-    Ir.Config.wf c'.
+    Ir.Config.wf md c'.
 Proof.
   intros.
   inversion HSTEP.
   - unfold inst_det_step in HNEXT.
-    destruct (Ir.Config.cur_inst c) as [i0|] eqn:Hcur.
+    destruct (Ir.Config.cur_inst md c) as [i0|] eqn:Hcur.
     eapply inst_det_step_wf. eassumption.
     rewrite Hcur. reflexivity. unfold inst_det_step.
     rewrite Hcur. eassumption.
@@ -859,7 +844,7 @@ Lemma no_mem_change_after_incrpc:
 Proof.
   intros.
   unfold incrpc.
-  destruct (Ir.Config.cur_fdef_pc c).
+  destruct (Ir.Config.cur_fdef_pc md c).
   destruct p.
   { des_ifs. unfold Ir.Config.update_pc.
     des_ifs. }
@@ -882,8 +867,8 @@ Ltac thats_it2 := apply no_mem_change_after_update.
 
 Lemma changes_mem_spec_det:
   forall c c' i e
-         (HWF:Ir.Config.wf c)
-         (HCUR:Some i = Ir.Config.cur_inst c)
+         (HWF:Ir.Config.wf md c)
+         (HCUR:Some i = Ir.Config.cur_inst md c)
          (HNOMEMCHG:changes_mem i = false)
          (HNEXT:Some (sr_success e c') = inst_det_step c),
     c.(Ir.Config.m) = c'.(Ir.Config.m).
@@ -976,8 +961,8 @@ Qed.
    changed after inst_step. *)
 Theorem changes_mem_spec:
   forall c i c' e
-         (HWF:Ir.Config.wf c)
-         (HCUR:Some i = Ir.Config.cur_inst c)
+         (HWF:Ir.Config.wf md c)
+         (HCUR:Some i = Ir.Config.cur_inst md c)
          (HNOMEMCHG:changes_mem i = false)
          (HSTEP:inst_step c (sr_success e c')),
     c.(Ir.Config.m) = c'.(Ir.Config.m).
@@ -995,6 +980,8 @@ Proof.
   - (* icmp_ule, nondet *) apply no_mem_change_after_update.
   - (* icmp_ule, nondet 2 *) apply no_mem_change_after_update.
 Qed.
+
+End SMALLSTEP.
 
 End SmallStep.
 

@@ -26,8 +26,8 @@ Definition has_data_dependency (i1 i2:Ir.Inst.t): bool :=
 
 (* Analogous to Ir.SmallStep.incrpc, except that it returns None if there's no
    trivial next pc. *)
-Definition incrpc' (c:Ir.Config.t):option Ir.Config.t :=
-  match (Ir.Config.cur_fdef_pc c) with
+Definition incrpc' (md:Ir.IRModule.t) (c:Ir.Config.t):option Ir.Config.t :=
+  match (Ir.Config.cur_fdef_pc md c) with
   | Some (fdef, pc0) =>
     match (Ir.IRFunction.next_trivial_pc pc0 fdef) with
     | Some pc' =>
@@ -37,37 +37,44 @@ Definition incrpc' (c:Ir.Config.t):option Ir.Config.t :=
   | None => None (* Cannot happen *)
   end.
 
-Definition inst_locates_at (c:Ir.Config.t) (i1 i2:Ir.Inst.t):Prop :=
+Definition inst_locates_at (md:Ir.IRModule.t) (c:Ir.Config.t) (i1 i2:Ir.Inst.t):Prop :=
   exists c',
-    Ir.Config.cur_inst c = Some i1 /\
-    Some c' = incrpc' c /\
-    Ir.Config.cur_inst c' = Some i2.
+    Ir.Config.cur_inst md c = Some i1 /\
+    Some c' = incrpc' md c /\
+    Ir.Config.cur_inst md c' = Some i2.
 
+Inductive nstep_eq: (Ir.trace * Ir.SmallStep.step_res) ->
+                    (Ir.trace * Ir.SmallStep.step_res) -> Prop :=
+| nseq_goes_wrong:
+    forall (t:Ir.trace),
+      nstep_eq (t, (Ir.SmallStep.sr_goes_wrong)) (t, (Ir.SmallStep.sr_goes_wrong))
+| nseq_oom:
+    forall (t:Ir.trace),
+      nstep_eq (t, (Ir.SmallStep.sr_oom)) (t, (Ir.SmallStep.sr_oom))
+| nseq_prog_finish:
+    forall (t:Ir.trace) v,
+      nstep_eq (t, (Ir.SmallStep.sr_prog_finish v)) (t, (Ir.SmallStep.sr_prog_finish v))
+| nseq_success:
+    forall (t:Ir.trace) e c,
+      nstep_eq (t, (Ir.SmallStep.sr_success e c))
+               (t, (Ir.SmallStep.sr_success e c)).
 
 (* Is it valid to reorder 'i1;i2' into 'i2;i1'? *)
-Definition inst_reorderable_unidir (i1 i2:Ir.Inst.t): Prop :=
+Definition inst_reorderable (i1 i2:Ir.Inst.t): Prop :=
   (* If there's no data dependency from i1 to i2 *)
   forall (HNODEP:has_data_dependency i1 i2 = false),
     (* 'i1;i2' -> 'i2;i1' is allowed *)
-    forall (st st':Ir.Config.t) (* Initial state, state after 'i1;i2' *)
-           (HWF:Ir.Config.wf st) (* Well-formedness of st0 *)
-           (HLOCATE:inst_locates_at st i1 i2)
-           (HSTEP:Ir.SmallStep.inst_nstep st 2 sr),
-      exists st'' (* state after 'i2;i1' *)
-             e1' e2', (* i2's event, i1's event *)
-        Ir.SmallStep.inst_step st0  i2 (Ir.SmallStep.sr_success e1' st1') /\
-        Ir.SmallStep.inst_step st1' i1 (Ir.SmallStep.sr_success e2' st2') /\
-        st2 = st2' /\ (* Final state is the same *)
-        (* Has same event sequence as well. *)
-        List.filter (Ir.not_none) (e1::e2::nil) = List.filter (Ir.not_none) (e1'::e2'::nil).
-
-(* 'i1;i2 <-> i2;i1'. *)
-Definition inst_reorderable (i1 i2:Ir.Inst.t): Prop :=
-  inst_reorderable_unidir i1 i2 /\ inst_reorderable_unidir i2 i1.
-
-
-
-
+    forall (md:Ir.IRModule.t) (* Module *)
+           (st:Ir.Config.t) (* Initial state *)
+           (HWF:Ir.Config.wf md st) (* Well-formedness of st0 *)
+           (HLOCATE:inst_locates_at md st i1 i2)
+           (sr:Ir.trace * Ir.SmallStep.step_res)
+           (HSTEP:Ir.SmallStep.inst_nstep md st 2 sr),
+      exists md' (* Reordered IRModule *)
+             sr', (* step result after 'i2;i1' *)
+        inst_locates_at md' st i2 i1 /\ (* Reordered *)
+        Ir.SmallStep.inst_nstep md' st 2 sr' /\
+        nstep_eq sr sr'.
 
 (* Reordering between ptrtoint/ptrtoint:
 
