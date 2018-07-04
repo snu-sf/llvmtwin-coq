@@ -1,6 +1,7 @@
 Require Import BinPos.
 Require Import List.
 Require Import Omega.
+Require Import sflib.
 
 Require Import Common.
 Require Import Lang.
@@ -31,6 +32,13 @@ Definition eq (r1 r2:t): Prop :=
 (***************************************************
               Lemmas about Regfile.
  ***************************************************)
+
+Theorem eq_refl:
+  forall r, eq r r.
+Proof.
+  intros.
+  unfold eq. intros. reflexivity.
+Qed.
 
 Theorem update_eq:
   forall (r1 r2:t) (HEQ:eq r1 r2)
@@ -84,6 +92,21 @@ Definition eq (s1 s2:t):Prop :=
                   itm1.(fst) = itm2.(fst) /\ itm1.(snd).(fst) = itm2.(snd).(fst) /\
                   Regfile.eq itm1.(snd).(snd) itm2.(snd).(snd))
                s1 s2.
+
+(***************************************************
+              Lemmas about Stack.
+ ***************************************************)
+
+Theorem eq_refl:
+  forall s, eq s s.
+Proof.
+  intros.
+  unfold eq.
+  induction s.
+  - constructor.
+  - constructor. split. reflexivity. split. reflexivity. apply Regfile.eq_refl.
+    assumption.
+Qed.
 
 End Stack.
 
@@ -204,6 +227,128 @@ Definition has_nestedcall (c:t): bool :=
 Definition eq (c1 c2:t): Prop :=
   c1.(m) = c2.(m) /\ Stack.eq c1.(s) c2.(s) /\ c1.(cid_to_f) = c2.(cid_to_f) /\
   c1.(cid_fresh) = c2.(cid_fresh).
+
+(***************************************************
+              Lemmas about Config.
+ ***************************************************)
+
+Theorem eq_refl:
+  forall c:t, eq c c.
+Proof.
+  intros.
+  unfold eq.
+  split. reflexivity. split. apply Stack.eq_refl.
+  split; reflexivity.
+Qed.
+
+Theorem eq_update_rval:
+  forall (c1 c2:t) (HEQ:eq c1 c2) r v,
+    eq (update_rval c1 r v) (update_rval c2 r v).
+Proof.
+  intros.
+  unfold eq in HEQ.
+  destruct HEQ as [HEQ1 [HEQ2 [HEQ3 HEQ4]]].
+  unfold eq.
+  unfold update_rval.
+  des_ifs; simpl.
+  - split. assumption. split. congruence. split; congruence.
+  - inversion HEQ2.
+  - inversion HEQ2.
+  - split. assumption. split.
+    + unfold Stack.eq in *.
+      inv HEQ2. simpl in H2.
+      constructor. simpl.
+      destruct H2 as [H21 [H22 H23]].
+      split. congruence. split. congruence.
+      apply Regfile.update_eq. assumption.
+      assumption.
+    + split. congruence. congruence.
+Qed.
+
+Theorem eq_update_pc:
+  forall (c1 c2:t) (HEQ:eq c1 c2) p,
+    eq (update_pc c1 p) (update_pc c2 p).
+Proof.
+  intros.
+  assert (HEQ_copy := HEQ).
+  unfold eq in HEQ.
+  destruct HEQ as [HEQ1 [HEQ2 [HEQ3 HEQ4]]].
+  unfold Stack.eq in HEQ2.
+  unfold update_pc.
+  des_ifs; try (inversion HEQ2; fail).
+  inv HEQ2. simpl in H2. desH H2.
+  rewrite H2 in *. clear H2.
+  rewrite H0 in *. clear H0.
+  split; simpl.
+  - assumption.
+  - split. unfold Stack.eq. constructor.
+    simpl. split. reflexivity. split. reflexivity. assumption.
+    assumption.
+    split. assumption. assumption.
+Qed.
+
+Theorem eq_get_funid:
+  forall (c1 c2:t) (HEQ:eq c1 c2) cid,
+    get_funid c1 cid = get_funid c2 cid.
+Proof.
+  intros.
+  unfold eq in HEQ.
+  desH HEQ.
+  unfold get_funid. rewrite HEQ1. reflexivity.
+Qed.
+
+Theorem cur_fdef_pc_eq:
+  forall (c1 c2:t) (HEQ:eq c1 c2),
+    cur_fdef_pc c1 = cur_fdef_pc c2.
+Proof.
+  intros.
+  assert (HEQ_copy := HEQ).
+  unfold eq in HEQ.
+  unfold cur_fdef_pc.
+  desH HEQ.
+  unfold Stack.eq in HEQ0.
+  des_ifs; try (inversion HEQ0; fail);
+    inv HEQ0; simpl in H2; desH H2.
+  - rewrite H2 in *. clear H2.
+    rewrite H0 in *. clear H0.
+    rewrite eq_get_funid with (c2 := c2) in Heq0. congruence.
+    assumption.
+  - rewrite eq_get_funid with (c2 := c2) in Heq0 by assumption.
+    congruence.
+  - rewrite eq_get_funid with (c2 := c2) in Heq0 by assumption.
+    congruence.
+  - rewrite eq_get_funid with (c2 := c2) in Heq0 by assumption.
+    congruence.
+  - rewrite eq_get_funid with (c2 := c2) in Heq0 by assumption.
+    congruence.
+Qed.
+
+Lemma cur_fdef_pc_update_pc:
+  forall c p fdef p0
+         (HPREV:cur_fdef_pc c = Some (fdef, p0)),
+    cur_fdef_pc (update_pc c p) = Some (fdef, p).
+Proof.
+  intros.
+  unfold cur_fdef_pc in *.
+  unfold update_pc.
+  des_ifs; simpl in *; inversion Heq; rewrite H0 in *;
+    unfold get_funid in *;
+    unfold cid_to_f in *; congruence.
+Qed.
+    
+Lemma cur_fdef_pc_update_rval:
+  forall c r v,
+    cur_fdef_pc (update_rval c r v) =
+         cur_fdef_pc c.
+Proof.
+  intros.
+  unfold cur_fdef_pc.
+  unfold update_rval.
+  des_ifs; try congruence;
+  try(simpl in *; inv Heq; unfold get_funid in *; simpl in *;
+    congruence).
+Qed.
+
 
 End CONFIG.
 
