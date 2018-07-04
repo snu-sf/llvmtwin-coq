@@ -40,6 +40,13 @@ Proof.
   unfold eq. intros. reflexivity.
 Qed.
 
+Theorem eq_symm:
+  forall r1 r2 (HEQ:eq r1 r2), eq r2 r1.
+Proof.
+  intros.
+  unfold eq in *. intros. congruence.
+Qed.
+
 Theorem update_eq:
   forall (r1 r2:t) (HEQ:eq r1 r2)
          (regid:nat) (v:Ir.val),
@@ -57,10 +64,11 @@ Proof.
 Qed.
 
 Theorem update_reordered_eq:
-  forall (rf:t) (rid1 rid2:nat) (v1 v2:Ir.val)
-         (HNEQ:Nat.eqb rid1 rid2 = false),
-    eq (update (update rf rid1 v1) rid2 v2)
-       (update (update rf rid2 v2) rid1 v1).
+  forall (rf1 rf2:t) (rid1 rid2:nat) (v1 v2:Ir.val)
+         (HNEQ:Nat.eqb rid1 rid2 = false)
+         (HEQ:eq rf1 rf2),
+    eq (update (update rf1 rid1 v1) rid2 v2)
+       (update (update rf2 rid2 v2) rid1 v1).
 Proof.
   intros.
   unfold update.
@@ -76,7 +84,8 @@ Proof.
   - omega.
   - reflexivity.
   - reflexivity.
-  - reflexivity.
+  - unfold eq in HEQ. unfold get in HEQ.
+    apply HEQ.
 Qed.
 
 End Regfile.
@@ -93,6 +102,13 @@ Definition eq (s1 s2:t):Prop :=
                   Regfile.eq itm1.(snd).(snd) itm2.(snd).(snd))
                s1 s2.
 
+(* Equality without PC. *)
+Definition eq_wopc (s1 s2:t):Prop :=
+  List.Forall2 (fun itm1 itm2 =>
+                  itm1.(fst) = itm2.(fst) /\
+                  Regfile.eq itm1.(snd).(snd) itm2.(snd).(snd))
+               s1 s2.
+
 (***************************************************
               Lemmas about Stack.
  ***************************************************)
@@ -105,6 +121,44 @@ Proof.
   induction s.
   - constructor.
   - constructor. split. reflexivity. split. reflexivity. apply Regfile.eq_refl.
+    assumption.
+Qed.
+
+Theorem eq_wopc_refl:
+  forall s, eq_wopc s s.
+Proof.
+  intros.
+  unfold eq.
+  induction s.
+  - constructor.
+  - constructor. split. reflexivity. apply Regfile.eq_refl.
+    assumption.
+Qed.
+
+Theorem eq_eq_wopc:
+  forall s1 s2 (HEQ:eq s1 s2),
+    eq_wopc s1 s2.
+Proof.
+  intros.
+  unfold eq in HEQ.
+  unfold eq_wopc.
+  induction HEQ.
+  - constructor.
+  - constructor.
+    desH H.
+    split. congruence. congruence.
+    assumption.
+Qed.
+
+Theorem eq_wopc_symm:
+  forall s1 s2 (HEQ:eq_wopc s1 s2),
+    eq_wopc s2 s1.
+Proof.
+  intros. unfold eq_wopc in *.
+  induction HEQ.
+  - intros. constructor.
+  - desH H. constructor.
+    split. congruence. apply Regfile.eq_symm. assumption.
     assumption.
 Qed.
 
@@ -228,6 +282,11 @@ Definition eq (c1 c2:t): Prop :=
   c1.(m) = c2.(m) /\ Stack.eq c1.(s) c2.(s) /\ c1.(cid_to_f) = c2.(cid_to_f) /\
   c1.(cid_fresh) = c2.(cid_fresh).
 
+(* Equality without PC. *)
+Definition eq_wopc (c1 c2:t): Prop :=
+  c1.(m) = c2.(m) /\ Stack.eq_wopc c1.(s) c2.(s) /\ c1.(cid_to_f) = c2.(cid_to_f) /\
+  c1.(cid_fresh) = c2.(cid_fresh).
+
 (***************************************************
               Lemmas about Config.
  ***************************************************)
@@ -239,6 +298,25 @@ Proof.
   unfold eq.
   split. reflexivity. split. apply Stack.eq_refl.
   split; reflexivity.
+Qed.
+
+Theorem eq_wopc_refl:
+  forall c:t, eq_wopc c c.
+Proof.
+  intros.
+  unfold eq_wopc.
+  split. reflexivity. split. apply Stack.eq_wopc_refl.
+  split; reflexivity.
+Qed.
+
+Theorem eq_wopc_symm:
+  forall c1 c2 (HEQ:eq_wopc c1 c2), eq_wopc c2 c1.
+Proof.
+  intros.
+  unfold eq_wopc in *.
+  desH HEQ.
+  split. congruence. split. apply Stack.eq_wopc_symm. assumption.
+  split; congruence.
 Qed.
 
 Theorem eq_update_rval:
@@ -260,6 +338,30 @@ Proof.
       constructor. simpl.
       destruct H2 as [H21 [H22 H23]].
       split. congruence. split. congruence.
+      apply Regfile.update_eq. assumption.
+      assumption.
+    + split. congruence. congruence.
+Qed.
+
+Theorem eq_wopc_update_rval:
+  forall (c1 c2:t) (HEQ:eq_wopc c1 c2) r v,
+    eq_wopc (update_rval c1 r v) (update_rval c2 r v).
+Proof.
+  intros.
+  unfold eq_wopc in HEQ.
+  destruct HEQ as [HEQ1 [HEQ2 [HEQ3 HEQ4]]].
+  unfold eq_wopc.
+  unfold update_rval.
+  des_ifs; simpl.
+  - split. assumption. split. congruence. split; congruence.
+  - inversion HEQ2.
+  - inversion HEQ2.
+  - split. assumption. split.
+    + unfold Stack.eq_wopc in *.
+      inv HEQ2. simpl in H2.
+      constructor. simpl.
+      destruct H2 as [H21 H22].
+      split. congruence.
       apply Regfile.update_eq. assumption.
       assumption.
     + split. congruence. congruence.
@@ -287,6 +389,27 @@ Proof.
     split. assumption. assumption.
 Qed.
 
+Theorem eq_wopc_update_pc:
+  forall (c1 c2:t) (HEQ:eq_wopc c1 c2) p,
+    eq_wopc (update_pc c1 p) (update_pc c2 p).
+Proof.
+  intros.
+  assert (HEQ_copy := HEQ).
+  unfold eq in HEQ.
+  destruct HEQ as [HEQ1 [HEQ2 [HEQ3 HEQ4]]].
+  unfold Stack.eq_wopc in HEQ2.
+  unfold update_pc.
+  des_ifs; try (inversion HEQ2; fail).
+  inv HEQ2. simpl in H2. desH H2.
+  rewrite H2 in *. clear H2.
+  split; simpl.
+  - assumption.
+  - split. unfold Stack.eq_wopc. constructor.
+    simpl. split. reflexivity. assumption.
+    assumption.
+    split. assumption. assumption.
+Qed.
+
 Theorem eq_get_funid:
   forall (c1 c2:t) (HEQ:eq c1 c2) cid,
     get_funid c1 cid = get_funid c2 cid.
@@ -296,6 +419,17 @@ Proof.
   desH HEQ.
   unfold get_funid. rewrite HEQ1. reflexivity.
 Qed.
+
+Theorem eq_wopc_get_funid:
+  forall (c1 c2:t) (HEQ:eq_wopc c1 c2) cid,
+    get_funid c1 cid = get_funid c2 cid.
+Proof.
+  intros.
+  unfold eq_wopc in HEQ.
+  desH HEQ.
+  unfold get_funid. rewrite HEQ1. reflexivity.
+Qed.
+
 
 Theorem cur_fdef_pc_eq:
   forall (c1 c2:t) (HEQ:eq c1 c2),
@@ -322,6 +456,7 @@ Proof.
   - rewrite eq_get_funid with (c2 := c2) in Heq0 by assumption.
     congruence.
 Qed.
+
 
 Lemma cur_fdef_pc_update_pc:
   forall c p fdef p0

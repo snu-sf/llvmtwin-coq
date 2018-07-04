@@ -27,7 +27,6 @@ Definition pc_bbid (p:Ir.IRFunction.pc): nat :=
   match p with
   | Ir.IRFunction.pc_phi bbid _ => bbid
   | Ir.IRFunction.pc_inst bbid _ => bbid
-  | Ir.IRFunction.pc_terminator bbid => bbid
   end.
 
 (* Increment pc of the config. *)

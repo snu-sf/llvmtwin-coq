@@ -1,5 +1,7 @@
 Require Import List.
 Require Import BinPos.
+Require Import sflib.
+
 Require Import Common.
 Require Import Memory.
 Require Import Omega.
@@ -226,8 +228,7 @@ Definition getbb (bname:nat) (f:t): option BasicBlock.t :=
 (* program counter *)
 Inductive pc:Type :=
 | pc_phi (bbid:nat) (pidx:nat)
-| pc_inst (bbid:nat) (iidx:nat)
-| pc_terminator (bbid:nat).
+| pc_inst (bbid:nat) (iidx:nat).
 
 
 (* Get PCs of definitions of register r.
@@ -261,7 +262,7 @@ Definition get_uses (r:reg) (f:t): list pc :=
            (List.map (fun inst_idx => pc_inst bid inst_idx)
                      (BasicBlock.inst_uses r bb.(snd))) ++
            (if BasicBlock.terminator_uses r bb.(snd) then
-              (pc_terminator bid)::nil
+              (pc_inst bid (List.length bb.(snd).(BasicBlock.insts)))::nil
            else nil))
         (number_list f.(body))).
 
@@ -277,11 +278,7 @@ Definition get_begin_pc (f:t): pc :=
   | bb::_ =>
     match bb.(BasicBlock.phis) with
     | phi::_ => pc_phi 0 0
-    | nil =>
-      match bb.(BasicBlock.insts) with
-      | inst::_ => pc_inst 0 0
-      | nil => pc_terminator 0
-      end
+    | nil => pc_inst 0 0
     end
   end.
 
@@ -290,11 +287,7 @@ Definition get_begin_pc_bb (bbid:nat) (f:t): option pc :=
   match (Ir.IRFunction.getbb bbid f) with
   | Some bb =>
     match (Ir.BasicBlock.phis bb) with
-    | nil =>
-      match (Ir.BasicBlock.insts bb) with
-      | nil => Some (Ir.IRFunction.pc_terminator bbid)
-      | _ => Some (Ir.IRFunction.pc_inst bbid 0)
-      end
+    | nil => Some (Ir.IRFunction.pc_inst bbid 0)
     | _ => Some (Ir.IRFunction.pc_phi bbid 0)
     end
   | None => None
@@ -309,10 +302,7 @@ Definition next_trivial_pc (p:pc) (f:t): option pc :=
     | None => None
     | Some bb =>
       if Nat.leb (List.length bb.(BasicBlock.phis)) (1 + pidx) then
-        if Nat.eqb 0 (List.length bb.(BasicBlock.insts)) then
-          Some (pc_terminator bbid)
-        else
-          Some (pc_inst bbid 0)
+        Some (pc_inst bbid 0)
       else
         Some (pc_phi bbid (1 + pidx))
     end
@@ -320,14 +310,11 @@ Definition next_trivial_pc (p:pc) (f:t): option pc :=
     match (getbb bbid f) with
     | None => None
     | Some bb =>
-      if Nat.leb (List.length bb.(BasicBlock.insts)) (1 + iidx) then
-        Some (pc_terminator bbid)
-      else
+      if Nat.ltb iidx (List.length bb.(BasicBlock.insts)) then
         Some (pc_inst bbid (1 + iidx))
+      else
+        None
     end
-  | pc_terminator bbid =>
-    (* It's not trivial. *)
-    None
   end.
 
 (* Returns the instruction pc is pointing to.
@@ -355,11 +342,7 @@ Definition valid_pc (p:pc) (f:t): bool :=
     end
   | pc_inst bbid iidx =>
     match (getbb bbid f) with
-    | None => false | Some bb => Nat.ltb iidx (List.length bb.(BasicBlock.insts))
-    end
-  | pc_terminator bbid =>
-    match (getbb bbid f) with
-    | None => false | Some _ => true
+    | None => false | Some bb => Nat.leb iidx (List.length bb.(BasicBlock.insts))
     end
   end.
 
@@ -372,41 +355,19 @@ Definition valid_next_pc (p1 p2:pc) (f:t): bool :=
     Nat.eqb bid1 bid2 && Nat.eqb iidx 0 &&
     match (getbb bid1 f) with
     | None => false
-    | Some bb => Nat.eqb pidx (List.length bb.(BasicBlock.phis) - 1) &&
-                 BasicBlock.valid_inst_idx iidx bb
-    end
-  | (pc_phi bid1 pidx, pc_terminator bid2) =>
-    Nat.eqb bid1 bid2 &&
-    match (getbb bid1 f) with
-    | None => false
-    | Some bb => BasicBlock.valid_phi_idx pidx bb &&
-                 Nat.eqb 0 (List.length bb.(BasicBlock.insts))
+    | Some bb => Nat.eqb pidx (List.length bb.(BasicBlock.phis) - 1)
     end
   | (pc_inst bid1 iidx1, pc_inst bid2 iidx2) =>
     Nat.eqb bid1 bid2 && Nat.eqb (iidx1 + 1) iidx2
-  | (pc_inst bid1 iidx1, pc_terminator bid2) =>
-    Nat.eqb bid1 bid2 &&
-    match (getbb bid1 f) with
-    | None => false
-    | Some bb => Nat.eqb iidx1 (List.length bb.(BasicBlock.insts) - 1)
-    end
-  | (pc_terminator bid1, pc_phi bid2 pidx) =>
+  | (pc_inst bid1 iidx, pc_phi bid2 pidx) =>
     match (getbb bid1 f, getbb bid2 f) with
     | (Some bb1, Some bb2) =>
+      Nat.eqb (List.length bb1.(BasicBlock.insts)) iidx &&
       Terminator.has_dest bid2 (bb1.(BasicBlock.term)) &&
       BasicBlock.valid_phi_idx pidx bb2 &&
       Nat.eqb pidx 0
     | (_, _) => false
     end
-  | (pc_terminator bid1, pc_inst bid2 iidx) =>
-    Nat.eqb iidx 0 &&
-    match (getbb bid1 f, getbb bid2 f) with
-    | (Some bb1, Some bb2) =>
-      Terminator.has_dest bid2 (bb1.(BasicBlock.term)) &&
-      Nat.eqb 0 (List.length bb2.(BasicBlock.phis))
-    | (_, _) => false
-    end
-  | (_, _) => false
   end.
 
 (* Lemmas about PC. *)
@@ -435,8 +396,7 @@ Proof.
           - inversion HNEXT.
             simpl. rewrite <- Heqobb. reflexivity.
           - inversion HNEXT.
-            simpl. rewrite <- Heqobb. rewrite <- Heqn_insts.
-            reflexivity.
+            simpl. rewrite <- Heqobb. reflexivity.
         }
         { inversion HNEXT.
           simpl. rewrite <- Heqobb. rewrite <- Heqn_phis.
@@ -449,23 +409,17 @@ Proof.
     simpl in HVALID. simpl in HNEXT.
     remember (getbb bbid f) as obb.
     destruct obb as [bb | ]; try (inversion HVALID; fail).
-    rewrite Nat.ltb_lt in HVALID.
+    rewrite Nat.leb_le in HVALID.
     remember (List.length (BasicBlock.insts bb)) as n_insts.
     destruct n_insts.
-    + inversion HVALID.
-    + inversion HNEXT.
-      remember (n_insts <=? iidx) as inst_end.
-      destruct inst_end.
-      { inversion H0.
-        simpl. rewrite <- Heqobb. reflexivity. }
-      { inversion H0.
-        simpl. rewrite <- Heqobb.
-        symmetry in Heqinst_end.
-        rewrite Nat.leb_nle in Heqinst_end.
-        rewrite Nat.ltb_lt. omega.
-      }
-  - (* terminator *)
-    simpl in HNEXT. inversion HNEXT.
+    + inversion HVALID. rewrite H in HNEXT. simpl in HNEXT.
+      inversion HNEXT.
+    + des_ifs.
+      inversion HVALID.
+      rewrite H in Heq.
+      rewrite Nat.ltb_irrefl in Heq. inv Heq.
+      unfold valid_pc. rewrite <- Heqobb. rewrite <- Heqn_insts.
+      rewrite Nat.leb_le in *. omega.
 Qed.
 
 End IRFunction.
