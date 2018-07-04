@@ -433,16 +433,16 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
 
 (* Result of N small steps on instructions. *)
 Inductive inst_nstep: Ir.Config.t -> nat -> Ir.trace * step_res -> Prop :=
-| ns_zero: forall c, inst_nstep c 0 (nil, sr_success Ir.e_none c)
+| ns_one: forall c sr (HSINGLE:inst_step c sr),
+    inst_nstep c 1 (nil, sr)
+| ns_success: forall c n c' tr e sr
+           (HSUCC: inst_nstep c n (tr, sr_success e c'))
+           (HSINGLE: inst_step c' sr),
+      inst_nstep c (S n) (e::tr, sr)
 | ns_oom: forall c n tr (HOOM: inst_nstep c n (tr, sr_oom)),
     inst_nstep c (S n) (tr, sr_oom)
 | ns_goes_wrong: forall c n tr (HGW: inst_nstep c n (tr, sr_goes_wrong)),
-    inst_nstep c (S n) (tr, sr_goes_wrong)
-| ns_success:
-    forall c n c' tr e sr
-           (HSUCC: inst_nstep c n (tr, sr_success e c'))
-           (HSINGLE: inst_step c' sr),
-      inst_nstep c (S n) (e::tr, sr).
+    inst_nstep c (S n) (tr, sr_goes_wrong).
 
 
 
