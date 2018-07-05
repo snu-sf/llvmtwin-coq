@@ -1219,6 +1219,21 @@ Definition list_keys {X:Type} (l:list (nat * X))
 :list nat :=
   List.map fst l.
 
+Lemma list_keys_In {X:Type}:
+  forall (l:list (nat * X)) key val
+         (HIN:List.In (key, val) l),
+    List.In key (list_keys l).
+Proof.
+  intros.
+  generalize dependent key.
+  generalize dependent val.
+  induction l.
+  - intros. inversion HIN.
+  - intros. inversion HIN. rewrite H.
+    simpl. left. reflexivity.
+    simpl. right. eapply IHl. eassumption.
+Qed.
+
 Lemma decompose_by_key {X:Type}:
   forall (l:list (nat * X)) key
          (HNODUP:NoDup (list_keys l))

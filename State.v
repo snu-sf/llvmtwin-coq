@@ -6,6 +6,7 @@ Require Import sflib.
 Require Import Common.
 Require Import Lang.
 Require Import Memory.
+Require Import LoadStore.
 Require Import Value.
 
 
@@ -196,6 +197,27 @@ Structure t := mk
     cid_fresh: Ir.callid; (* Fresh, unused call id. *)
   }.
 
+(* Get register value. *)
+Definition get_rval (c:t) (regid:nat): option Ir.val :=
+  match c.(s) with
+  | nil => None
+  | (_, (_, r))::_ => Regfile.get r regid
+  end.
+
+(* Get value of the operand o. *)
+Definition get_val (c:t) (o:Ir.op): option Ir.val:=
+  match o with
+  | Ir.opconst c => Some
+    match c with
+    | Ir.cnum cty cn => Ir.num cn
+    | Ir.cnullptr cty => Ir.ptr Ir.NULL
+    | Ir.cpoison cty => Ir.poison
+    | Ir.cglb glbvarid => Ir.ptr (Ir.plog (glbvarid, 0))
+    end
+  | Ir.opreg regid => get_rval c regid
+  end.
+
+
 (* Wellformedness of a program state. *)
 Structure wf (c:t) := mk_wf
   {
@@ -216,29 +238,22 @@ Structure wf (c:t) := mk_wf
                      (HIN:List.In (curcid, (curpc, curregfile)) c.(s))
                      (HIN2:List.In (curcid, funid) c.(cid_to_f))
                      (HF:Some f = Ir.IRModule.getf funid md),
-        Ir.IRFunction.valid_pc curpc f = true
+        Ir.IRFunction.valid_pc curpc f = true;
+    (* wf_no_bogus_ptr: regfile has no pointer value which has
+       bogus block id. *)
+    wf_no_bogus_ptr:
+      forall op l ofs
+             (HGETVAL:get_val c op = Some (Ir.ptr (Ir.plog (l, ofs)))),
+        l < c.(m).(Ir.Memory.fresh_bid);
+    (* wf_no_bogus_ptr_mem: memory has no pointer value which has
+       bogus block id. *)
+    wf_no_bogus_ptr_mem:
+      forall p retty l ofs
+             (HGETVAL:Ir.load_val c.(m) p retty = Ir.ptr (Ir.plog (l, ofs))),
+        l < c.(m).(Ir.Memory.fresh_bid)
     (* WIP - more properties will be added later. *)
   }.
 
-(* Get register value. *)
-Definition get_rval (c:t) (regid:nat): option Ir.val :=
-  match c.(s) with
-  | nil => None
-  | (_, (_, r))::_ => Regfile.get r regid
-  end.
-
-(* Get value of the operand o. *)
-Definition get_val (c:t) (o:Ir.op): option Ir.val:=
-  match o with
-  | Ir.opconst c => Some
-    match c with
-    | Ir.cnum cty cn => Ir.num cn
-    | Ir.cnullptr cty => Ir.ptr Ir.NULL
-    | Ir.cpoison cty => Ir.poison
-    | Ir.cglb glbvarid => Ir.ptr (Ir.plog (glbvarid, 0))
-    end
-  | Ir.opreg regid => get_rval c regid
-  end.
 
 (* Update value of register regid. *)
 Definition update_rval (c:t) (regid:nat) (v:Ir.val): t :=
@@ -510,6 +525,28 @@ Proof.
   des_ifs; try congruence;
   try(simpl in *; inv Heq; unfold get_funid in *; simpl in *;
     congruence).
+Qed.
+
+Lemma cid_to_f_In_get_funid:
+  forall curcid funid0 c
+         (HWF:wf c)
+         (HIN:In (curcid, funid0) (cid_to_f c)),
+    Some funid0 = get_funid c curcid.
+Proof.
+  intros.
+  inversion HWF.
+  unfold get_funid.
+  remember (list_find_key (cid_to_f c) curcid) as res.
+  assert (List.length res < 2).
+  { eapply list_find_key_NoDup.
+    eassumption. eassumption. }
+  assert (List.In (curcid, funid0) res).
+  { rewrite Heqres. eapply list_find_key_In.
+    eassumption. }
+  destruct res; try (inversion H0; fail).
+  destruct res.
+  - inversion H0. rewrite H1. reflexivity. inversion H1.
+  - simpl in H. omega.
 Qed.
 
 

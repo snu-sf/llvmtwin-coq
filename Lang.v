@@ -79,6 +79,23 @@ Inductive t :=
 | iicmp_ule: reg -> ty -> op -> op -> t (* lhs, opty, op1, op2 *)
 .
 
+Definition ops (i:t) :=
+  match i with
+  | ibinop _ _ _ op1 op2 => op1::op2::nil
+  | ipsub _ _ _ op1 op2 => op1::op2::nil
+  | igep _ _ op1 op2 _ => op1::op2::nil
+  | iload _ _ op1 => op1::nil
+  | istore _ op1 op2 => op1::op2::nil
+  | imalloc _ _ op1 => op1::nil
+  | ifree op1 => op1::nil
+  | ibitcast _ op1 _ => op1::nil
+  | iptrtoint _ op1 _ => op1::nil
+  | iinttoptr _ op1 _ => op1::nil
+  | ievent op1 => op1::nil
+  | iicmp_eq _ _ op1 op2 => op1::op2::nil
+  | iicmp_ule _ _ op1 op2 => op1::op2::nil
+  end.
+
 Definition regops (i:t) :=
   match i with
   | ibinop _ _ _ op1 op2 => (regop op1) ++ (regop op2)

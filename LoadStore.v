@@ -2,7 +2,6 @@ Require Import Common.
 Require Import Lang.
 Require Import Value.
 Require Import Memory.
-Require Import State.
 Require Import Bool.
 Require Import List.
 Require Import BinNatDef.

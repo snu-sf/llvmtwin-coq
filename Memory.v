@@ -905,8 +905,6 @@ Structure wf (m:t) :=
 
 (* Add a new memory block. *)
 Definition new (m:t) (t:blockty) (n:nat) (a:nat) (c:list Byte.t) (P:list nat)
-           (HWF:forall begt, MemBlock.wf (MemBlock.mk t (begt, None) n a c P))
-           (HDISJ: allocatable m (List.map (fun x => (x, n)) P) = true)
 : Memory.t * blockid :=
   (mk (1 + m.(mt)) (* update time *)
      ((m.(fresh_bid), (MemBlock.mk t (m.(mt), None) n a c P))::m.(blocks)) (* add block *)
@@ -1120,8 +1118,10 @@ Proof.
 Qed.
 
 Theorem new_wf:
-  forall m (HWF:wf m) t n a c P HWF HDISJ m' mb
-         (HNEW:(m', mb) = new m t n a c P HWF HDISJ),
+  forall m (HWF:wf m) t n a c P m' mb
+         (HWF0: forall begt, MemBlock.wf (MemBlock.mk t (begt, None) n a c P))
+         (HDISJ:allocatable m (List.map (fun x => (x, n)) P) = true)
+         (HNEW:(m', mb) = new m t n a c P),
     wf m'.
 Proof.
   intros.
@@ -1288,6 +1288,22 @@ Proof.
         assumption. }
       eapply wf_blocktime0. eassumption. omega.
     }
+Qed.
+
+Lemma get_fresh_bid:
+  forall m (HWF:wf m) mb l
+         (HGET:Ir.Memory.get m l = Some mb),
+    l < m.(fresh_bid).
+Proof.
+  intros.
+  inversion HWF.
+  symmetry in HGET.
+  apply get_In with (blks := m.(blocks)) in HGET; try reflexivity.
+  rewrite forallb_forall in wf_newid0.
+  apply list_keys_In in HGET.
+  apply wf_newid0 in HGET.
+  rewrite PeanoNat.Nat.ltb_lt in HGET.
+  assumption.
 Qed.
 
 (**********************************************

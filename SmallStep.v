@@ -208,25 +208,37 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
   match (Ir.Config.cur_inst md c) with
   | Some i =>
     match i with
-    | ibinop r (Ir.ity bsz) bopc op1 op2 =>
+    | ibinop r opty bopc op1 op2 =>
       Some (sr_success Ir.e_none (update_reg_and_incrpc c r
-        match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
-        | (Some (Ir.num i1), Some (Ir.num i2)) => Ir.num (binop bopc i1 i2 bsz)
+        match opty with
+        | Ir.ity bsz =>
+          match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
+          | (Some (Ir.num i1), Some (Ir.num i2)) => Ir.num (binop bopc i1 i2 bsz)
+          | (_, _) => Ir.poison
+          end
+        | _ => Ir.poison
+        end))
+
+    | ipsub r retty ptrty op1 op2 =>
+      Some (sr_success Ir.e_none (update_reg_and_incrpc c r
+        match (retty, ptrty) with
+        | (Ir.ity bsz, Ir.ptrty opty) =>
+          match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
+          | (Some (Ir.ptr p1), Some (Ir.ptr p2)) => psub p1 p2 (Ir.Config.m c) bsz
+          | (_, _) => Ir.poison
+          end
         | (_, _) => Ir.poison
         end))
 
-    | ipsub r (Ir.ity bsz) (Ir.ptrty opty) op1 op2 =>
+    | igep r ptrty opptr opidx inb =>
       Some (sr_success Ir.e_none (update_reg_and_incrpc c r
-        match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
-        | (Some (Ir.ptr p1), Some (Ir.ptr p2)) => psub p1 p2 (Ir.Config.m c) bsz
-        | (_, _) => Ir.poison
-        end))
-
-    | igep r (Ir.ptrty retty) opptr opidx inb =>
-      Some (sr_success Ir.e_none (update_reg_and_incrpc c r
-        match (Ir.Config.get_val c opptr, Ir.Config.get_val c opidx) with
-        | (Some (Ir.ptr p), Some (Ir.num idx)) => gep p idx retty (Ir.Config.m c) inb
-        | (_, _) => Ir.poison
+        match ptrty with
+        | Ir.ptrty retty =>
+          match (Ir.Config.get_val c opptr, Ir.Config.get_val c opidx) with
+          | (Some (Ir.ptr p), Some (Ir.num idx)) => gep p idx retty (Ir.Config.m c) inb
+          | (_, _) => Ir.poison
+          end
+        | _ => Ir.poison
         end))
 
     | iload r retty opptr =>
@@ -348,8 +360,6 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
       | (_, _) => (* In other cases, it is untyped. *)
         Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
       end
-
-    | _ => Some sr_goes_wrong (* Untyped IR *)
     end
 
   | None => Some sr_goes_wrong
@@ -387,7 +397,7 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
       (HDISJ:Ir.Memory.allocatable (Ir.Config.m c)
                        (List.map (fun addr => (addr, N.to_nat nsz)) P) = true)
       (HNEW: (m', l) = Ir.Memory.new (Ir.Config.m c) (Ir.heap) (N.to_nat nsz)
-                                     (Ir.SYSALIGN) contents P HMBWF HDISJ),
+                                     (Ir.SYSALIGN) contents P),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc
                                            (Ir.Config.update_m c m') r
                     (Ir.ptr (Ir.plog (l, 0)))))
@@ -457,6 +467,22 @@ Definition changes_mem (i:Ir.Inst.t): bool :=
   | ievent _ => false
   | iicmp_eq _ _ _ _ => false
   | iicmp_ule _ _ _ _ => false
+  end.
+Definition never_goes_wrong (i:Ir.Inst.t): bool :=
+  match i with
+  | ibinop _ _ _ _ _ => true
+  | ipsub _ _ _ _ _ => true
+  | igep _ _ _ _ _ => true
+  | iload _ _ _ => false
+  | istore _ _ _ => false
+  | imalloc _ _ _ => true
+  | ifree _ => false
+  | ibitcast _ _ _ => true
+  | iptrtoint _ _ _ => true
+  | iinttoptr _ _ _ => true
+  | ievent _ => false
+  | iicmp_eq _ _ _ _ => true
+  | iicmp_ule _ _ _ _ => true
   end.
 Definition allocates_mem (i:Ir.Inst.t): bool :=
   match i with
@@ -548,27 +574,6 @@ Definition phi_step (bef_bbid:nat) (c:Ir.Config.t) (p:Ir.PhiNode.t): option Ir.C
         Theorems about sstep of instruction.
  ****************************************************)
 
-Lemma cid_to_f_In_get_funid:
-  forall curcid funid0 c
-         (HWF:Ir.Config.wf md c)
-         (HIN:In (curcid, funid0) (Ir.Config.cid_to_f c)),
-    Some funid0 = Ir.Config.get_funid c curcid.
-Proof.
-  intros.
-  inversion HWF.
-  unfold Ir.Config.get_funid.
-  remember (list_find_key (Ir.Config.cid_to_f c) curcid) as res.
-  assert (List.length res < 2).
-  { eapply list_find_key_NoDup.
-    eassumption. eassumption. }
-  assert (List.In (curcid, funid0) res).
-  { rewrite Heqres. eapply list_find_key_In.
-    eassumption. }
-  destruct res; try (inversion H0; fail).
-  destruct res.
-  - inversion H0. rewrite H1. reflexivity. inversion H1.
-  - simpl in H. omega.
-Qed.
 
 Lemma incrpc_wf:
   forall c c'
@@ -616,13 +621,20 @@ Proof.
            left. reflexivity.
            eassumption. assumption.
            assert (HINCID:Some funid0 = Ir.Config.get_funid c curcid).
-           { apply cid_to_f_In_get_funid. assumption. assumption. }
+           { eapply Ir.Config.cid_to_f_In_get_funid. eassumption. assumption. }
            rewrite <- Heqofunid in HINCID.
            inversion HINCID.
            rewrite H0 in HF. rewrite <- HF in Heqofdef'.
            inversion Heqofdef'. rewrite <- H1. congruence.
          -- apply wf_stack with (curcid := curcid) (funid := funid0) (curregfile := curregfile).
             right. assumption. assumption. assumption.
+      * simpl. intros. apply wf_no_bogus_ptr with (op := op) (ofs := ofs).
+        unfold Ir.Config.get_val in HGETVAL.
+        unfold Ir.Config.get_rval in HGETVAL. simpl in HGETVAL.
+        unfold Ir.Config.get_val. unfold Ir.Config.get_rval.
+        rewrite <- Heqs'. assumption.
+      * simpl. intros. eapply wf_no_bogus_ptr_mem.
+        eassumption.
     + congruence.
   - congruence.
 Qed.
@@ -630,7 +642,9 @@ Qed.
 Lemma update_rval_wf:
   forall c c' r v
          (HWF:Ir.Config.wf md c)
-         (HC':c' = Ir.Config.update_rval c r v),
+         (HC':c' = Ir.Config.update_rval c r v)
+         (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog (l, o))),
+             l < c.(Ir.Config.m).(Ir.Memory.fresh_bid)),
     Ir.Config.wf md c'.
 Proof.
   intros.
@@ -650,24 +664,57 @@ Proof.
       eassumption. assumption.
     - eapply wf_stack.
       simpl. right. eassumption. eassumption. assumption.
+    - simpl. intros.
+      unfold Ir.Config.get_val in HGETVAL.
+      unfold Ir.Config.get_rval in HGETVAL.
+      simpl in HGETVAL.
+      destruct op eqn:Hop.
+      + apply wf_no_bogus_ptr with (op := Ir.opconst c0) (ofs := ofs).
+        des_ifs.
+      + destruct (Nat.eqb r r0) eqn:Hreg.
+        { apply HNOBOGUSPTR with (o := ofs).
+          unfold Ir.Regfile.get in HGETVAL.
+          unfold Ir.Regfile.update in HGETVAL.
+          simpl in HGETVAL. rewrite Hreg in HGETVAL.
+          inv HGETVAL. reflexivity. }
+        { unfold Ir.Regfile.get in HGETVAL.
+          unfold Ir.Regfile.update in HGETVAL.
+          simpl in HGETVAL. rewrite Hreg in HGETVAL.
+          apply wf_no_bogus_ptr with (op := Ir.opreg r0) (ofs := ofs).
+          unfold Ir.Config.get_val.
+          unfold Ir.Config.get_rval. rewrite Hs. unfold Ir.Regfile.get.
+          assumption.
+        }
   }
 Qed.
 
 Lemma update_reg_and_incrpc_wf:
   forall c c' v r
          (HWF:Ir.Config.wf md c)
-         (HC':c' = update_reg_and_incrpc c r v),
+         (HC':c' = update_reg_and_incrpc c r v)
+         (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog (l, o))),
+             l < c.(Ir.Config.m).(Ir.Memory.fresh_bid)),
     Ir.Config.wf md c'.
 Proof.
   intros.
   unfold update_reg_and_incrpc in HC'.
   assert (Ir.Config.wf md (Ir.Config.update_rval c r v)).
-  { eapply update_rval_wf. eassumption. reflexivity. }
+  { eapply update_rval_wf. eassumption. reflexivity. eassumption. }
   rewrite HC'.
   eapply incrpc_wf.
-  eapply H. reflexivity.  
+  eapply H. reflexivity.
 Qed.
 
+Lemma fresh_bid_store_val:
+  forall m p v t,
+    Ir.Memory.fresh_bid (Ir.store_val m p v t) =
+    Ir.Memory.fresh_bid m.
+Proof.
+  intros.
+  unfold Ir.store_val. unfold Ir.store_bytes.
+  unfold Ir.Memory.set.
+  des_ifs.
+Qed.
 
 Ltac thats_it := eapply update_reg_and_incrpc_wf; eauto.
 Ltac des_op c op op' HINV :=
@@ -675,7 +722,8 @@ Ltac des_op c op op' HINV :=
 Ltac des_inv v HINV :=
   destruct (v); try (inversion HINV; fail).
 Ltac try_wf :=
-  des_ifs; try (eapply update_reg_and_incrpc_wf; try eassumption; try reflexivity; fail).
+  des_ifs; try (eapply update_reg_and_incrpc_wf; try eassumption;
+                try reflexivity; try congruence; fail).
 
 (* Lemma: inst_det_step preserves well-formedness of configuration. *)
 Lemma inst_det_step_wf:
@@ -703,13 +751,25 @@ Proof.
                   |r opty op1 op2 (* iicmp_ule *)
                   ] eqn:HINST; try (inversion HNEXT; fail).
     + destruct bopc; try_wf.
-    + (* ipsub. *) try_wf.
+    + (* ipsub. *) unfold psub in HNEXT. try_wf.
     + (* igep. *) try_wf.
+      eapply update_reg_and_incrpc_wf.
+      eassumption. reflexivity.
+      intros. unfold gep in HPTR. des_ifs.
+      apply Ir.Memory.get_fresh_bid with (mb := t1). inv HWF. assumption.
+      assumption.
+      inv HWF. eapply wf_no_bogus_ptr. eassumption.
     + (* iload. *) try_wf.
+      eapply update_reg_and_incrpc_wf. eassumption. reflexivity.
+      intros. inv HWF. eapply wf_no_bogus_ptr_mem.
+      eassumption.
     + (* istore. *) try_wf; try (eapply incrpc_wf; try eassumption; try reflexivity; fail).
       apply incrpc_wf with (c := Ir.Config.update_m c (Ir.store_val (Ir.Config.m c) p v valty)).
       destruct HWF.
-      split; simpl; try assumption. eapply Ir.store_val_wf. eassumption. reflexivity. congruence. reflexivity.
+      split; simpl; try assumption. eapply Ir.store_val_wf. eassumption. reflexivity. congruence.
+      intros. rewrite fresh_bid_store_val. eapply wf_no_bogus_ptr. eassumption.
+      admit. (* store_val does not hamper wf_no_bogus_ptr_mem! *)
+      reflexivity.
     + (* ifree *) try_wf; try (eapply incrpc_wf; try eassumption; try reflexivity; fail).
       apply incrpc_wf with (c := Ir.Config.update_m c t0); try reflexivity.
       unfold free in Heq0.
@@ -722,6 +782,8 @@ Proof.
         assumption. unfold Ir.Config.cid_to_f in *.
         unfold Ir.Config.update_m in HIN2. destruct c. simpl in *. assumption.
         assumption.
+        admit. (* wf_no_bogus_ptr *)
+        admit. (* wf_no_bogus_ptr_mem *)
       * split. eapply Ir.Memory.free_wf. eassumption. rewrite Heq0. unfold Ir.Config.update_m. reflexivity.
         unfold Ir.Config.cid_to_f in *. des_ifs.
         intros. apply wf_cid_to_f2. unfold Ir.Config.cid_to_f in *. des_ifs.
@@ -729,7 +791,9 @@ Proof.
         assumption. unfold Ir.Config.cid_to_f in *.
         unfold Ir.Config.update_m in HIN2. destruct c. simpl in *. assumption.
         assumption.
-    + (* ibitcast. *) try_wf.
+        admit. (* wf_no_bogus_ptr *)
+        admit. (* wf_no_bogus_ptr_mem *)
+(*    + (* ibitcast. *) try_wf.
     + (* iptrtoint. *) try_wf.
     + (* iinttoptr *) try_wf.
     + (* ievent *)
@@ -762,7 +826,8 @@ Proof.
           des_op c op2 op2v HC'; try (inv HC'; try_wf).
       }
       { des_ifs; try_wf. }
-Qed.
+Qed.*)
+Admitted.
 
 (* Theorem: inst_step preserves well-formedness of configuration. *)
 Theorem inst_step_wf:
@@ -770,7 +835,7 @@ Theorem inst_step_wf:
          (HWF:Ir.Config.wf md c)
          (HSTEP:inst_step c (sr_success e c')),
     Ir.Config.wf md c'.
-Proof.
+(*Proof.
   intros.
   inversion HSTEP.
   - unfold inst_det_step in HNEXT.
@@ -787,7 +852,9 @@ Proof.
       split; try (simpl; assumption).
       * simpl. eapply Ir.Memory.new_wf.
         eapply wf_m.
-        eapply HNEW.
+        eassumption.
+        eassumption.
+        eassumption.
     + reflexivity.
   - (* iicmp_eq, nondet *)
     eapply update_reg_and_incrpc_wf.
@@ -797,7 +864,8 @@ Proof.
     eapply update_reg_and_incrpc_wf. eassumption. reflexivity.
   - (* icmp_ule, nondet 2 *)
     eapply update_reg_and_incrpc_wf. eassumption. reflexivity.
-Qed.
+Qed.*)
+Admitted.
 
 (****************************************************
    Theorems regarding categorization of instruction.
