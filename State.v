@@ -135,6 +135,22 @@ Proof.
     assumption.
 Qed.
 
+Theorem eq_wopc_trans:
+  forall s1 s2 s3 (HEQ1:eq_wopc s1 s2) (HEQ2:eq_wopc s2 s3),
+    eq_wopc s1 s3.
+Proof.
+  intros.
+  unfold eq_wopc in *.
+  generalize dependent s2.
+  generalize dependent s3.
+  induction s1.
+  - intros. inv HEQ1. inv HEQ2. constructor.
+  - intros. inv HEQ1. simpl in H1. desH H1.
+    inv HEQ2. simpl in H4. desH H4. constructor.
+    split. congruence. unfold Regfile.eq in *. intros. congruence.
+    eapply IHs1. eassumption. eassumption.
+Qed.
+
 Theorem eq_eq_wopc:
   forall s1 s2 (HEQ:eq s1 s2),
     eq_wopc s1 s2.
@@ -317,6 +333,18 @@ Proof.
   desH HEQ.
   split. congruence. split. apply Stack.eq_wopc_symm. assumption.
   split; congruence.
+Qed.
+
+Theorem eq_wopc_trans:
+  forall c1 c2 c3 (HEQ:eq_wopc c1 c2) (HEQ2:eq_wopc c2 c3),
+  eq_wopc c1 c3.
+Proof.
+  intros.
+  unfold eq_wopc in *.
+  desH HEQ.
+  desH HEQ2.
+  split. congruence. split. eapply Stack.eq_wopc_trans. eassumption. assumption.
+  split; congruence. 
 Qed.
 
 Theorem eq_update_rval:

@@ -209,37 +209,25 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
   | Some i =>
     match i with
     | ibinop r (Ir.ity bsz) bopc op1 op2 =>
-      match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
-      | (Some (Ir.num i1), Some (Ir.num i2)) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num (binop bopc i1 i2 bsz))))
-      | (Some Ir.poison, Some (Ir.num i2)) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-      | (Some (Ir.num i2), Some Ir.poison) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-      | (_, _) => Some sr_goes_wrong
-      end
+      Some (sr_success Ir.e_none (update_reg_and_incrpc c r
+        match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
+        | (Some (Ir.num i1), Some (Ir.num i2)) => Ir.num (binop bopc i1 i2 bsz)
+        | (_, _) => Ir.poison
+        end))
 
     | ipsub r (Ir.ity bsz) (Ir.ptrty opty) op1 op2 =>
-      match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
-      | (Some (Ir.ptr p1), Some (Ir.ptr p2)) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r (psub p1 p2 (Ir.Config.m c) bsz)))
-      | (Some Ir.poison, Some (Ir.ptr p2)) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-      | (Some (Ir.ptr p1), Some Ir.poison) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-      | (_, _) => Some sr_goes_wrong
-      end
+      Some (sr_success Ir.e_none (update_reg_and_incrpc c r
+        match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
+        | (Some (Ir.ptr p1), Some (Ir.ptr p2)) => psub p1 p2 (Ir.Config.m c) bsz
+        | (_, _) => Ir.poison
+        end))
 
     | igep r (Ir.ptrty retty) opptr opidx inb =>
-      match (Ir.Config.get_val c opptr, Ir.Config.get_val c opidx) with
-      | (Some (Ir.ptr p), Some (Ir.num idx)) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r (gep p idx retty (Ir.Config.m c) inb)))
-      | (Some Ir.poison, Some (Ir.num idx)) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-      | (Some (Ir.ptr p), Some Ir.poison) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-      | (_, _) => Some sr_goes_wrong
-      end
+      Some (sr_success Ir.e_none (update_reg_and_incrpc c r
+        match (Ir.Config.get_val c opptr, Ir.Config.get_val c opidx) with
+        | (Some (Ir.ptr p), Some (Ir.num idx)) => gep p idx retty (Ir.Config.m c) inb
+        | (_, _) => Ir.poison
+        end))
 
     | iload r retty opptr =>
       match (Ir.Config.get_val c opptr) with
@@ -247,7 +235,8 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         if Ir.deref (Ir.Config.m c) p (Ir.ty_bytesz retty) then
           Some (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.load_val (Ir.Config.m c) p retty)))
         else Some sr_goes_wrong
-      | _ => Some sr_goes_wrong
+      | _ => (* type check fail *)
+        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
       end
 
     | istore valty opptr opval =>
@@ -257,7 +246,8 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
           Some (sr_success Ir.e_none
                            (incrpc (Ir.Config.update_m c (Ir.store_val (Ir.Config.m c) p v valty))))
         else Some sr_goes_wrong
-      | (_, _) => Some sr_goes_wrong
+      | (_, _) => (* type check fail *)
+        Some (sr_success Ir.e_none c)
       end
 
     | imalloc r opty opval =>
@@ -271,43 +261,39 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         | Some m => Some (sr_success Ir.e_none (incrpc (Ir.Config.update_m c m)))
         | None => Some sr_goes_wrong
         end
-      | _ => Some sr_goes_wrong
+      | _ => (* type check fail *)
+        Some (sr_success Ir.e_none c)
       end
 
     | ibitcast r opval retty =>
-      match (Ir.Config.get_val c opval) with
-      | Some (Ir.ptr p) =>
-        match retty with
-        | Ir.ptrty _ => Some (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.ptr p)))
-        | _ => Some sr_goes_wrong
-        end
-      | Some (Ir.num n) =>
-        match retty with
-        | Ir.ity _ => Some (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num n)))
-        | _ => Some sr_goes_wrong
-        end
-      | _ => Some sr_goes_wrong
-      end
+      Some (sr_success Ir.e_none (update_reg_and_incrpc c r
+        match (Ir.Config.get_val c opval) with
+        | Some (Ir.ptr p) =>
+          match retty with
+          | Ir.ptrty _ => Ir.ptr p
+          | _ => Ir.poison
+          end
+        | Some (Ir.num n) =>
+          match retty with
+          | Ir.ity _ => Ir.num n
+          | _ => Ir.poison
+          end
+        | _ => Ir.poison
+        end))
 
     | iptrtoint r opptr (Ir.ity retty) =>
-      match (Ir.Config.get_val c opptr) with
-      | Some (Ir.ptr p) =>
-        Some (sr_success Ir.e_none
-                         (update_reg_and_incrpc c r (Ir.num (p2N p (Ir.Config.m c) retty))))
-      | Some (Ir.poison) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-      | _ => Some sr_goes_wrong
-      end
+      Some (sr_success Ir.e_none (update_reg_and_incrpc c r
+        match (Ir.Config.get_val c opptr) with
+        | Some (Ir.ptr p) => Ir.num (p2N p (Ir.Config.m c) retty)
+        | _ => Ir.poison
+        end))
 
     | iinttoptr r opint (Ir.ptrty retty) =>
-      match (Ir.Config.get_val c opint) with
-      | Some (Ir.num n) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r
-                                                          (Ir.ptr (Ir.pphy (N.to_nat n, nil, None)))))
-      | Some (Ir.poison) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-    | _=> Some sr_goes_wrong
-    end
+      Some (sr_success Ir.e_none (update_reg_and_incrpc c r
+        match (Ir.Config.get_val c opint) with
+        | Some (Ir.num n) => Ir.ptr (Ir.pphy (N.to_nat n, nil, None))
+        | _ => Ir.poison
+        end))
 
     | ievent opval =>
       match (Ir.Config.get_val c opval) with
@@ -331,7 +317,8 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         | Some b => Some (sr_success Ir.e_none (update_reg_and_incrpc c r (to_num b)))
         | None => None (* nondet. result *)
         end
-      | (_, _) => Some sr_goes_wrong (* In other cases, it is untyped. *)
+      | (_, _) => (* In other cases, it is untyped. *)
+        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
       end
 
     | iicmp_ule r opty opptr1 opptr2 =>
@@ -350,7 +337,8 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         | Some b => Some (sr_success Ir.e_none (update_reg_and_incrpc c r (to_num b)))
         | None => None
         end
-      | (_, _) => Some sr_goes_wrong
+      | (_, _) => (* In other cases, it is untyped. *)
+        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
       end
 
     | _ => Some sr_goes_wrong (* Untyped IR *)
@@ -461,6 +449,11 @@ Definition changes_mem (i:Ir.Inst.t): bool :=
   | ievent _ => false
   | iicmp_eq _ _ _ _ => false
   | iicmp_ule _ _ _ _ => false
+  end.
+Definition allocates_mem (i:Ir.Inst.t): bool :=
+  match i with
+  | imalloc _ _ _ => true
+  | _ => false
   end.
 Definition raises_event (i:Ir.Inst.t): bool :=
   match i with
@@ -673,6 +666,8 @@ Ltac des_op c op op' HINV :=
   destruct (Ir.Config.get_val c op) as [op' | ]; try (inversion HINV; fail).
 Ltac des_inv v HINV :=
   destruct (v); try (inversion HINV; fail).
+Ltac try_wf :=
+  des_ifs; try (eapply update_reg_and_incrpc_wf; try eassumption; try reflexivity; fail).
 
 (* Lemma: inst_det_step preserves well-formedness of configuration. *)
 Lemma inst_det_step_wf:
@@ -699,71 +694,36 @@ Proof.
                   |r opty op1 op2 (* iicmp_eq *)
                   |r opty op1 op2 (* iicmp_ule *)
                   ] eqn:HINST; try (inversion HNEXT; fail).
-    + rename HNEXT into H2.
-      destruct bopc.
-      { simpl in H2.
-        des_inv retty H2. des_op c op1 opv1 H2. des_op c op2 opv2 H2.
-        + des_inv opv1 H2; des_inv opv2 H2; inversion H2; thats_it.
-        + des_inv opv1 H2.
-      }
-      { simpl in H2.
-        des_inv retty H2. des_op c op1 opv1 H2. des_op c op2 opv2 H2.
-        + des_inv opv1 H2; des_inv opv2 H2; inversion H2; thats_it.
-        + des_inv opv1 H2.
-      }
-    + (* ipsub. *)
-      rename HNEXT into H2. simpl in H2.
-      des_inv retty H2. des_inv ptrty H2. des_op c opptr1 op1 H2.
-      des_inv op1 H2; des_op c opptr2 op2 H2; des_inv op2 H2; inversion H2; thats_it.
-    + (* igep. *)
-      rename HNEXT into H2. simpl in H2.
-      des_inv retty H2. des_op c opptr op1 H2.
-      des_inv op1 H2; des_op c opidx op2 H2; des_inv op2 H2; inversion H2; thats_it.
-    + (* iload. *)
-      rename HNEXT into H2. simpl in H2. des_op c opptr op1 H2.
-      des_inv op1 H2. des_ifH H2; try (inversion H2; fail). inversion H2. thats_it.
-    + (* istore. *)
-      rename HNEXT into H2. simpl in H2.
-      des_op c opval opv H2. des_inv opv H2. des_op c opptr opp H2.
-      destruct (Ir.deref (Ir.Config.m c) p (Ir.ty_bytesz valty)) eqn:Hderef;
-        try (inversion H2; fail).
-      inversion H2.
-      apply incrpc_wf with (c := Ir.Config.update_m c (Ir.store_val (Ir.Config.m c) p opp valty));
-        try reflexivity.
+    + destruct bopc; try_wf.
+    + (* ipsub. *) try_wf.
+    + (* igep. *) try_wf.
+    + (* iload. *) try_wf.
+    + (* istore. *) try_wf.
+      apply incrpc_wf with (c := Ir.Config.update_m c (Ir.store_val (Ir.Config.m c) p v valty)).
       destruct HWF.
-      split; simpl; try assumption.
-      eapply Ir.store_val_wf. eassumption. reflexivity.  congruence.
-    + (* ifree *)
-      destruct HWF. rename HNEXT into H2. simpl in H2.
-      des_op c opptr opp H2. des_inv opp H2.
-      destruct (free p (Ir.Config.m c)) as [m0 | ] eqn:Hfree; try (inversion H2; fail).
-      inversion H2.
-      unfold free in Hfree.
-      destruct p.
-      { destruct p. destruct n; try (inversion Hfree).
-        apply incrpc_wf with (c := Ir.Config.update_m c m0).
-        assert (HWF':Ir.Memory.wf m0).
-        { eapply Ir.Memory.free_wf. eapply wf_m. erewrite Hfree. reflexivity. }
-        split; try (simpl; assumption). reflexivity. }
-      { destruct p. destruct p.
-        destruct (Ir.Memory.zeroofs_block (Ir.Config.m c) n) eqn:Hblk.
-        -- destruct p.
-           des_ifH Hfree.
-           apply incrpc_wf with (c := Ir.Config.update_m c m0).
-           assert (HWF':Ir.Memory.wf m0).
-           { eapply Ir.Memory.free_wf. eapply wf_m. erewrite Hfree. reflexivity. }
-           split; try (simpl; assumption). reflexivity.
-           inversion Hfree.
-        -- inversion Hfree. }
-    + (* ibitcast. *)
-      rename HNEXT into H2. simpl in H2.
-      des_op c opval opv H2. des_inv opv H2; des_inv retty H2; inversion H2; thats_it.
-    + (* iptrtoint. *)
-      rename HNEXT into H2. simpl in H2. des_inv retty H2.
-      des_op c opptr opp H2. des_inv opp H2; inversion H2; thats_it.
-    + (* iinttoptr *)
-      rename HNEXT into H2. simpl in H2. des_inv retty H2.
-      des_op c opint opi H2. des_inv opi H2; inversion H2; thats_it.
+      split; simpl; try assumption. eapply Ir.store_val_wf. eassumption. reflexivity. congruence. reflexivity.
+    + (* ifree *) try_wf.
+      apply incrpc_wf with (c := Ir.Config.update_m c t0); try reflexivity.
+      unfold free in Heq0.
+      destruct HWF.
+      des_ifs.
+      * split. eapply Ir.Memory.free_wf. eassumption. rewrite Heq0. unfold Ir.Config.update_m. reflexivity.
+        unfold Ir.Config.cid_to_f in *. des_ifs.
+        intros. apply wf_cid_to_f2. unfold Ir.Config.cid_to_f in *. des_ifs.
+        intros. apply wf_stack with (curcid := curcid) (funid := funid) (curregfile := curregfile).
+        assumption. unfold Ir.Config.cid_to_f in *.
+        unfold Ir.Config.update_m in HIN2. destruct c. simpl in *. assumption.
+        assumption.
+      * split. eapply Ir.Memory.free_wf. eassumption. rewrite Heq0. unfold Ir.Config.update_m. reflexivity.
+        unfold Ir.Config.cid_to_f in *. des_ifs.
+        intros. apply wf_cid_to_f2. unfold Ir.Config.cid_to_f in *. des_ifs.
+        intros. apply wf_stack with (curcid := curcid) (funid := funid) (curregfile := curregfile).
+        assumption. unfold Ir.Config.cid_to_f in *.
+        unfold Ir.Config.update_m in HIN2. destruct c. simpl in *. assumption.
+        assumption.
+    + (* ibitcast. *) try_wf.
+    + (* iptrtoint. *) try_wf.
+    + (* iinttoptr *) try_wf.
     + (* ievent *)
       rename HNEXT into H2. simpl in H2.
       des_op c opval opv H2. des_inv opv H2.
@@ -773,29 +733,27 @@ Proof.
       des_op c op1 op1v HC'.
       { destruct op1v.
         - des_op c op2 op2v HC'.
-          destruct op2v; inversion HC'; thats_it.
+          destruct op2v; inversion HC'; thats_it. inv HC'. try_wf.
         - des_op c op2 op2v HC'.
           destruct op2v; try (inversion HC'; fail).
+          inv HC'. try_wf.
           destruct (icmp_eq_ptr p p0 (Ir.Config.m c)) eqn:Heq_ptr; try (inversion HC'; fail);
              inversion HC'; thats_it.
           inversion HC'. thats_it.
+          inv HC'. try_wf.
         - inversion HC'. thats_it. }
       { des_op c op2 op2v HC'.
         destruct op2v; try (inversion HC'; fail).
-        inversion HC'. thats_it. }
+        inversion HC'. thats_it.
+        inv HC'. try_wf. inv HC'. try_wf. inv HC'. try_wf.
+      }
     + (* iicmp_ule, det *)
       rename HNEXT into HC'. simpl in HC'.
       des_op c op1 op1v HC'.
       { des_inv op1v HC';
-          des_op c op2 op2v HC'.
-        -- des_inv op2v HC'; inversion HC'; thats_it.
-        -- des_inv op2v HC'.
-           { destruct (icmp_ule_ptr p p0 (Ir.Config.m c)) eqn:Huleptr; try (inversion HC'; fail).
-             inversion HC'. thats_it. }
-           { inversion HC'. thats_it. }
-        -- inversion HC'. thats_it.
-        -- inversion HC'. thats_it. }
-      { des_op c op2 op2v HC'. des_inv op2v HC'. inversion HC'. thats_it. }
+          des_op c op2 op2v HC'; try (inv HC'; try_wf).
+      }
+      { des_ifs; try_wf. }
 Qed.
 
 (* Theorem: inst_step preserves well-formedness of configuration. *)
@@ -889,71 +847,12 @@ Proof.
                   |r opty op1 op2 (* iicmp_eq *)
                   |r opty op1 op2 (* iicmp_ule *)
                   ] eqn:HINST; try (inversion HNEXT; fail);
-      try (inversion HNOMEMCHG; fail).
-    + rename HNEXT into H2.
-      destruct bopc.
-      { simpl in H2.
-        des_inv retty H2. des_op c op1 opv1 H2. des_op c op2 opv2 H2.
-        + des_inv opv1 H2; des_inv opv2 H2; inversion H2; thats_it2.
-        + des_inv opv1 H2.
-      }
-      { simpl in H2.
-        des_inv retty H2. des_op c op1 opv1 H2. des_op c op2 opv2 H2.
-        + des_inv opv1 H2; des_inv opv2 H2; inversion H2; thats_it2.
-        + des_inv opv1 H2.
-      }
-    + (* ipsub. *)
-      rename HNEXT into H2. simpl in H2.
-      des_inv retty H2. des_inv ptrty H2. des_op c opptr1 op1 H2.
-      des_inv op1 H2; des_op c opptr2 op2 H2; des_inv op2 H2; inversion H2; thats_it2.
-    + (* igep. *)
-      rename HNEXT into H2. simpl in H2.
-      des_inv retty H2. des_op c opptr op1 H2.
-      des_inv op1 H2; des_op c opidx op2 H2; des_inv op2 H2; inversion H2; thats_it2.
-    + (* iload. *)
-      rename HNEXT into H2. simpl in H2. des_op c opptr op1 H2.
-      des_inv op1 H2. des_ifH H2; try (inversion H2; fail). inversion H2. thats_it2.
-    + (* ibitcast. *)
-      rename HNEXT into H2. simpl in H2.
-      des_op c opval opv H2. des_inv opv H2; des_inv retty H2; inversion H2; thats_it2.
-    + (* iptrtoint. *)
-      rename HNEXT into H2. simpl in H2. des_inv retty H2.
-      des_op c opptr opp H2. des_inv opp H2; inversion H2; thats_it2.
-    + (* iinttoptr *)
-      rename HNEXT into H2. simpl in H2. des_inv retty H2.
-      des_op c opint opi H2. des_inv opi H2; inversion H2; thats_it2.
+      try (inversion HNOMEMCHG; fail);
+      try (des_ifs; thats_it2; fail).
     + (* ievent *)
       rename HNEXT into H2. simpl in H2.
       des_op c opval opv H2. des_inv opv H2.
       inversion H2. eapply no_mem_change_after_incrpc.
-    + (* iicmp_eq, det *)
-      rename HNEXT into HC'. simpl in HC'.
-      des_op c op1 op1v HC'.
-      { destruct op1v.
-        - des_op c op2 op2v HC'.
-          destruct op2v; inversion HC'; thats_it2.
-        - des_op c op2 op2v HC'.
-          destruct op2v; try (inversion HC'; fail).
-          destruct (icmp_eq_ptr p p0 (Ir.Config.m c)) eqn:Heq_ptr; try (inversion HC'; fail);
-             inversion HC'; thats_it2.
-          inversion HC'. thats_it2.
-        - inversion HC'. thats_it2. }
-      { des_op c op2 op2v HC'.
-        destruct op2v; try (inversion HC'; fail).
-        inversion HC'. thats_it2. }
-    + (* iicmp_ule, det *)
-      rename HNEXT into HC'. simpl in HC'.
-      des_op c op1 op1v HC'.
-      { des_inv op1v HC';
-          des_op c op2 op2v HC'.
-        -- des_inv op2v HC'; inversion HC'; thats_it2.
-        -- des_inv op2v HC'.
-           { destruct (icmp_ule_ptr p p0 (Ir.Config.m c)) eqn:Huleptr; try (inversion HC'; fail).
-             inversion HC'. thats_it2. }
-           { inversion HC'. thats_it2. }
-        -- inversion HC'. thats_it2.
-        -- inversion HC'. thats_it2. }
-      { des_op c op2 op2v HC'. des_inv op2v HC'. inversion HC'. thats_it2. }
 Qed.
 
 (* Theorem: if changes_mem returns false, memory isn't
