@@ -247,7 +247,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
                            (incrpc (Ir.Config.update_m c (Ir.store_val (Ir.Config.m c) p v valty))))
         else Some sr_goes_wrong
       | (_, _) => (* type check fail *)
-        Some (sr_success Ir.e_none c)
+        Some (sr_success Ir.e_none (incrpc c))
       end
 
     | imalloc r opty opval =>
@@ -262,7 +262,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         | None => Some sr_goes_wrong
         end
       | _ => (* type check fail *)
-        Some (sr_success Ir.e_none c)
+        Some (sr_success Ir.e_none (incrpc c))
       end
 
     | ibitcast r opval retty =>
@@ -281,17 +281,25 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         | _ => Ir.poison
         end))
 
-    | iptrtoint r opptr (Ir.ity retty) =>
+    | iptrtoint r opptr retty =>
       Some (sr_success Ir.e_none (update_reg_and_incrpc c r
-        match (Ir.Config.get_val c opptr) with
-        | Some (Ir.ptr p) => Ir.num (p2N p (Ir.Config.m c) retty)
+        match retty with
+        | Ir.ity retty =>
+          match (Ir.Config.get_val c opptr) with
+          | Some (Ir.ptr p) => Ir.num (p2N p (Ir.Config.m c) retty)
+          | _ => Ir.poison
+          end
         | _ => Ir.poison
         end))
 
-    | iinttoptr r opint (Ir.ptrty retty) =>
+    | iinttoptr r opint retty =>
       Some (sr_success Ir.e_none (update_reg_and_incrpc c r
-        match (Ir.Config.get_val c opint) with
-        | Some (Ir.num n) => Ir.ptr (Ir.pphy (N.to_nat n, nil, None))
+        match retty with
+        | Ir.ptrty retty =>
+          match (Ir.Config.get_val c opint) with
+          | Some (Ir.num n) => Ir.ptr (Ir.pphy (N.to_nat n, nil, None))
+          | _ => Ir.poison
+          end
         | _ => Ir.poison
         end))
 
@@ -698,11 +706,11 @@ Proof.
     + (* ipsub. *) try_wf.
     + (* igep. *) try_wf.
     + (* iload. *) try_wf.
-    + (* istore. *) try_wf.
+    + (* istore. *) try_wf; try (eapply incrpc_wf; try eassumption; try reflexivity; fail).
       apply incrpc_wf with (c := Ir.Config.update_m c (Ir.store_val (Ir.Config.m c) p v valty)).
       destruct HWF.
       split; simpl; try assumption. eapply Ir.store_val_wf. eassumption. reflexivity. congruence. reflexivity.
-    + (* ifree *) try_wf.
+    + (* ifree *) try_wf; try (eapply incrpc_wf; try eassumption; try reflexivity; fail).
       apply incrpc_wf with (c := Ir.Config.update_m c t0); try reflexivity.
       unfold free in Heq0.
       destruct HWF.
