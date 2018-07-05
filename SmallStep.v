@@ -273,8 +273,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         | Some m => Some (sr_success Ir.e_none (incrpc (Ir.Config.update_m c m)))
         | None => Some sr_goes_wrong
         end
-      | _ => (* type check fail *)
-        Some (sr_success Ir.e_none (incrpc c))
+      | _ => Some sr_goes_wrong
       end
 
     | ibitcast r opval retty =>

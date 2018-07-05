@@ -121,6 +121,17 @@ Proof.
   des_ifs.
 Qed.
 
+Lemma incrpc_update_reg_and_incrpc:
+  forall md st r v,
+    Ir.SmallStep.incrpc md (Ir.SmallStep.update_reg_and_incrpc md st r v) =
+    Ir.SmallStep.update_reg_and_incrpc md (Ir.SmallStep.incrpc md st) r v.
+Proof.
+  intros.
+  unfold Ir.SmallStep.update_reg_and_incrpc.
+  rewrite incrpc_update_rval.
+  reflexivity.
+Qed.
+
 Lemma get_val_incrpc:
   forall md st op,
     Ir.Config.get_val (Ir.SmallStep.incrpc md st) op = Ir.Config.get_val st op.
@@ -716,7 +727,90 @@ Proof.
   }
 Qed.
 
-
+(* nstep_eq
+    ([Ir.e_none],
+    Ir.SmallStep.sr_success Ir.e_none
+      (Ir.SmallStep.update_reg_and_incrpc md
+         (Ir.Config.update_m (Ir.SmallStep.incrpc md st) t) r2
+         match retty2 with
+         | Ir.ity retty =>
+             match Ir.Config.get_val st opptr2 with
+             | Some (Ir.ptr p0) => Ir.num (Ir.SmallStep.p2N p0 t retty)
+             | _ => Ir.poison
+             end
+         | Ir.ptrty _ => Ir.poison
+         end))
+    ([Ir.e_none],
+    Ir.SmallStep.sr_success Ir.e_none
+      (Ir.SmallStep.incrpc md'
+         (Ir.Config.update_m
+            (Ir.SmallStep.update_reg_and_incrpc md' st r2
+               match retty2 with
+               | Ir.ity retty =>
+                   match Ir.Config.get_val st opptr2 with
+                   | Some (Ir.ptr p0) =>
+                       Ir.num (Ir.SmallStep.p2N p0 (Ir.Config.m st) retty)
+                   | _ => Ir.poison
+                   end
+               | Ir.ptrty _ => Ir.poison
+               end) t))) *)
+Lemma nstep_eq_trans_3:
+  forall tr e md1 md2 sr' st r v m,
+    nstep_eq (tr, Ir.SmallStep.sr_success e
+            (Ir.SmallStep.update_reg_and_incrpc md1
+               (Ir.Config.update_m (Ir.SmallStep.incrpc md1 st) m) r v)) sr'
+    <->
+    nstep_eq (tr, Ir.SmallStep.sr_success e
+            (Ir.SmallStep.incrpc md2
+              (Ir.Config.update_m
+                (Ir.SmallStep.update_reg_and_incrpc md2 st r v) m))) sr'.
+Proof.
+  intros.
+  split.
+  { intros H.
+    inv H.
+    constructor.
+    assumption.
+    rewrite <- update_reg_and_incrpc_update_m.
+    rewrite incrpc_update_reg_and_incrpc.
+    rewrite incrpc_update_m.
+    apply Ir.Config.eq_wopc_trans with (c2 := (Ir.SmallStep.update_reg_and_incrpc md1
+              (Ir.Config.update_m (Ir.SmallStep.incrpc md1 st) m) r v));
+      try assumption.
+    unfold Ir.SmallStep.update_reg_and_incrpc.
+    apply config_eq_wopc_incrpc.
+    apply Ir.Config.eq_wopc_symm.
+    apply config_eq_wopc_incrpc.
+    apply Ir.Config.eq_wopc_update_rval.
+    apply eq_wopc_update_m.
+    apply config_eq_wopc_incrpc.
+    apply Ir.Config.eq_wopc_symm.
+    apply config_eq_wopc_incrpc.
+    apply Ir.Config.eq_wopc_refl.
+  }
+  { intros H.
+    inv H.
+    constructor.
+    assumption.
+    rewrite update_reg_and_incrpc_update_m.
+    rewrite <- incrpc_update_reg_and_incrpc.
+    rewrite <- incrpc_update_m.
+    apply Ir.Config.eq_wopc_trans with
+        (c2 := (Ir.SmallStep.incrpc md2
+              (Ir.Config.update_m (Ir.SmallStep.update_reg_and_incrpc md2 st r v) m)));
+      try assumption.
+    unfold Ir.SmallStep.update_reg_and_incrpc.
+    apply config_eq_wopc_incrpc.
+    apply Ir.Config.eq_wopc_symm.
+    apply config_eq_wopc_incrpc.
+    apply eq_wopc_update_m.
+    apply config_eq_wopc_incrpc.
+    apply Ir.Config.eq_wopc_symm.
+    apply config_eq_wopc_incrpc.
+    apply Ir.Config.eq_wopc_update_rval.
+    apply Ir.Config.eq_wopc_refl.
+  }
+Qed.
 
 (***************************************************
         Definition of valid reordering.
@@ -1023,6 +1117,113 @@ Proof.
     + inv HGW0.
 Admitted.
 
+
+
+(********************************************
+   REORDERING of free - ptrtoint:
+
+   free opptr1
+   r2 = ptrtoint opptr2 ty2
+   ->
+   r2 = ptrtoint opptr2 ty2
+   free opptr1
+**********************************************)
+
+Theorem reorder_free_ptrtoint:
+  forall i1 i2 r2 opptr1 (opptr2:Ir.op) retty2
+         (HINST1:i1 = Ir.Inst.ifree opptr1)
+         (HINST2:i2 = Ir.Inst.iptrtoint r2 opptr2 retty2),
+    inst_reordering_valid i1 i2.
+Proof.
+  intros.
+  unfold inst_reordering_valid.
+  intros.
+  destruct HLOCATE as [st_next [HLOCATE1 [HLOCATE_NEXT HLOCATE2]]].
+  destruct HLOCATE' as [st_next' [HLOCATE1' [HLOCATE_NEXT' HLOCATE2']]].
+  inv HSTEP.
+  - (* free succeed *)
+    inv HSUCC; try (inv HSUCC0; fail).
+    inv HSINGLE0; try congruence.
+    unfold Ir.SmallStep.inst_det_step in HNEXT.
+    rewrite HLOCATE1 in HNEXT.
+    des_ifs.
+    inv HSINGLE; try
+      (rewrite incrpc_update_m in HCUR; rewrite cur_inst_update_m in HCUR;
+       apply incrpc'_incrpc in HLOCATE_NEXT; rewrite HLOCATE_NEXT in HLOCATE2;
+       congruence; fail).
+    rewrite incrpc_update_m in HNEXT.
+    unfold Ir.SmallStep.inst_det_step in HNEXT.
+    rewrite cur_inst_update_m in HNEXT.
+    apply incrpc'_incrpc in HLOCATE_NEXT.
+    rewrite HLOCATE_NEXT in HLOCATE2.
+    rewrite HLOCATE2 in HNEXT.
+    inv HNEXT.
+    eexists. split.
+    { eapply Ir.SmallStep.ns_success.
+      eapply Ir.SmallStep.ns_one.
+      eapply Ir.SmallStep.s_det.
+      unfold Ir.SmallStep.inst_det_step.
+      rewrite HLOCATE1'.
+      reflexivity.
+      eapply Ir.SmallStep.s_det.
+      unfold Ir.SmallStep.inst_det_step.
+      rewrite cur_inst_update_reg_and_incrpc.
+      apply incrpc'_incrpc in HLOCATE_NEXT'.
+      rewrite HLOCATE_NEXT' in HLOCATE2'.
+      rewrite HLOCATE2'.
+      rewrite get_val_independent2.
+      rewrite m_update_reg_and_incrpc.
+      rewrite Heq.
+      rewrite Heq0.
+      reflexivity.
+      destruct opptr1. intros H0. congruence.
+      assert (r <> r2). admit. congruence.
+    }
+    { rewrite get_val_update_m.
+      rewrite get_val_incrpc.
+      rewrite nstep_eq_trans_3 with (md2 := md').
+      destruct retty2.
+      - destruct (Ir.Config.get_val st opptr2) eqn:Hopptr2.
+        + destruct v;try apply nstep_eq_refl.
+          admit. (* p2N does not change after free *)
+        + apply nstep_eq_refl.
+      - apply nstep_eq_refl.
+    }
+  - (* free never rases oom. *)
+    inv HOOM.
+    + exfalso. exploit (no_alloc_no_oom (Ir.Inst.ifree opptr1)).
+      reflexivity. eapply HLOCATE1. eassumption. intros. assumption.
+    + inv HSUCC.
+    + inv HOOM0.
+  - (* free goes wrong. *)
+    inv HGW.
+    + inv HSINGLE; try congruence.
+      unfold Ir.SmallStep.inst_det_step in HNEXT.
+      rewrite HLOCATE1 in HNEXT.
+      eexists.
+      split.
+      { eapply Ir.SmallStep.ns_success.
+        eapply Ir.SmallStep.ns_one.
+        eapply Ir.SmallStep.s_det.
+        unfold Ir.SmallStep.inst_det_step.
+        rewrite HLOCATE1'.
+        reflexivity.
+        eapply Ir.SmallStep.s_det.
+        apply incrpc'_incrpc in HLOCATE_NEXT'.
+        rewrite HLOCATE_NEXT' in HLOCATE2'.
+        unfold Ir.SmallStep.inst_det_step.
+        rewrite cur_inst_update_reg_and_incrpc.
+        rewrite HLOCATE2'.
+        rewrite get_val_independent2.
+        rewrite m_update_reg_and_incrpc.
+        des_ifs.
+        destruct opptr1. intros H0. congruence.
+        assert (r <> r2). admit. congruence.
+      }
+      { constructor. reflexivity. }
+    + inv HSUCC.
+    + inv HGW0.
+Admitted.
 
 End Reordering.
 
