@@ -8,6 +8,6 @@ all:
 	coqc State.v
 	coqc Behaviors.v
 	coqc WellTyped.v
-	coqc SmallStep.v
+	coqc SmallStep.v SmallStepTest.v
 	coqc Refinement.v
 	coqc Reordering.v

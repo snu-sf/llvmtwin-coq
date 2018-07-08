@@ -189,24 +189,34 @@ Definition icmp_eq_ptr (p1 p2:Ir.ptrval) (m:Ir.Memory.t): option bool :=
     Some (N.eqb (p2N p1 m Ir.PTRSZ) (N.of_nat o2))
   end.
 
-(* p1 <= p2 *)
-Definition icmp_ule_ptr (p1 p2:Ir.ptrval) (m:Ir.Memory.t): option bool :=
+Definition icmp_ule_ptr_nondet_cond (p1 p2:Ir.ptrval) (m:Ir.Memory.t): bool :=
   match (p1, p2) with
   | (Ir.plog l1 o1, Ir.plog l2 o2) =>
-    if Nat.eqb l1 l2 then
-      match (Ir.Memory.get m l1, Ir.Memory.get m l2) with
-      | (Some mb1, Some mb2) =>
-        if Nat.leb o1 (Ir.MemBlock.n mb1) && Nat.leb o2 (Ir.MemBlock.n mb2) then
-          Some (Nat.leb o1 o2)
-        else None (* nondet. value *)
-      | (_, _) => None
-      end
-    else None (* nondet. value *)
-  | (Ir.pphy o1 Is1 cid1, _) =>
-    Some (N.leb (N.of_nat o1) (p2N p2 m Ir.PTRSZ))
-  | (_, Ir.pphy o2 Is2 cid2) =>
-    Some (N.leb (p2N p1 m Ir.PTRSZ) (N.of_nat o2))
+    negb (Nat.eqb l1 l2) ||
+    match Ir.Memory.get m l1 with
+    | Some mb1 =>
+      Nat.ltb (Ir.MemBlock.n mb1) o1 && Nat.ltb (Ir.MemBlock.n mb1) o2
+    | None => false
+    end
+  | _ => false
   end.
+
+(* p1 <= p2 *)
+Definition icmp_ule_ptr (p1 p2:Ir.ptrval) (m:Ir.Memory.t): option bool :=
+  if icmp_ule_ptr_nondet_cond p1 p2 m then None
+  else Some
+    match (p1, p2) with
+    | (Ir.plog l1 o1, Ir.plog l2 o2) =>
+      (* always l1 = l2 *)
+      match (Ir.Memory.get m l1) with
+      | Some mb1 => Nat.leb o1 o2
+      | None => false (* unreachable *)
+      end
+    | (Ir.pphy o1 Is1 cid1, _) =>
+      N.leb (N.of_nat o1) (p2N p2 m Ir.PTRSZ)
+    | (_, Ir.pphy o2 Is2 cid2) =>
+      N.leb (p2N p1 m Ir.PTRSZ) (N.of_nat o2)
+    end.
 
 Definition binop (bopc:Ir.Inst.bopcode) (i1 i2:N) (bsz:nat):N :=
   match bopc with
@@ -414,26 +424,14 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
       (HNONDET:icmp_eq_ptr_nondet_cond p1 p2 (Ir.Config.m c) = true),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
 
-| s_icmp_ule_nondet_diff: forall c i r opty op1 op2 mb1 mb2 l1 l2 o1 o2 res
+| s_icmp_ule_nondet: forall c i r opty op1 op2 p1 p2 res
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
-      (HOP1:Some (Ir.ptr (Ir.plog l1 o1)) = Ir.Config.get_val c op1)
-      (HOP2:Some (Ir.ptr (Ir.plog l2 o2)) = Ir.Config.get_val c op2)
-      (HMB1:Some mb1 = Ir.Memory.get (Ir.Config.m c) l1)
-      (HMB2:Some mb2 = Ir.Memory.get (Ir.Config.m c) l2)
-      (HDIFF:~l1 = l2)
-      (HNONDET:res = 0%N \/ res = 1%N),
+      (HOP1:Some (Ir.ptr p1) = Ir.Config.get_val c op1)
+      (HOP2:Some (Ir.ptr p2) = Ir.Config.get_val c op2)
+      (HNONDET:icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m c) = true),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
 
-| s_icmp_ule_nondet_same: forall c i r opty op1 op2 mb l o1 o2 res
-      (HCUR:Some i = Ir.Config.cur_inst md c)
-      (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
-      (HOP1:Some (Ir.ptr (Ir.plog l o1)) = Ir.Config.get_val c op1)
-      (HOP2:Some (Ir.ptr (Ir.plog l o2)) = Ir.Config.get_val c op2)
-      (HMB:Some mb = Ir.Memory.get (Ir.Config.m c) l)
-      (HNOTINB:~(o1 <= Ir.MemBlock.n mb /\ o2 <= Ir.MemBlock.n mb))
-      (HNONDET:res = 0%N \/ res = 1%N),
-    inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
 .
 
 (* Result of N small steps on instructions. *)
@@ -952,7 +950,6 @@ Proof.
     rewrite HINST in HNOMEMCHG. inversion HNOMEMCHG.
   - (* iicmp_eq, nondet *) apply no_mem_change_after_update.
   - (* icmp_ule, nondet *) apply no_mem_change_after_update.
-  - (* icmp_ule, nondet 2 *) apply no_mem_change_after_update.
 Qed.
 
 End SMALLSTEP.
