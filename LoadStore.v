@@ -34,7 +34,7 @@ Definition get_deref_blks_phyptr (m:Ir.Memory.t) (o:nat) (Is:list nat)
 Definition get_deref (m:Ir.Memory.t) (p:Ir.ptrval) (sz:nat)
 : list (Ir.blockid * Ir.MemBlock.t * nat) :=
   match p with
-  | Ir.plog (bid, ofs) => (* Logical pointer *)
+  | Ir.plog bid ofs => (* Logical pointer *)
     match (Ir.Memory.get m bid) with
     | None => nil (* No such block *)
     | Some blk =>
@@ -43,7 +43,7 @@ Definition get_deref (m:Ir.Memory.t) (p:Ir.ptrval) (sz:nat)
         (bid, blk, ofs)::nil
       else nil
     end
-  | Ir.pphy (o, Is, cid) => (* Physical pointer *)
+  | Ir.pphy o Is cid => (* Physical pointer *)
     List.map (fun mb => (mb.(fst), mb.(snd), o - Ir.MemBlock.addr mb.(snd)))
              (get_deref_blks_phyptr m o Is cid sz)
   end.
@@ -99,14 +99,16 @@ Definition log_to_phy (m:Ir.Memory.t) (bid:Ir.blockid) (ofs:nat): option Ir.ptrv
   match Ir.Memory.get m bid with
   | None => None
   | Some bb => Some (Ir.pphy
-     ((Nat.modulo (Ir.MemBlock.addr bb + ofs) Ir.MEMSZ), nil, None))
+     (Nat.modulo (Ir.MemBlock.addr bb + ofs) Ir.MEMSZ)
+                    nil
+                    None)
   end.
 
 (* Convert a pointer to physical pointer. *)
 Definition ptr_to_phy (m:Ir.Memory.t) (p:Ir.ptrval): option Ir.ptrval :=
   match p with
-  | Ir.plog (bid, ofs) => log_to_phy m bid ofs
-  | Ir.pphy (o, Is, cid) => Some (Ir.pphy (o, nil, None))
+  | Ir.plog bid ofs => log_to_phy m bid ofs
+  | Ir.pphy o Is cid => Some (Ir.pphy o nil None)
   end.
 
 
@@ -119,7 +121,7 @@ Definition ptr_to_phy (m:Ir.Memory.t) (p:Ir.ptrval): option Ir.ptrval :=
    or returns nothing. *)
 Theorem get_deref_log:
   forall (m:Ir.Memory.t) bid ofs sz bos blk
-         (HDEREF: get_deref m (Ir.plog (bid, ofs)) sz = bos)
+         (HDEREF: get_deref m (Ir.plog bid ofs) sz = bos)
          (HBLK: Ir.Memory.get m bid = Some blk),
     bos = (bid, blk, ofs)::nil \/ bos = nil.
 Proof.
@@ -134,7 +136,7 @@ Qed.
 
 Lemma get_deref_log_inv:
   forall (m:Ir.Memory.t) bid ofs sz blk
-         (HDEREF: exists e, get_deref m (Ir.plog (bid, ofs)) sz = e::nil)
+         (HDEREF: exists e, get_deref m (Ir.plog bid ofs) sz = e::nil)
          (HBLK: Ir.Memory.get m bid = Some blk),
     Ir.MemBlock.alive blk &&
     Ir.MemBlock.inbounds ofs blk &&
@@ -163,9 +165,8 @@ Lemma get_deref_inv:
     Ir.MemBlock.inbounds (ofs + sz) blk = true.
 Proof.
   intros.
-  destruct p.
+  destruct p as [b n | o Is cid].
   - apply get_deref_log_inv with (m := m) (bid := bid).
-    destruct p.
     assert (b = bid /\ n = ofs).
     { unfold get_deref in HDEREF.
       destruct (Ir.Memory.get m b).
@@ -176,8 +177,7 @@ Proof.
     destruct H as [H1 H2]. rewrite H1, H2 in HDEREF.
     exists (bid, blk, ofs). assumption.
     assumption.
-  - destruct p as [[o Is] cid].
-    unfold get_deref in HDEREF.
+  - unfold get_deref in HDEREF.
     unfold get_deref_blks_phyptr in HDEREF.
     remember (Ir.Memory.inbounds_blocks2 m (o::o+sz::Is)) as res.
     symmetry in Heqres.
@@ -353,9 +353,8 @@ Theorem get_deref_singleton:
   \/ (bos = nil).
 Proof.
   intros.
-  destruct p.
+  destruct p as [bid ofs | o Is cid].
   - (* logical ptr *)
-    destruct p as [bid ofs].
     unfold get_deref in HDEREF.
     destruct (Ir.Memory.get m bid) eqn:HGET.
     remember (Ir.MemBlock.alive t && Ir.MemBlock.inbounds ofs t &&
@@ -366,8 +365,6 @@ Proof.
     + right. reflexivity.
     + right. congruence.
   - unfold get_deref in HDEREF.
-    destruct p as (p', cid).
-    destruct p' as (o, Is).
     remember (get_deref_blks_phyptr m o Is cid sz) as blks.
     assert ((exists bo0, blks = bo0::nil /\
                          Ir.Memory.get m bo0.(fst) = Some bo0.(snd))
@@ -442,7 +439,7 @@ Qed.
 Theorem get_deref_log_phy_same:
   forall (m:Ir.Memory.t) (m_wf:Ir.Memory.wf m) bid ofs p' (sz:nat) bo
          (HSZ: 0 < sz)
-         (HDEREF: get_deref m (Ir.plog (bid, ofs)) sz = bo::nil)
+         (HDEREF: get_deref m (Ir.plog bid ofs) sz = bo::nil)
          (HP':log_to_phy m bid ofs  = Some p'),
     get_deref m p' sz = bo::nil.
 Proof.

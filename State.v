@@ -212,7 +212,7 @@ Definition get_val (c:t) (o:Ir.op): option Ir.val:=
     | Ir.cnum cty cn => Ir.num cn
     | Ir.cnullptr cty => Ir.ptr Ir.NULL
     | Ir.cpoison cty => Ir.poison
-    | Ir.cglb glbvarid => Ir.ptr (Ir.plog (glbvarid, 0))
+    | Ir.cglb glbvarid => Ir.ptr (Ir.plog glbvarid 0)
     end
   | Ir.opreg regid => get_rval c regid
   end.
@@ -243,13 +243,13 @@ Structure wf (c:t) := mk_wf
        bogus block id. *)
     wf_no_bogus_ptr:
       forall op l ofs
-             (HGETVAL:get_val c op = Some (Ir.ptr (Ir.plog (l, ofs)))),
+             (HGETVAL:get_val c op = Some (Ir.ptr (Ir.plog l ofs))),
         l < c.(m).(Ir.Memory.fresh_bid);
     (* wf_no_bogus_ptr_mem: memory has no pointer value which has
        bogus block id. *)
     wf_no_bogus_ptr_mem:
       forall p retty l ofs
-             (HGETVAL:Ir.load_val c.(m) p retty = Ir.ptr (Ir.plog (l, ofs))),
+             (HGETVAL:Ir.load_val c.(m) p retty = Ir.ptr (Ir.plog l ofs)),
         l < c.(m).(Ir.Memory.fresh_bid)
     (* WIP - more properties will be added later. *)
   }.

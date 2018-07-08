@@ -25,25 +25,25 @@ Inductive ptrval :=
 -- Note that 0 <= o < MEMSZ is kept as invariant of memory.
 -- Note: no address space
 *)
-| plog: blockid * nat -> ptrval
+| plog: blockid -> nat -> ptrval
 (*
 - Phy(o, I, cid) where 0 <= o, i(¡ô I) < MEMSZ
 -- Note that 0 <= o < MEMSZ is kept as invariant of memory.
 -- Note: no address space
 *)
-| pphy: nat * list nat * option callid -> ptrval.
+| pphy: nat -> list nat -> option callid -> ptrval.
 
 
 (* NULL pointer. *)
-Definition NULL := pphy (0, nil, None).
+Definition NULL := pphy 0 nil None.
 
 
 (* Are two pointers equivalent? *)
 Definition ptr_eqb (p1 p2:ptrval): bool :=
   match (p1, p2) with
-  | (plog (bid1, ofs1), plog (bid2, ofs2)) =>
+  | (plog bid1 ofs1, plog bid2 ofs2) =>
     Nat.eqb bid1 bid2 && Nat.eqb ofs1 ofs2
-  | (pphy (ofs1, I1, cid1), pphy (ofs2, I2, cid2)) =>
+  | (pphy ofs1 I1 cid1, pphy ofs2 I2 cid2) =>
     Nat.eqb ofs1 ofs2 &&
     @list_inclb nat Nat.eq_dec I1 I2 &&
     @list_inclb nat Nat.eq_dec I2 I1 &&
@@ -60,10 +60,8 @@ Lemma ptr_eqb_refl:
 Proof.
   intros.
   destruct p; unfold ptr_eqb.
-  - destruct p.
-    repeat (rewrite Nat.eqb_refl). reflexivity.
-  - destruct p. destruct p.
-    rewrite Nat.eqb_refl.
+  - repeat (rewrite Nat.eqb_refl). reflexivity.
+  - rewrite Nat.eqb_refl.
     rewrite list_inclb_refl.
     destruct o. rewrite Nat.eqb_refl. reflexivity. reflexivity.
 Qed.

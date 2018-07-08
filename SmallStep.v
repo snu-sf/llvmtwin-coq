@@ -78,13 +78,13 @@ Inductive step_res :=
 (* Convert a pointer into N. *)
 Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):N :=
   match p with
-  | Ir.plog (l, o) =>
+  | Ir.plog l o =>
     match Ir.log_to_phy m l o with
-    | Some (Ir.pphy (o', _, _)) =>
+    | Some (Ir.pphy o' _ _) =>
       twos_compl2 o' sz
     | _ => 0%N
     end
-  | Ir.pphy (o, _, _) =>
+  | Ir.pphy o _ _ =>
     twos_compl2 o sz
   end.
 
@@ -92,15 +92,15 @@ Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):N :=
 Definition psub p1 p2 m bsz :=
   let s := N.shiftl 2%N (N.of_nat bsz) in
   match (p1, p2) with
-  | (Ir.plog (l1, o1), Ir.plog (l2, o2)) =>
+  | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     if Nat.eqb l1 l2 then
       Ir.num (twos_compl_sub (N.of_nat o1) (N.of_nat o2) bsz)
     else Ir.poison
-  | (Ir.pphy (o1, _, _), Ir.plog _) =>
+  | (Ir.pphy o1 _ _, Ir.plog _ _) =>
     Ir.num (twos_compl_sub (N.of_nat o1) (p2N p2 m bsz) bsz)
-  | (Ir.plog _, Ir.pphy (o2, _, _)) =>
+  | (Ir.plog _ _, Ir.pphy o2 _ _) =>
     Ir.num (twos_compl_sub (p2N p1 m bsz) (N.of_nat o2) bsz)
-  | (Ir.pphy (o1, _, _), Ir.pphy (o2, _, _)) =>
+  | (Ir.pphy o1 _ _, Ir.pphy o2 _ _) =>
     Ir.num (twos_compl_sub (N.of_nat o1) (N.of_nat o2) bsz)
   end.
 
@@ -108,38 +108,38 @@ Definition psub p1 p2 m bsz :=
 Definition gep (p:Ir.ptrval) (idx0:N) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir.val :=
   let idx := N.mul idx0 (N.of_nat (Ir.ty_bytesz t)) in
   match p with
-  | Ir.plog (l, o) =>
+  | Ir.plog l o =>
     let o' := N.to_nat (twos_compl_add (N.of_nat o) idx Ir.PTRSZ) in
     if inb then
       match (Ir.Memory.get m l) with
       | Some blk =>
         if Ir.MemBlock.inbounds o blk &&
-           Ir.MemBlock.inbounds o' blk then Ir.ptr (Ir.plog (l, o'))
+           Ir.MemBlock.inbounds o' blk then Ir.ptr (Ir.plog l o')
         else Ir.poison (* out of bounds *)
       | None => Ir.poison (* unreachable *)
       end
-    else Ir.ptr (Ir.plog (l, o'))
-  | Ir.pphy (o, Is, cid) =>
+    else Ir.ptr (Ir.plog l o')
+  | Ir.pphy o Is cid =>
     let o' := N.to_nat (twos_compl_add (N.of_nat o) idx Ir.PTRSZ) in
     if inb then
       if N.ltb idx (N.shiftl 1 (N.sub (N.of_nat Ir.PTRSZ) 1%N)) then
         (* Added idx is positive. *)
         if Nat.ltb o' Ir.MEMSZ then
           (* Should not overflow Ir.MEMSZ *)
-          Ir.ptr (Ir.pphy (o', o::o'::Is, cid))
+          Ir.ptr (Ir.pphy o' (o::o'::Is) cid)
         else Ir.poison
       else
         (* idx is negative: no constraint. *)
-        Ir.ptr (Ir.pphy (o', o::o'::Is, cid))
+        Ir.ptr (Ir.pphy o' (o::o'::Is) cid)
     else
-      Ir.ptr (Ir.pphy (o', Is, cid))
+      Ir.ptr (Ir.pphy o' Is cid)
   end.
 
 (* free operation. *)
 Definition free p m: option (Ir.Memory.t) :=
   match p with
-  | Ir.plog (l, 0) => Ir.Memory.free m l
-  | Ir.pphy (o, Is, cid) =>
+  | Ir.plog l 0 => Ir.Memory.free m l
+  | Ir.pphy o Is cid =>
     match (Ir.Memory.zeroofs_block m o) with
     | None => None
     | Some (bid, mb) =>
@@ -150,34 +150,49 @@ Definition free p m: option (Ir.Memory.t) :=
   | _ => None
   end.
 
+Definition icmp_eq_ptr_nondet_cond (p1 p2:Ir.ptrval) (m:Ir.Memory.t): bool :=
+  match (p1, p2) with
+  | (Ir.plog l1 o1, Ir.plog l2 o2) =>
+    match (Ir.Memory.get m l1, Ir.Memory.get m l2) with
+    | (Some mb1, Some mb2) =>
+      (negb (Nat.eqb l1 l2)) &&
+      ((Nat.eqb o1 mb1.(Ir.MemBlock.n) && Nat.eqb o2 0) ||
+       (mb1.(Ir.MemBlock.n) <? o1) ||
+       (Nat.eqb o1 0 && Nat.eqb o2 mb2.(Ir.MemBlock.n)) ||
+       (mb2.(Ir.MemBlock.n) <? o2) ||
+       (* even if offsets are inbounds, comparison result is nondeterministic
+          if lifetimes are disjoint. *)
+       (match (mb1.(Ir.MemBlock.r), mb2.(Ir.MemBlock.r)) with
+        | ((b1, None), (b2, None)) => false
+        | ((b1, None), (b2, Some e2)) => e2 <? b1
+        | ((b1, Some e1), (b2, None)) => e1 <? b2
+        | ((b1, Some e1), (b2, Some e2)) => (e1 <? b2) || (e2 <? b1)
+        end))
+    | (_, _) => false
+    end
+  | (_, _) => false
+  end.
+
 (* p1 == p2 *)
 Definition icmp_eq_ptr (p1 p2:Ir.ptrval) (m:Ir.Memory.t): option bool :=
   match (p1, p2) with
-  | (Ir.plog (l1, o1), Ir.plog (l2, o2)) =>
+  | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     if Nat.eqb l1 l2 then
       (* ICMP-PTR-LOGICAL *)
       Some (Nat.eqb o1 o2)
     else
-      match (Ir.Memory.get m l1, Ir.Memory.get m l2) with
-      | (Some mb1, Some mb2) =>
-        (* ICMP-PTR-LOGICAL' *)
-        if Nat.leb o1 (Ir.MemBlock.n mb1) && Nat.leb o2 (Ir.MemBlock.n mb2) then
-          Some false
-        else
-          (* ICMP-PTR-LOGICAL-NONDET-TRUE *)
-          None
-      | (_, _) => None
-      end
-  | (Ir.pphy (o1, Is1, cid1), _) =>
+      if icmp_eq_ptr_nondet_cond p1 p2 m then None
+      else Some false
+  | (Ir.pphy o1 Is1 cid1, _) =>
     Some (N.eqb (N.of_nat o1) (p2N p2 m Ir.PTRSZ))
-  | (_, Ir.pphy (o2, Is2, cid2)) =>
+  | (_, Ir.pphy o2 Is2 cid2) =>
     Some (N.eqb (p2N p1 m Ir.PTRSZ) (N.of_nat o2))
   end.
 
 (* p1 <= p2 *)
 Definition icmp_ule_ptr (p1 p2:Ir.ptrval) (m:Ir.Memory.t): option bool :=
   match (p1, p2) with
-  | (Ir.plog (l1, o1), Ir.plog (l2, o2)) =>
+  | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     if Nat.eqb l1 l2 then
       match (Ir.Memory.get m l1, Ir.Memory.get m l2) with
       | (Some mb1, Some mb2) =>
@@ -187,9 +202,9 @@ Definition icmp_ule_ptr (p1 p2:Ir.ptrval) (m:Ir.Memory.t): option bool :=
       | (_, _) => None
       end
     else None (* nondet. value *)
-  | (Ir.pphy (o1, Is1, cid1), _) =>
+  | (Ir.pphy o1 Is1 cid1, _) =>
     Some (N.leb (N.of_nat o1) (p2N p2 m Ir.PTRSZ))
-  | (_, Ir.pphy (o2, Is2, cid2)) =>
+  | (_, Ir.pphy o2 Is2 cid2) =>
     Some (N.leb (p2N p1 m Ir.PTRSZ) (N.of_nat o2))
   end.
 
@@ -308,7 +323,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         match retty with
         | Ir.ptrty retty =>
           match (Ir.Config.get_val c opint) with
-          | Some (Ir.num n) => Ir.ptr (Ir.pphy (N.to_nat n, nil, None))
+          | Some (Ir.num n) => Ir.ptr (Ir.pphy (N.to_nat n) nil None)
           | _ => Ir.poison
           end
         | _ => Ir.poison
@@ -325,11 +340,6 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
       (* Integer comparison *)
       | (Some (Ir.num n1), Some (Ir.num n2)) =>
         Some (sr_success Ir.e_none (update_reg_and_incrpc c r (to_num (N.eqb n1 n2))))
-      (* Comparison with poison *)
-      | (Some (Ir.poison), _) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-      | (_, Some (Ir.poison)) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
       (* Pointer comparison *)
       | (Some (Ir.ptr p1), Some (Ir.ptr p2)) =>
         match (icmp_eq_ptr p1 p2 (Ir.Config.m c)) with
@@ -345,11 +355,6 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
       (* Integer comparison *)
       | (Some (Ir.num n1), Some (Ir.num n2)) =>
         Some (sr_success Ir.e_none (update_reg_and_incrpc c r (to_num (N.leb n1 n2))))
-      (* Comparison with poison *)
-      | (Some Ir.poison, _) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
-      | (_, Some Ir.poison) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
       (* Comparison with pointer *)
       | (Some (Ir.ptr p1), Some (Ir.ptr p2)) =>
         match (icmp_ule_ptr p1 p2 (Ir.Config.m c)) with
@@ -399,25 +404,21 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
                                      (Ir.SYSALIGN) contents P),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc
                                            (Ir.Config.update_m c m') r
-                    (Ir.ptr (Ir.plog (l, 0)))))
+                    (Ir.ptr (Ir.plog l 0))))
 
-| s_icmp_eq_nondet: forall c i r opty op1 op2 mb1 mb2 l1 o1 l2 o2 res
+| s_icmp_eq_nondet: forall c i r opty op1 op2 p1 p2 res
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.iicmp_eq r opty op1 op2)
-      (HOP1:Some (Ir.ptr (Ir.plog (l1, o1))) = Ir.Config.get_val c op1)
-      (HOP2:Some (Ir.ptr (Ir.plog (l2, o2))) = Ir.Config.get_val c op2)
-      (HMB1:Some mb1 = Ir.Memory.get (Ir.Config.m c) l1)
-      (HMB2:Some mb2 = Ir.Memory.get (Ir.Config.m c) l2)
-      (HDIFF:~l1 = l2)
-      (HNOTINB:~(o1 < Ir.MemBlock.n mb1 /\ o2 < Ir.MemBlock.n mb2))
-      (HNONDET:res = 0%N \/ res = 1%N),
+      (HOP1:Some (Ir.ptr p1) = Ir.Config.get_val c op1)
+      (HOP2:Some (Ir.ptr p2) = Ir.Config.get_val c op2)
+      (HNONDET:icmp_eq_ptr_nondet_cond p1 p2 (Ir.Config.m c) = true),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
 
 | s_icmp_ule_nondet_diff: forall c i r opty op1 op2 mb1 mb2 l1 l2 o1 o2 res
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
-      (HOP1:Some (Ir.ptr (Ir.plog (l1, o1))) = Ir.Config.get_val c op1)
-      (HOP2:Some (Ir.ptr (Ir.plog (l2, o2))) = Ir.Config.get_val c op2)
+      (HOP1:Some (Ir.ptr (Ir.plog l1 o1)) = Ir.Config.get_val c op1)
+      (HOP2:Some (Ir.ptr (Ir.plog l2 o2)) = Ir.Config.get_val c op2)
       (HMB1:Some mb1 = Ir.Memory.get (Ir.Config.m c) l1)
       (HMB2:Some mb2 = Ir.Memory.get (Ir.Config.m c) l2)
       (HDIFF:~l1 = l2)
@@ -427,8 +428,8 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
 | s_icmp_ule_nondet_same: forall c i r opty op1 op2 mb l o1 o2 res
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
-      (HOP1:Some (Ir.ptr (Ir.plog (l, o1))) = Ir.Config.get_val c op1)
-      (HOP2:Some (Ir.ptr (Ir.plog (l, o2))) = Ir.Config.get_val c op2)
+      (HOP1:Some (Ir.ptr (Ir.plog l o1)) = Ir.Config.get_val c op1)
+      (HOP2:Some (Ir.ptr (Ir.plog l o2)) = Ir.Config.get_val c op2)
       (HMB:Some mb = Ir.Memory.get (Ir.Config.m c) l)
       (HNOTINB:~(o1 <= Ir.MemBlock.n mb /\ o2 <= Ir.MemBlock.n mb))
       (HNONDET:res = 0%N \/ res = 1%N),
@@ -642,7 +643,7 @@ Lemma update_rval_wf:
   forall c c' r v
          (HWF:Ir.Config.wf md c)
          (HC':c' = Ir.Config.update_rval c r v)
-         (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog (l, o))),
+         (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
              l < c.(Ir.Config.m).(Ir.Memory.fresh_bid)),
     Ir.Config.wf md c'.
 Proof.
@@ -691,7 +692,7 @@ Lemma update_reg_and_incrpc_wf:
   forall c c' v r
          (HWF:Ir.Config.wf md c)
          (HC':c' = update_reg_and_incrpc c r v)
-         (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog (l, o))),
+         (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
              l < c.(Ir.Config.m).(Ir.Memory.fresh_bid)),
     Ir.Config.wf md c'.
 Proof.
