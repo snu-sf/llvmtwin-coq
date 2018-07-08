@@ -385,10 +385,9 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
 | s_det: forall c sr
       (HNEXT:Some sr = inst_det_step c), inst_step c sr
 
-| s_malloc_zero: forall c i r szty opsz
+| s_malloc_null: forall c i r szty opsz
       (HCUR:Some i = Ir.Config.cur_inst md c)
-      (HINST:i = Ir.Inst.imalloc r szty opsz)
-      (HZERO:Ir.Config.get_val c opsz = Some (Ir.num 0%N)),
+      (HINST:i = Ir.Inst.imalloc r szty opsz),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.ptr Ir.NULL)))
 
 | s_malloc_oom: forall c i r szty opsz nsz

@@ -903,12 +903,9 @@ Proof.
         eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
         rewrite HLOCATE1'.  reflexivity.
         (* and, run malloc. *)
-        eapply Ir.SmallStep.s_malloc_zero. rewrite cur_inst_update_reg_and_incrpc.
+        eapply Ir.SmallStep.s_malloc_null. rewrite cur_inst_update_reg_and_incrpc.
         apply incrpc'_incrpc in HLOCATE_NEXT'. rewrite HLOCATE_NEXT' in HLOCATE2'. rewrite HLOCATE2'. reflexivity.
         reflexivity.
-        destruct opptr1. rewrite get_val_const_update_reg_and_incrpc. assumption.
-        rewrite get_val_independent. assumption. 
-        admit. (* Impossible syntax *)
       * rewrite nstep_eq_trans_1. apply nseq_success. reflexivity.
         destruct opptr2. rewrite get_val_const_update_reg_and_incrpc. rewrite m_update_reg_and_incrpc.
         apply Ir.Config.eq_wopc_refl.
@@ -1027,7 +1024,7 @@ Proof.
     inv HSINGLE; try congruence.
     + unfold Ir.SmallStep.inst_det_step in HNEXT.
       rewrite HCUR' in HNEXT. rewrite HLOCATE2 in HNEXT. inv HNEXT.
-    + (* malloc(0) *)
+    + (* malloc returns null *)
       rewrite HCUR' in HCUR. rewrite HLOCATE2 in HCUR. inv HCUR.
       inv HSINGLE0; try congruence.
       unfold Ir.SmallStep.inst_det_step in HNEXT.
@@ -1037,13 +1034,9 @@ Proof.
         eapply Ir.SmallStep.ns_success.
         {
           eapply Ir.SmallStep.ns_one.
-          eapply Ir.SmallStep.s_malloc_zero.
+          eapply Ir.SmallStep.s_malloc_null.
           rewrite HLOCATE1'. reflexivity. reflexivity.
-          rewrite get_val_independent2 in HZERO. assumption.
-          destruct opptr2. intro H. inversion H.
-          assert (r <> r1). admit.
-          intros H0. inv H0. congruence.
-        }
+       }
         { (* ptrtoint in md' *)
           eapply Ir.SmallStep.s_det.
           unfold Ir.SmallStep.inst_det_step.
@@ -1547,10 +1540,8 @@ Proof.
         eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
         rewrite HLOCATE1'.  reflexivity.
         (* and, run malloc. *)
-        eapply Ir.SmallStep.s_malloc_zero. rewrite cur_inst_update_reg_and_incrpc.
+        eapply Ir.SmallStep.s_malloc_null. rewrite cur_inst_update_reg_and_incrpc.
         rewrite HLOCATE2'. reflexivity. reflexivity.
-        rewrite get_val_independent2. assumption.
-        destruct opptr1. congruence. assert (r <> r2). admit. congruence.
       * inv HSINGLE; try (rewrite cur_inst_update_reg_and_incrpc in HCUR; congruence).
         unfold Ir.SmallStep.inst_det_step in HNEXT.
         rewrite cur_inst_update_reg_and_incrpc in HNEXT.
@@ -1666,7 +1657,7 @@ Proof.
     inv HSINGLE; try congruence.
     + unfold Ir.SmallStep.inst_det_step in HNEXT.
       rewrite HCUR' in HNEXT. rewrite HLOCATE2 in HNEXT. inv HNEXT.
-    + (* malloc(0) *)
+    + (* malloc returns null *)
       rewrite HCUR' in HCUR. rewrite HLOCATE2 in HCUR. inv HCUR.
       inv HSINGLE0; try congruence.
       unfold Ir.SmallStep.inst_det_step in HNEXT.
@@ -1676,12 +1667,8 @@ Proof.
         eapply Ir.SmallStep.ns_success.
         {
           eapply Ir.SmallStep.ns_one.
-          eapply Ir.SmallStep.s_malloc_zero.
+          eapply Ir.SmallStep.s_malloc_null.
           rewrite HLOCATE1'. reflexivity. reflexivity.
-          rewrite get_val_independent2 in HZERO. assumption.
-          destruct opptr2. intro H. inversion H.
-          assert (r <> r1). admit.
-          intros H0. inv H0. congruence.
         }
         { (* ptrtoint in md' *)
           eapply Ir.SmallStep.s_det.
@@ -2099,10 +2086,8 @@ Proof.
         eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
         rewrite HLOCATE1'.  reflexivity.
         (* and, run malloc. *)
-        eapply Ir.SmallStep.s_malloc_zero. rewrite cur_inst_update_reg_and_incrpc.
+        eapply Ir.SmallStep.s_malloc_null. rewrite cur_inst_update_reg_and_incrpc.
         rewrite HLOCATE2'. reflexivity. reflexivity.
-        rewrite get_val_independent2. assumption.
-        destruct opptr1. congruence. assert (r <> r2). admit. congruence.
       * inv HSINGLE; try (rewrite cur_inst_update_reg_and_incrpc in HCUR; congruence).
         unfold Ir.SmallStep.inst_det_step in HNEXT.
         rewrite cur_inst_update_reg_and_incrpc in HNEXT.
@@ -2205,7 +2190,7 @@ Proof.
     inv HSINGLE; try congruence.
     + unfold Ir.SmallStep.inst_det_step in HNEXT.
       rewrite HCUR' in HNEXT. rewrite HLOCATE2 in HNEXT. inv HNEXT.
-    + (* malloc(0) *)
+    + (* malloc returns null *)
       rewrite HCUR' in HCUR. rewrite HLOCATE2 in HCUR. inv HCUR.
       inv HSINGLE0; try congruence.
       unfold Ir.SmallStep.inst_det_step in HNEXT.
@@ -2215,12 +2200,8 @@ Proof.
         eapply Ir.SmallStep.ns_success.
         {
           eapply Ir.SmallStep.ns_one.
-          eapply Ir.SmallStep.s_malloc_zero.
+          eapply Ir.SmallStep.s_malloc_null.
           rewrite HLOCATE1'. reflexivity. reflexivity.
-          rewrite get_val_independent2 in HZERO. assumption.
-          destruct opptr2. intro H. inversion H.
-          assert (r <> r1). admit.
-          intros H0. inv H0. congruence.
         }
         { (* ptrtoint in md' *)
           eapply Ir.SmallStep.s_det.
@@ -2531,8 +2512,8 @@ Ltac get_val_independent_H H opval r2 :=
     [ congruence | assert (r00 <> r2) by admit; congruence ]);
   try rewrite get_val_update_m in H.
 
-Ltac s_malloc_zero_trivial HLOCATE2' :=
-  eapply Ir.SmallStep.s_malloc_zero;
+Ltac s_malloc_null_trivial HLOCATE2' :=
+  eapply Ir.SmallStep.s_malloc_null;
   try (try (rewrite cur_inst_update_reg_and_incrpc);
        rewrite HLOCATE2');
   try reflexivity.
@@ -2709,15 +2690,14 @@ Proof.
           [ eapply Ir.SmallStep.ns_success;
             [ eapply Ir.SmallStep.ns_one;
               inst_step_det_trivial HLOCATE1' Hop21 Hop22
-            | s_malloc_zero_trivial HLOCATE2';
+            | s_malloc_null_trivial HLOCATE2';
               get_val_independent_goal opptr1 r2]
           | eapply nstep_eq_trans_1;
             [ assert (r1 <> r2) by admit; assumption | apply nstep_eq_refl ] ]).
           - des_ifs. eexists. split.
             + eapply Ir.SmallStep.ns_success. eapply Ir.SmallStep.ns_one.
               inst_step_icmp_det_ptr_trivial HLOCATE1' Hop21 Hop22 Heq.
-              s_malloc_zero_trivial HLOCATE2'.
-              get_val_independent_goal opptr1 r2.
+              s_malloc_null_trivial HLOCATE2'.
             + eapply nstep_eq_trans_1. assert (r1 <> r2) by admit.
               assumption. apply nstep_eq_refl.
         }
@@ -2725,7 +2705,7 @@ Proof.
           eexists; split;
           [ eapply Ir.SmallStep.ns_success; [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22 |
-            s_malloc_zero_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
+            s_malloc_null_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
           | eapply nstep_eq_trans_1; [ assert (r1 <> r2) by admit;
             assumption | apply nstep_eq_refl] ]).
         }
@@ -2733,7 +2713,7 @@ Proof.
           eexists; split;
           [ eapply Ir.SmallStep.ns_success; [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22 |
-            s_malloc_zero_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
+            s_malloc_null_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
           | eapply nstep_eq_trans_1; [ assert (r1 <> r2) by admit;
             assumption | apply nstep_eq_refl] ]).
         }
@@ -2741,7 +2721,7 @@ Proof.
           eexists; split;
           [ eapply Ir.SmallStep.ns_success; [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22 |
-            s_malloc_zero_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
+            s_malloc_null_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
           | eapply nstep_eq_trans_1; [ assert (r1 <> r2) by admit;
             assumption | apply nstep_eq_refl] ]).
         }
@@ -2796,8 +2776,7 @@ Proof.
           reflexivity. eapply HOP1. eapply HOP2. eassumption.
           apply incrpc'_incrpc in HLOCATE_NEXT'.
           rewrite HLOCATE_NEXT' in HLOCATE2'.
-          s_malloc_zero_trivial HLOCATE2'.
-          get_val_independent_goal opptr1 r2.
+          s_malloc_null_trivial HLOCATE2'.
         }
         { eapply nstep_eq_trans_1.
           { assert (r1 <> r2). admit. congruence. } 
@@ -2890,7 +2869,7 @@ Proof.
     inv HSINGLE; try congruence.
     + unfold Ir.SmallStep.inst_det_step in HNEXT.
       rewrite HCUR' in HNEXT. rewrite HLOCATE2 in HNEXT. inv HNEXT.
-    + (* malloc(0) *)
+    + (* malloc returns null *)
       rewrite HCUR' in HCUR. rewrite HLOCATE2 in HCUR. inv HCUR.
       apply incrpc'_incrpc in HLOCATE_NEXT'.
       rewrite HLOCATE_NEXT' in HLOCATE2'.
@@ -2903,7 +2882,7 @@ Proof.
               eexists; split;
               [ eapply Ir.SmallStep.ns_success;
                 [ eapply Ir.SmallStep.ns_one;
-                  s_malloc_zero_trivial HLOCATE1';
+                  s_malloc_null_trivial HLOCATE1';
                   get_val_independent_H HZERO opptr2 r1
                 | eapply Ir.SmallStep.s_det;
                   unfold Ir.SmallStep.inst_det_step;
@@ -2919,8 +2898,7 @@ Proof.
         { eexists. split.
           { eapply Ir.SmallStep.ns_success.
             { eapply Ir.SmallStep.ns_one.
-              s_malloc_zero_trivial HLOCATE1'.
-              get_val_independent_H HZERO opptr2 r1.
+              s_malloc_null_trivial HLOCATE1'.
             }
             { eapply Ir.SmallStep.s_det.
               unfold Ir.SmallStep.inst_det_step.
@@ -2943,8 +2921,7 @@ Proof.
         eexists. split.
         { eapply Ir.SmallStep.ns_success.
           { eapply Ir.SmallStep.ns_one.
-            s_malloc_zero_trivial HLOCATE1'.
-            get_val_independent_H HZERO opptr2 r1.
+            s_malloc_null_trivial HLOCATE1'.
           }
           { eapply Ir.SmallStep.s_icmp_eq_nondet.
             rewrite cur_inst_update_reg_and_incrpc.
@@ -3674,15 +3651,14 @@ Proof.
           [ eapply Ir.SmallStep.ns_success;
             [ eapply Ir.SmallStep.ns_one;
               inst_step_det_trivial HLOCATE1' Hop21 Hop22
-            | s_malloc_zero_trivial HLOCATE2';
+            | s_malloc_null_trivial HLOCATE2';
               get_val_independent_goal opptr1 r2]
           | eapply nstep_eq_trans_1;
             [ assert (r1 <> r2) by admit; assumption | apply nstep_eq_refl ] ]).
           - des_ifs. eexists. split.
             + eapply Ir.SmallStep.ns_success. eapply Ir.SmallStep.ns_one.
               inst_step_icmp_det_ptr_trivial HLOCATE1' Hop21 Hop22 Heq.
-              s_malloc_zero_trivial HLOCATE2'.
-              get_val_independent_goal opptr1 r2.
+              s_malloc_null_trivial HLOCATE2'.
             + eapply nstep_eq_trans_1. assert (r1 <> r2) by admit.
               assumption. apply nstep_eq_refl.
         }
@@ -3690,7 +3666,7 @@ Proof.
           eexists; split;
           [ eapply Ir.SmallStep.ns_success; [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22 |
-            s_malloc_zero_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
+            s_malloc_null_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
           | eapply nstep_eq_trans_1; [ assert (r1 <> r2) by admit;
             assumption | apply nstep_eq_refl] ]).
         }
@@ -3698,7 +3674,7 @@ Proof.
           eexists; split;
           [ eapply Ir.SmallStep.ns_success; [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22 |
-            s_malloc_zero_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
+            s_malloc_null_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
           | eapply nstep_eq_trans_1; [ assert (r1 <> r2) by admit;
             assumption | apply nstep_eq_refl] ]).
         }
@@ -3706,7 +3682,7 @@ Proof.
           eexists; split;
           [ eapply Ir.SmallStep.ns_success; [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22 |
-            s_malloc_zero_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
+            s_malloc_null_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
           | eapply nstep_eq_trans_1; [ assert (r1 <> r2) by admit;
             assumption | apply nstep_eq_refl] ]).
         }
@@ -3759,8 +3735,7 @@ Proof.
           reflexivity. eapply HOP1. eapply HOP2. eassumption.
           apply incrpc'_incrpc in HLOCATE_NEXT'.
           rewrite HLOCATE_NEXT' in HLOCATE2'.
-          s_malloc_zero_trivial HLOCATE2'.
-          get_val_independent_goal opptr1 r2.
+          s_malloc_null_trivial HLOCATE2'.
         }
         { eapply nstep_eq_trans_1.
           { assert (r1 <> r2). admit. congruence. } 
@@ -3853,7 +3828,7 @@ Proof.
     inv HSINGLE; try congruence.
     + unfold Ir.SmallStep.inst_det_step in HNEXT.
       rewrite HCUR' in HNEXT. rewrite HLOCATE2 in HNEXT. inv HNEXT.
-    + (* malloc(0) *)
+    + (* malloc returns null *)
       rewrite HCUR' in HCUR. rewrite HLOCATE2 in HCUR. inv HCUR.
       apply incrpc'_incrpc in HLOCATE_NEXT'.
       rewrite HLOCATE_NEXT' in HLOCATE2'.
@@ -3866,7 +3841,7 @@ Proof.
               eexists; split;
               [ eapply Ir.SmallStep.ns_success;
                 [ eapply Ir.SmallStep.ns_one;
-                  s_malloc_zero_trivial HLOCATE1';
+                  s_malloc_null_trivial HLOCATE1';
                   get_val_independent_H HZERO opptr2 r1
                 | eapply Ir.SmallStep.s_det;
                   unfold Ir.SmallStep.inst_det_step;
@@ -3882,8 +3857,7 @@ Proof.
         { eexists. split.
           { eapply Ir.SmallStep.ns_success.
             { eapply Ir.SmallStep.ns_one.
-              s_malloc_zero_trivial HLOCATE1'.
-              get_val_independent_H HZERO opptr2 r1.
+              s_malloc_null_trivial HLOCATE1'.
             }
             { eapply Ir.SmallStep.s_det.
               unfold Ir.SmallStep.inst_det_step.
@@ -3906,8 +3880,7 @@ Proof.
         eexists. split.
         { eapply Ir.SmallStep.ns_success.
           { eapply Ir.SmallStep.ns_one.
-            s_malloc_zero_trivial HLOCATE1'.
-            get_val_independent_H HZERO opptr2 r1.
+            s_malloc_null_trivial HLOCATE1'.
           }
           { eapply Ir.SmallStep.s_icmp_ule_nondet.
             rewrite cur_inst_update_reg_and_incrpc.
@@ -4544,7 +4517,7 @@ Proof.
         [ eapply Ir.SmallStep.ns_success;
           [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22
-          | s_malloc_zero_trivial HLOCATE2';
+          | s_malloc_null_trivial HLOCATE2';
             get_val_independent_goal opptr1 r2]
          | eapply nstep_eq_trans_1;
           [ assert (r1 <> r2) by admit; assumption | apply nstep_eq_refl ] ]).
@@ -4553,7 +4526,7 @@ Proof.
           eexists; split;
           [ eapply Ir.SmallStep.ns_success; [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22 |
-            s_malloc_zero_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
+            s_malloc_null_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
           | eapply nstep_eq_trans_1; [ assert (r1 <> r2) by admit;
             assumption | apply nstep_eq_refl] ]).
       }
@@ -4561,7 +4534,7 @@ Proof.
           eexists; split;
           [ eapply Ir.SmallStep.ns_success; [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22 |
-            s_malloc_zero_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
+            s_malloc_null_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
           | eapply nstep_eq_trans_1; [ assert (r1 <> r2) by admit;
             assumption | apply nstep_eq_refl] ]).
       }
@@ -4569,7 +4542,7 @@ Proof.
           eexists; split;
           [ eapply Ir.SmallStep.ns_success; [ eapply Ir.SmallStep.ns_one;
             inst_step_det_trivial HLOCATE1' Hop21 Hop22 |
-            s_malloc_zero_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
+            s_malloc_null_trivial HLOCATE2'; get_val_independent_goal opptr1 r2 ]
           | eapply nstep_eq_trans_1; [ assert (r1 <> r2) by admit;
             assumption | apply nstep_eq_refl] ]).
       }
@@ -4673,7 +4646,7 @@ Proof.
     inv HSINGLE; try congruence.
     + unfold Ir.SmallStep.inst_det_step in HNEXT.
       rewrite HCUR' in HNEXT. rewrite HLOCATE2 in HNEXT. inv HNEXT.
-    + (* malloc(0) *)
+    + (* malloc returns null *)
       rewrite HCUR' in HCUR. rewrite HLOCATE2 in HCUR. inv HCUR.
       apply incrpc'_incrpc in HLOCATE_NEXT'.
       rewrite HLOCATE_NEXT' in HLOCATE2'.
@@ -4686,7 +4659,7 @@ Proof.
               eexists; split;
               [ eapply Ir.SmallStep.ns_success;
                 [ eapply Ir.SmallStep.ns_one;
-                  s_malloc_zero_trivial HLOCATE1';
+                  s_malloc_null_trivial HLOCATE1';
                   get_val_independent_H HZERO opptr2 r1
                 | eapply Ir.SmallStep.s_det;
                   unfold Ir.SmallStep.inst_det_step;
@@ -4702,8 +4675,7 @@ Proof.
         { eexists. split.
           { eapply Ir.SmallStep.ns_success.
             { eapply Ir.SmallStep.ns_one.
-              s_malloc_zero_trivial HLOCATE1'.
-              get_val_independent_H HZERO opptr2 r1.
+              s_malloc_null_trivial HLOCATE1'.
             }
             { eapply Ir.SmallStep.s_det.
               unfold Ir.SmallStep.inst_det_step.
