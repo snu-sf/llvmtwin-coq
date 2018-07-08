@@ -47,16 +47,16 @@ Definition update_reg_and_incrpc (c:Ir.Config.t) (r:Ir.reg) (v:Ir.val) :=
 
 (* Helper functions *)
 Definition twos_compl (n:N) (sz:nat):N :=
-  N.modulo n (N.shiftl 2%N (N.of_nat sz)).
+  N.modulo n (N.shiftl 2%N (N.of_nat (sz - 1))).
 
 Definition twos_compl2 (n:nat) (sz:nat):N :=
-  N.modulo (N.of_nat n) (N.shiftl 2%N (N.of_nat sz)).
+  N.modulo (N.of_nat n) (N.shiftl 2%N (N.of_nat (sz - 1))).
 
 Definition twos_compl_add (x y:N) (sz:nat):N :=
   twos_compl (N.add x y) sz.
 
 Definition twos_compl_sub (x y:N) (sz:nat):N :=
-  twos_compl (N.sub (N.add x (N.shiftl 2%N (N.of_nat sz))) y) sz.
+  twos_compl (N.sub (N.add x (N.shiftl 2%N (N.of_nat (sz - 1)))) y) sz.
 
 Definition to_num (b:bool): Ir.val :=
   Ir.num (if b then 1%N else 0%N).
@@ -90,7 +90,6 @@ Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):N :=
 
 (* Pointer subtraction. *)
 Definition psub p1 p2 m bsz :=
-  let s := N.shiftl 2%N (N.of_nat bsz) in
   match (p1, p2) with
   | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     if Nat.eqb l1 l2 then
@@ -247,13 +246,13 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
 
     | ipsub r retty ptrty op1 op2 =>
       Some (sr_success Ir.e_none (update_reg_and_incrpc c r
-        match (retty, ptrty) with
-        | (Ir.ity bsz, Ir.ptrty opty) =>
+        match retty with
+        | Ir.ity bsz =>
           match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
           | (Some (Ir.ptr p1), Some (Ir.ptr p2)) => psub p1 p2 (Ir.Config.m c) bsz
           | (_, _) => Ir.poison
           end
-        | (_, _) => Ir.poison
+        | _ => Ir.poison
         end))
 
     | igep r ptrty opptr opidx inb =>

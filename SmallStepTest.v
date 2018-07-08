@@ -821,8 +821,226 @@ Proof.
     }   
 Qed.
 
-
 End IcmpUle.
+
+
+
+Module PSub.
+
+(****************************************************
+            psub poison, _ is always poison.
+ ****************************************************)
+
+Theorem psub_poison:
+  forall st r rty pty op1 op2 sr md
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.poison))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.ipsub r rty pty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := true *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.poison)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1 in HNEXT. inv HNEXT.
+  des_ifs.
+Qed.
+
+(****************************************************
+     If ptr1 = log(l, 10) & ptr2 = log(l, 9),
+      psub i8 ptr1, ptr2 = 1.
+      (i8 means the return value is truncated
+       into 8 bits)
+ ****************************************************)
+
+Theorem psub_sameblock1:
+  forall st r pty op1 op2 l sr md
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l 10)))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.ptr (Ir.plog l 9)))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.ipsub r (Ir.ity 8) pty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := true *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1%N)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1, HOP2 in HNEXT.
+  inv HNEXT.
+  unfold Ir.SmallStep.psub.
+  rewrite PeanoNat.Nat.eqb_refl.
+  des_ifs.
+Qed.
+
+(****************************************************
+     If ptr1 = log(l, 10) & ptr2 = log(l, 11),
+      psub i8 ptr1, ptr2 = 255.
+      (i8 means the return value is truncated
+       into 8 bits)
+ ****************************************************)
+
+Theorem psub_sameblock2:
+  forall st r pty op1 op2 l sr md
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l 10)))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.ptr (Ir.plog l 11)))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.ipsub r (Ir.ity 8) pty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := true *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 255%N)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1, HOP2 in HNEXT.
+  inv HNEXT.
+  unfold Ir.SmallStep.psub.
+  unfold Ir.SmallStep.twos_compl_sub.
+  unfold Ir.SmallStep.twos_compl.
+  rewrite PeanoNat.Nat.eqb_refl.
+  reflexivity.
+Qed.
+
+(****************************************************
+     If ptr1 = log(l1, o1) & ptr2 = log(l2, o2)
+        & l1 <> l2,
+      psub ptr1, ptr2 = poison.
+ ****************************************************)
+
+Theorem psub_diffblock:
+  forall st r retty pty op1 op2 l1 o1 l2 o2 sr md
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l1 o1)))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.ptr (Ir.plog l2 o2)))
+         (HDIFFBLK:l1 <> l2)
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.ipsub r retty pty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := true *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.poison)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1, HOP2 in HNEXT.
+  inv HNEXT.
+  unfold Ir.SmallStep.psub.
+  rewrite <- PeanoNat.Nat.eqb_neq in HDIFFBLK.
+  rewrite HDIFFBLK. des_ifs.
+Qed.
+
+(****************************************************
+     If ptr1 = log(l1, 10) & ptr2 = phy(128, _, _)
+        & addr(l1) = 138,
+      psub ptr1, ptr2 = 138 + 10 - 128 = 20.
+ ****************************************************)
+
+Theorem psub_log_phy:
+  forall st r pty op1 op2 l1 sr md I cid blk
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l1 10)))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.ptr (Ir.pphy 128 I cid)))
+         (HBLK:Ir.Memory.get (Ir.Config.m st) l1 = Some blk)
+         (HADDR:Ir.MemBlock.addr blk = 138)
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.ipsub r (Ir.ity 8) pty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := true *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 20%N)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1, HOP2 in HNEXT.
+  inv HNEXT.
+  unfold Ir.SmallStep.psub.
+  unfold Ir.SmallStep.twos_compl_sub.
+  unfold Ir.SmallStep.twos_compl.
+  unfold Ir.SmallStep.p2N.
+  unfold Ir.log_to_phy.
+  rewrite HBLK.
+  rewrite HADDR.
+  reflexivity.
+Qed.
+
+(****************************************************
+     If ptr1 = log(l1, 1) & ptr2 = phy(8, _, _)
+        & addr(l1) = 4,
+  psub i4 ptr1, ptr2 = (4 + 1 - 8) % 16 = 13.
+ ****************************************************)
+
+Theorem psub_log_phy2:
+  forall st r pty op1 op2 l1 sr md I cid blk
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l1 1)))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.ptr (Ir.pphy 8 I cid)))
+         (HBLK:Ir.Memory.get (Ir.Config.m st) l1 = Some blk)
+         (HADDR:Ir.MemBlock.addr blk = 4)
+         (HCUR:Ir.Config.cur_inst md st =
+               Some (Ir.Inst.ipsub r (Ir.ity 4) pty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := true *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 13%N)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1, HOP2 in HNEXT.
+  inv HNEXT.
+  unfold Ir.SmallStep.psub.
+  unfold Ir.SmallStep.twos_compl_sub.
+  unfold Ir.SmallStep.twos_compl.
+  unfold Ir.SmallStep.p2N.
+  unfold Ir.log_to_phy.
+  rewrite HBLK.
+  rewrite HADDR.
+  reflexivity.
+Qed.
+
+(****************************************************
+     If ptr1 = phy(10, _, _) & ptr2 = phy(8, _, _)
+              psub i4 ptr1, ptr2 = 2
+ ****************************************************)
+
+Theorem psub_phy_phy:
+  forall st r pty op1 op2 sr md I1 I2 cid1 cid2
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.pphy 10 I1 cid1)))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.ptr (Ir.pphy 8 I2 cid2)))
+         (HCUR:Ir.Config.cur_inst md st =
+               Some (Ir.Inst.ipsub r (Ir.ity 4) pty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := true *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 2%N)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1, HOP2 in HNEXT.
+  inv HNEXT.
+  unfold Ir.SmallStep.psub.
+  unfold Ir.SmallStep.twos_compl_sub.
+  unfold Ir.SmallStep.twos_compl.
+  unfold Ir.SmallStep.p2N.
+  reflexivity.
+Qed.
+
+
+End PSub.
 
 End SmallStepTest.
 
