@@ -195,7 +195,8 @@ Definition icmp_ule_ptr_nondet_cond (p1 p2:Ir.ptrval) (m:Ir.Memory.t): bool :=
     negb (Nat.eqb l1 l2) ||
     match Ir.Memory.get m l1 with
     | Some mb1 =>
-      Nat.ltb (Ir.MemBlock.n mb1) o1 && Nat.ltb (Ir.MemBlock.n mb1) o2
+      (negb (Nat.leb o1 (Ir.MemBlock.n mb1))) ||
+      (negb (Nat.leb o2 (Ir.MemBlock.n mb1)))
     | None => false
     end
   | _ => false

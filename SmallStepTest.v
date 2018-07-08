@@ -17,6 +17,48 @@ Module Ir.
 
 Module SmallStepTest.
 
+Lemma update_rval_diffval:
+  forall st r v1 v2
+         (HDIFF:v1 <> v2) (HNOTEMPTY:Ir.Config.s st <> []),
+    Ir.Config.update_rval st r v1 <>
+    Ir.Config.update_rval st r v2.
+Proof.
+  intros.
+  unfold Ir.Config.update_rval.
+  destruct (Ir.Config.s st) eqn:HS.
+  - congruence.
+  - destruct p. destruct p.
+    intros H0.
+    inv H0. congruence.
+Qed.
+
+Lemma update_reg_and_incrpc_diffval:
+  forall md st r v1 v2
+         (HDIFF:v1 <> v2) (HNOTEMPTY:Ir.Config.s st <> []),
+    Ir.SmallStep.update_reg_and_incrpc md st r v1 <>
+    Ir.SmallStep.update_reg_and_incrpc md st r v2.
+Proof.
+  intros.
+  unfold Ir.SmallStep.update_reg_and_incrpc.
+  unfold Ir.SmallStep.incrpc.
+  repeat (rewrite Ir.Config.cur_fdef_pc_update_rval).
+  destruct (Ir.Config.cur_fdef_pc md st) eqn:HPC.
+  { destruct p. des_ifs.
+    unfold Ir.Config.update_pc.
+    unfold Ir.Config.update_rval.
+    destruct (Ir.Config.s st) eqn:HS.
+    { congruence. }
+    { destruct p1. destruct p1.
+      simpl. intros H0. inv H0. congruence. }
+    apply update_rval_diffval; assumption.
+  }
+  { apply update_rval_diffval; assumption. }
+Qed.
+
+
+
+
+Module IcmpEq.
 
 (****************************************************
             icmp eq 1, 2 is always false.
@@ -61,6 +103,28 @@ Proof.
   unfold Ir.SmallStep.inst_det_step in HNEXT.
   rewrite HCUR in HNEXT.
   rewrite HOP1, HOP2 in HNEXT. inv HNEXT.
+  reflexivity.
+Qed.
+
+(****************************************************
+            icmp eq poison, _ is poison.
+ ****************************************************)
+
+Theorem icmp_eq_poison:
+  forall st r rty op1 op2 sr md
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.poison))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_eq r rty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := false *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.poison)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1 in HNEXT. inv HNEXT.
   reflexivity.
 Qed.
 
@@ -231,45 +295,6 @@ Qed.
   icmp eq ptr1, ptr2 yields nondeterminstic result.
  ****************************************************)
 
-(* two lemmas to help theorem proving *)
-Lemma update_rval_diffval:
-  forall st r v1 v2
-         (HDIFF:v1 <> v2) (HNOTEMPTY:Ir.Config.s st <> []),
-    Ir.Config.update_rval st r v1 <>
-    Ir.Config.update_rval st r v2.
-Proof.
-  intros.
-  unfold Ir.Config.update_rval.
-  destruct (Ir.Config.s st) eqn:HS.
-  - congruence.
-  - destruct p. destruct p.
-    intros H0.
-    inv H0. congruence.
-Qed.
-
-Lemma update_reg_and_incrpc_diffval:
-  forall md st r v1 v2
-         (HDIFF:v1 <> v2) (HNOTEMPTY:Ir.Config.s st <> []),
-    Ir.SmallStep.update_reg_and_incrpc md st r v1 <>
-    Ir.SmallStep.update_reg_and_incrpc md st r v2.
-Proof.
-  intros.
-  unfold Ir.SmallStep.update_reg_and_incrpc.
-  unfold Ir.SmallStep.incrpc.
-  repeat (rewrite Ir.Config.cur_fdef_pc_update_rval).
-  destruct (Ir.Config.cur_fdef_pc md st) eqn:HPC.
-  { destruct p. des_ifs.
-    unfold Ir.Config.update_pc.
-    unfold Ir.Config.update_rval.
-    destruct (Ir.Config.s st) eqn:HS.
-    { congruence. }
-    { destruct p1. destruct p1.
-      simpl. intros H0. inv H0. congruence. }
-    apply update_rval_diffval; assumption.
-  }
-  { apply update_rval_diffval; assumption. }
-Qed.
-  
 
 Theorem icmp_eq_ptr_diffblock_nondet1:
   forall st r rty op1 op2 sr md l1 l2 o1 o2 mb1 mb2 beg1 beg2 end1 end2
@@ -524,6 +549,280 @@ Proof.
       }
     }
 Qed.
+
+End IcmpEq.
+
+
+
+Module IcmpUle.
+
+(****************************************************
+            icmp ule 1, 2 is always true.
+ ****************************************************)
+
+Theorem icmp_ule_int_true1:
+  forall st r rty op1 op2 sr md
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 1%N))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 2%N))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := true *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1%N)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1, HOP2 in HNEXT. inv HNEXT.
+  reflexivity.
+Qed.
+
+(****************************************************
+            icmp ule 15, 15 is always true.
+ ****************************************************)
+
+Theorem icmp_ule_int_true2:
+  forall st r rty op1 op2 sr md
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 15%N))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 15%N))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := true *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1%N)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1, HOP2 in HNEXT. inv HNEXT.
+  reflexivity.
+Qed.
+
+(****************************************************
+            icmp ule 15, 14 is always false.
+ ****************************************************)
+
+Theorem icmp_ule_int_false:
+  forall st r rty op1 op2 sr md
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 15%N))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 14%N))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := false *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0%N)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1, HOP2 in HNEXT. inv HNEXT.
+  reflexivity.
+Qed.
+
+(****************************************************
+            icmp ule poison, _ is always poison.
+ ****************************************************)
+
+Theorem icmp_ule_poison:
+  forall st r rty op1 op2 sr md
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.poison))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := false *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.poison)).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT.
+  rewrite HCUR in HNEXT.
+  rewrite HOP1 in HNEXT. inv HNEXT.
+  reflexivity.
+Qed.
+
+(****************************************************
+       If ptr1 = log(l, o1) & ptr2 = log(l, o2),
+       & o1 <= block size & o2 <= block size,
+     icmp ule ptr1, ptr2 is equivalent to o1 <= o2.
+ ****************************************************)
+
+Theorem icmp_ule_ptr_sameblock_det:
+  forall st r rty op1 op2 sr md l o1 o2 mb
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l o1)))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.ptr (Ir.plog l o2)))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
+         (HBLK:Ir.Memory.get (Ir.Config.m st) l = Some mb)
+         (HOFS1:o1 <= Ir.MemBlock.n mb)
+         (HOFS2:o2 <= Ir.MemBlock.n mb)
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := o1 == o2 *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r
+                                               (Ir.SmallStep.to_num (Nat.leb o1 o2))).
+Proof.
+  intros.
+  assert (HNONDET: Ir.SmallStep.icmp_ule_ptr_nondet_cond (Ir.plog l o1)
+                (Ir.plog l o2) (Ir.Config.m st) = false).
+  { unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond.
+    rewrite PeanoNat.Nat.eqb_refl.
+    rewrite HBLK.
+    rewrite <- PeanoNat.Nat.leb_le in HOFS1, HOFS2.
+    rewrite HOFS1. rewrite HOFS2. reflexivity. }
+
+  inv HINST; try congruence.
+  - unfold Ir.SmallStep.inst_det_step in HNEXT.
+    rewrite HCUR in HNEXT.
+    rewrite HOP1, HOP2 in HNEXT.
+    unfold Ir.SmallStep.icmp_ule_ptr in HNEXT.
+    rewrite HNONDET in HNEXT.
+    rewrite HBLK in HNEXT.
+    inv HNEXT.
+    reflexivity.
+Qed.
+
+(****************************************************
+       If ptr1 = log(l, o1) & ptr2 = log(l, o2),
+       & (block size < o1 \/ block size < o2),
+  icmp ule ptr1, ptr2 yields nondeterministic value.
+ ****************************************************)
+
+Theorem icmp_ule_ptr_sameblock_nondet:
+  forall st r rty op1 op2 sr md l o1 o2 mb
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l o1)))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.ptr (Ir.plog l o2)))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
+         (HBLK:Ir.Memory.get (Ir.Config.m st) l = Some mb)
+         (HOFS:Ir.MemBlock.n mb < o1 \/ Ir.MemBlock.n mb < o2)
+         (HSTACKNOTEMPTY:Ir.Config.s st <> []) (* there exists a register file *)
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    exists sr',
+      Ir.SmallStep.inst_step md st sr' /\
+      sr' <> sr.
+Proof.
+  intros.
+  assert (HNONDET: Ir.SmallStep.icmp_ule_ptr_nondet_cond (Ir.plog l o1)
+                (Ir.plog l o2) (Ir.Config.m st) = true).
+  { unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond.
+    rewrite PeanoNat.Nat.eqb_refl.
+    rewrite HBLK.
+    repeat (rewrite Nat.lt_nge in HOFS).
+    repeat (rewrite <- Nat.leb_nle in HOFS).
+    destruct HOFS.
+    { rewrite H. reflexivity. }
+    { rewrite H. simpl. rewrite orb_true_r. reflexivity. }
+  }
+
+  inv HINST; try congruence.
+  - unfold Ir.SmallStep.inst_det_step in HNEXT.
+    rewrite HCUR in HNEXT.
+    rewrite HOP1, HOP2 in HNEXT.
+    unfold Ir.SmallStep.icmp_ule_ptr in HNEXT.
+    rewrite HNONDET in HNEXT.
+    inv HNEXT.
+  - rewrite HCUR in HCUR0.
+    inv HCUR0.
+    destruct res.
+    { exists (Ir.SmallStep.sr_success Ir.e_none
+      (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1))).
+      split.
+      { eapply Ir.SmallStep.s_icmp_ule_nondet.
+        rewrite HCUR. reflexivity. reflexivity. eassumption.
+        eassumption. eassumption. }
+      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1)) <>
+                (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0))).
+        { apply update_reg_and_incrpc_diffval.
+          congruence. assumption. }
+        congruence.
+      }
+    }
+    { exists (Ir.SmallStep.sr_success Ir.e_none
+      (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0))).
+      split.
+      { eapply Ir.SmallStep.s_icmp_ule_nondet.
+        rewrite HCUR. reflexivity. reflexivity. eassumption.
+        eassumption. eassumption. }
+      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0)) <>
+                (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num (N.pos p)))).
+        { apply update_reg_and_incrpc_diffval.
+          congruence. assumption. }
+        congruence.
+      }
+    }   
+Qed.
+
+(****************************************************
+       If ptr1 = log(l1, o1) & ptr2 = log(l2, o2),
+  icmp ule ptr1, ptr2 yields nondeterministic value.
+ ****************************************************)
+
+Theorem icmp_ule_ptr_diffblock_nondet:
+  forall st r rty op1 op2 sr md l1 l2 o1 o2
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l1 o1)))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.ptr (Ir.plog l2 o2)))
+         (HDIFFBLK:l1 <> l2)
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
+         (HSTACKNOTEMPTY:Ir.Config.s st <> []) (* there exists a register file *)
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    exists sr',
+      Ir.SmallStep.inst_step md st sr' /\
+      sr' <> sr.
+Proof.
+  intros.
+  assert (HNONDET: Ir.SmallStep.icmp_ule_ptr_nondet_cond (Ir.plog l1 o1)
+                (Ir.plog l2 o2) (Ir.Config.m st) = true).
+  { unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond.
+    rewrite <- PeanoNat.Nat.eqb_neq in HDIFFBLK.
+    rewrite HDIFFBLK. reflexivity.
+  }
+
+  inv HINST; try congruence.
+  - unfold Ir.SmallStep.inst_det_step in HNEXT.
+    rewrite HCUR in HNEXT.
+    rewrite HOP1, HOP2 in HNEXT.
+    unfold Ir.SmallStep.icmp_ule_ptr in HNEXT.
+    rewrite HNONDET in HNEXT.
+    inv HNEXT.
+  - rewrite HCUR in HCUR0.
+    inv HCUR0.
+    destruct res.
+    { exists (Ir.SmallStep.sr_success Ir.e_none
+      (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1))).
+      split.
+      { eapply Ir.SmallStep.s_icmp_ule_nondet.
+        rewrite HCUR. reflexivity. reflexivity. eassumption.
+        eassumption. eassumption. }
+      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1)) <>
+                (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0))).
+        { apply update_reg_and_incrpc_diffval.
+          congruence. assumption. }
+        congruence.
+      }
+    }
+    { exists (Ir.SmallStep.sr_success Ir.e_none
+      (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0))).
+      split.
+      { eapply Ir.SmallStep.s_icmp_ule_nondet.
+        rewrite HCUR. reflexivity. reflexivity. eassumption.
+        eassumption. eassumption. }
+      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0)) <>
+                (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num (N.pos p)))).
+        { apply update_reg_and_incrpc_diffval.
+          congruence. assumption. }
+        congruence.
+      }
+    }   
+Qed.
+
+
+End IcmpUle.
 
 End SmallStepTest.
 
