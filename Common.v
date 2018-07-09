@@ -5,6 +5,7 @@ Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Arith.Compare_dec.
 Require Import Sumbool.
 Require Import Basics.
+Require Import sflib.
 Require Import Omega.
 
 
@@ -1290,6 +1291,33 @@ Proof.
       rewrite Heq. simpl. erewrite IHl. reflexivity. reflexivity.
     + destruct l'. inversion HMAP.
       inversion HMAP. simpl. erewrite IHl. reflexivity. reflexivity.
+Qed.
+
+Lemma list_find_key_set_diffkey {X:Type}:
+  forall (l:list (nat * X)) k k' v
+    (HDIFFKEY:k <> k'),
+    list_find_key (list_set l k' v) k = list_find_key l k.
+Proof.
+  intros.
+  unfold list_find_key.
+  unfold list_set.
+  induction l.
+  { reflexivity. }
+  { simpl.
+    rewrite <- IHl.
+    destruct a.
+    simpl.
+    des_ifs.
+    { simpl in *. rewrite PeanoNat.Nat.eqb_eq in *. congruence. }
+    { simpl in *. rewrite PeanoNat.Nat.eqb_eq in *.
+      rewrite PeanoNat.Nat.eqb_neq in *. congruence. }
+    { simpl in *. rewrite PeanoNat.Nat.eqb_eq in *.
+      rewrite PeanoNat.Nat.eqb_neq in *. omega. }
+    { simpl in *. rewrite PeanoNat.Nat.eqb_eq in *.
+      rewrite PeanoNat.Nat.eqb_neq in *. omega. }
+    { simpl in *. rewrite PeanoNat.Nat.eqb_eq in *.
+      rewrite PeanoNat.Nat.eqb_neq in *. omega. }
+  }
 Qed.
 
 Lemma list_set_eq {X:Type}:

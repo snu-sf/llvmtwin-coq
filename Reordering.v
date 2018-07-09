@@ -2,6 +2,7 @@ Require Import BinNat.
 Require Import Bool.
 Require Import List.
 Require Import sflib.
+Require Import Omega.
 
 Require Import Common.
 Require Import Lang.
@@ -867,19 +868,66 @@ Ltac do_nseq_refl :=
    r1 = malloc ty opptr1.
 **********************************************)
 
+Lemma get_new:
+  forall m m' l blkty nsz a c P l0
+         (HWF:Ir.Memory.wf m)
+         (HNEW:(m', l) = Ir.Memory.new m blkty nsz a c P)
+         (HDISJ:Ir.Memory.allocatable m (List.map (fun addr => (addr, nsz)) P) = true)
+         (HSZ2:nsz > 0)
+         (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk (Ir.heap) (begt, None) nsz
+                                                            (Ir.SYSALIGN) c P))
+         (HL0:l0 < Ir.Memory.fresh_bid m),
+    Ir.Memory.get m' l0 = Ir.Memory.get m l0.
+Proof.
+  intros.
+  unfold Ir.SmallStep.p2N.
+  unfold Ir.log_to_phy.
+  unfold Ir.Memory.new in HNEW.
+  inv HNEW.
+  unfold Ir.Memory.get. simpl.
+  apply PeanoNat.Nat.lt_neq in HL0.
+  apply not_eq_sym in HL0.
+  rewrite <- PeanoNat.Nat.eqb_neq in HL0.
+  rewrite HL0. reflexivity.
+Qed.
+
 (* Lemma: Ir.SmallStep.p2N returns unchanged value even
    if Memory.new is called *)
 Lemma p2N_new_invariant:
-  forall st op l0 o0 m' l blkty nsz a c P n0
+  forall md st op l0 o0 m' l blkty nsz a c P n0
+         (HWF:Ir.Config.wf md st)
          (HGV: Ir.Config.get_val st op = Some (Ir.ptr (Ir.plog l0 o0)))
-         (HNEW:(m', l) = Ir.Memory.new (Ir.Config.m st) blkty nsz a c P),
-    Ir.SmallStep.p2N (Ir.plog l0 o0) m' n0 =
+         (HNEW:(m', l) = Ir.Memory.new (Ir.Config.m st) blkty nsz a c P)
+         (HDISJ:Ir.Memory.allocatable (Ir.Config.m st)
+                (List.map (fun addr => (addr, nsz)) P) = true)
+         (HSZ2:nsz > 0)
+         (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk (Ir.heap) (begt, None) nsz
+                                                            (Ir.SYSALIGN) c P)),
+    Ir.SmallStep.p2N (Ir.plog l0 o0) (Ir.Config.m (Ir.Config.update_m st m')) n0 =
     Ir.SmallStep.p2N (Ir.plog l0 o0) (Ir.Config.m st) n0.
 Proof.
   intros.
   unfold Ir.SmallStep.p2N.
   unfold Ir.log_to_phy.
-  
+  destruct HWF.
+  dup HGV.
+  apply wf_no_bogus_ptr in HGV0.
+  assert (HL:l = Ir.Memory.fresh_bid (Ir.Config.m st)).
+  { unfold Ir.Memory.new in HNEW. inv HNEW. reflexivity. }
+  erewrite get_new; try eassumption. reflexivity.
+Qed. 
+
+Ltac get_val_independent_goal opval r2 :=
+  rewrite get_val_independent2; try eassumption;
+  try (destruct opval as [| r00];
+  [ congruence | assert (r00 <> r2) by admit; congruence ]).
+
+Ltac get_val_independent_H H opval r2 :=
+  rewrite get_val_independent2 in H;
+  try (destruct opval as [| r00];
+    [ congruence | assert (r00 <> r2) by admit; congruence ]);
+  try rewrite get_val_update_m in H.
+
 
 Theorem reorder_malloc_ptrtoint:
   forall i1 i2 r1 r2 opptr1 opptr2 ty1 ty2
@@ -954,7 +1002,6 @@ Proof.
         rewrite get_val_update_m.
         (* now we should show that opptr2 isn't something like (l, ofs).
            Note that l is a new block id. *)
-        inv HWF.
         (* opptr2 (which is operand of ptrtoint) cannot be log (l, 0). *)
         destruct opptr2.
         -- rewrite get_val_const_update_reg_and_incrpc.
@@ -962,13 +1009,8 @@ Proof.
            { destruct v; try do_nseq_refl.
              - destruct p.
                + destruct ty2.
-                 * (* Ir.Config.get_val st op = Some (Ir.ptr (Ir.plog b n)) *)
-                   (* (m', l) =
-         Ir.Memory.new (Ir.Config.m st) Ir.heap (N.to_nat nsz) Ir.SYSALIGN
-           (repeat Ir.Byte.poison (N.to_nat nsz)) P *)
-                   (* Ir.SmallStep.p2N (Ir.plog b n) m' n0 =
-                      Ir.SmallStep.p2N (Ir.plog b n) (Ir.Config.m st) n0 *)
-                   admit. (* about logical pointer *)
+                 *  (* about logical pointer *)
+                   erewrite p2N_new_invariant; try eassumption. apply nstep_eq_refl.
                  * apply nstep_eq_refl.
                + unfold Ir.SmallStep.p2N. do_nseq_refl.
            }
@@ -977,7 +1019,9 @@ Proof.
            destruct (Ir.Config.get_val st (Ir.opreg r)) eqn:Hopr.
            { destruct v; try do_nseq_refl.
              - destruct p.
-               + admit. (* about logical pointer. *)
+               + destruct ty2.
+                 * erewrite p2N_new_invariant; try eassumption. apply nstep_eq_refl.
+                 * apply nstep_eq_refl.
                + unfold Ir.SmallStep.p2N. do_nseq_refl.
            }
            { do_nseq_refl. }
@@ -998,12 +1042,9 @@ Proof.
       rewrite HLOCATE_NEXT' in HLOCATE2'.
       rewrite HLOCATE2'. reflexivity. reflexivity.
       rewrite HLOCATE1 in HCUR. inv HCUR.
-      destruct opptr1.
-      * rewrite get_val_const_update_reg_and_incrpc. eassumption.
-      * rewrite get_val_independent. assumption.
-        admit. (* r <> r2 *)
-      * rewrite m_update_reg_and_incrpc. assumption.
-      * constructor. reflexivity.
+      get_val_independent_goal opptr1 r2.
+      rewrite m_update_reg_and_incrpc. assumption.
+      constructor. reflexivity.
     + inv HSUCC.
     + inv HOOM0.
   - (* malloc raised goes_wrong - impossible *)
@@ -1071,11 +1112,8 @@ Proof.
       {
         rewrite m_update_reg_and_incrpc.
         rewrite nstep_eq_trans_1 with (md2 := md').
-        rewrite get_val_independent2.
+        get_val_independent_goal opptr1 r2.
         apply nstep_eq_refl.
-        destruct opptr1. intros H. congruence.
-        assert (r <> r2). admit.
-        intros H1. congruence.
         assert (r1 <> r2). admit. congruence.
       }
     + (* oom *)
@@ -1089,11 +1127,8 @@ Proof.
         eapply Ir.SmallStep.ns_one.
         eapply Ir.SmallStep.s_malloc_oom.
         rewrite HLOCATE1'. reflexivity. reflexivity.
-        rewrite get_val_independent2 in HSZ. eassumption.
-        destruct opptr2. intros H. congruence.
-        intros H2.
-        assert (r <> r1). admit.
-        congruence.
+        get_val_independent_H HSZ opptr2 r1.
+        eassumption.
         rewrite m_update_reg_and_incrpc in HNOSPACE. assumption.
       }
       { constructor. reflexivity. }
@@ -1108,11 +1143,8 @@ Proof.
       { eapply Ir.SmallStep.ns_success.
         eapply Ir.SmallStep.ns_one.
         eapply Ir.SmallStep.s_malloc. rewrite HLOCATE1'. reflexivity. reflexivity.
-        rewrite get_val_independent2 in HSZ. eassumption.
-        destruct opptr2. intros H. congruence.
-        assert(r <> r1). admit.
-        intros H2. congruence.
-        assumption. reflexivity. eassumption. eassumption.
+        get_val_independent_H HSZ opptr2 r1. eassumption. eassumption.
+        reflexivity. eassumption. eassumption.
         eassumption.
         eapply Ir.SmallStep.s_det.
         unfold Ir.SmallStep.inst_det_step.
@@ -1125,15 +1157,13 @@ Proof.
       }
       { eapply nstep_eq_trans_2 with (md2 := md').
         assert (r1 <> r2). admit. assumption.
-        rewrite get_val_independent2.
+        get_val_independent_goal opptr1 r2.
         rewrite get_val_update_m.
         rewrite m_update_reg_and_incrpc.
         destruct (Ir.Config.get_val st opptr1) eqn:Hopptr1; try apply nstep_eq_refl.
         destruct v; try apply nstep_eq_refl.
-        admit. (* p2N does not change even if malloc is called *)
-        destruct opptr1. intros H. congruence.
-        assert (r <> r2). admit.
-        intros. congruence.
+        destruct p; destruct ty1; try apply nstep_eq_refl.
+        erewrite p2N_new_invariant; try eassumption. apply nstep_eq_refl.
       }
   - (* ptrtoint never raises OOM. *)
     inv HOOM.
@@ -1160,6 +1190,133 @@ Admitted.
    r2 = ptrtoint opptr2 ty2
    free opptr1
 **********************************************)
+
+Lemma get_free_some:
+  forall m m' l l0 blk
+         (HWF:Ir.Memory.wf m)
+         (HFREE:Some m' = Ir.Memory.free m l0)
+         (HGET:Ir.Memory.get m l = Some blk),
+    exists blk', Ir.Memory.get m' l = Some blk'.
+Proof.
+  intros.
+  assert (HFREEWF:Ir.Memory.wf m').
+  { eapply Ir.Memory.free_wf. eassumption. eassumption. }
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  unfold Ir.MemBlock.set_lifetime_end in Heq2.
+  des_ifs.
+  symmetry in HGET.
+  (* apply Ir.Memory.get_In with (blks := Ir.Memory.blocks m) in HGET. *)
+  destruct (Nat.eqb l0 l) eqn:HL.
+  { rewrite PeanoNat.Nat.eqb_eq in HL.
+    subst l0.
+    erewrite Ir.Memory.get_set_id with (bid := l) (m := Ir.Memory.incr_time m).
+    { eexists. reflexivity. }
+    { eapply Ir.Memory.incr_time_wf. eapply HWF. reflexivity. }
+    { eassumption. }
+    { rewrite Ir.Memory.get_incr_time_id. symmetry in HGET. eassumption. }
+    { reflexivity. }
+  }
+  { rewrite PeanoNat.Nat.eqb_neq in HL.
+    erewrite Ir.Memory.get_set_diff with (bid := l) (bid' := l0) (m := Ir.Memory.incr_time m).
+    { eexists. reflexivity. }
+    { eapply Ir.Memory.incr_time_wf. eapply HWF. reflexivity. }
+    { eassumption. }
+    { rewrite Ir.Memory.get_incr_time_id. symmetry in HGET. eassumption. }
+    { reflexivity. }
+    { omega. }
+  }
+Qed.
+
+Lemma get_set_diff2:
+  forall m bid mb' m' bid'
+         (HWF:Ir.Memory.wf m)
+         (HWF':Ir.Memory.wf m')
+         (HGET:Ir.Memory.get m bid = None)
+         (HSET:m' = Ir.Memory.set m bid' mb')
+         (HDIFF:bid <> bid'),
+    Ir.Memory.get m' bid = None.
+Proof.
+  intros.
+  unfold Ir.Memory.get.
+  symmetry in HGET.
+  rewrite HSET.
+  unfold Ir.Memory.set.
+  simpl. rewrite list_find_key_set_diffkey.
+  unfold Ir.Memory.get in HGET. congruence.
+  congruence.
+Qed.
+
+Lemma get_free_none:
+  forall m m' l l0
+         (HWF:Ir.Memory.wf m)
+         (HFREE:Some m' = Ir.Memory.free m l0)
+         (HGET:Ir.Memory.get m l = None),
+    Ir.Memory.get m' l = None.
+Proof.
+  intros.
+  assert (HFREEWF:Ir.Memory.wf m').
+  { eapply Ir.Memory.free_wf. eassumption. eassumption. }
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  unfold Ir.MemBlock.set_lifetime_end in Heq2.
+  des_ifs.
+  destruct (Nat.eqb l0 l) eqn:HL.
+  { rewrite PeanoNat.Nat.eqb_eq in HL.
+    subst l0.
+    congruence. }
+  { rewrite PeanoNat.Nat.eqb_neq in HL.
+    erewrite get_set_diff2 with (bid := l) (bid' := l0) (m := Ir.Memory.incr_time m).
+    { reflexivity. }
+    { eapply Ir.Memory.incr_time_wf. eapply HWF. reflexivity. }
+    { eassumption. }
+    { rewrite Ir.Memory.get_incr_time_id. eassumption. }
+    { reflexivity. }
+    { omega. }
+  }
+Qed.
+
+(* Lemma: Ir.SmallStep.p2N returns unchanged value even
+   if Memory.free is called *)
+Lemma p2N_free_invariant:
+  forall md st op l0 o0 m' l n0
+         (HWF:Ir.Config.wf md st)
+         (HGV: Ir.Config.get_val st op = Some (Ir.ptr (Ir.plog l0 o0)))
+         (HFREE:Some m' = Ir.Memory.free (Ir.Config.m st) l),
+    Ir.SmallStep.p2N (Ir.plog l0 o0) m' n0 =
+    Ir.SmallStep.p2N (Ir.plog l0 o0) (Ir.Config.m st) n0.
+Proof.
+  intros.
+  unfold Ir.SmallStep.p2N.
+  unfold Ir.log_to_phy.
+  destruct (Ir.Memory.get m' l0) eqn:Hget';
+  destruct (Ir.Memory.get (Ir.Config.m st) l0) eqn:Hget; try reflexivity.
+  { rewrite Ir.Memory.get_free with (m := Ir.Config.m st) (m' := m')
+                          (l := l) (l0 := l0) (blk := t0) (blk' := t).
+    reflexivity.
+    { destruct HWF. assumption. }
+    { assumption. }
+    { congruence. }
+    { congruence. }
+  }
+  { assert (Ir.Memory.get m' l0 = None).
+    { eapply get_free_none.
+      { destruct HWF. eassumption. }
+      { eassumption. }
+      { eassumption. }
+    }
+    congruence.
+  }
+  { assert (exists blk', Ir.Memory.get m' l0 = Some blk').
+    { eapply get_free_some.
+      { destruct HWF. eassumption. }
+      { eassumption. }
+      { eassumption. }
+    }
+    destruct H.
+    congruence.
+  }
+Qed.
 
 Theorem reorder_free_ptrtoint:
   forall i1 i2 r2 opptr1 (opptr2:Ir.op) retty2
@@ -1203,13 +1360,11 @@ Proof.
       apply incrpc'_incrpc in HLOCATE_NEXT'.
       rewrite HLOCATE_NEXT' in HLOCATE2'.
       rewrite HLOCATE2'.
-      rewrite get_val_independent2.
+      get_val_independent_goal opptr1 r2.
       rewrite m_update_reg_and_incrpc.
       rewrite Heq.
       rewrite Heq0.
       reflexivity.
-      destruct opptr1. intros H0. congruence.
-      assert (r <> r2). admit. congruence.
     }
     { rewrite get_val_update_m.
       rewrite get_val_incrpc.
@@ -1217,7 +1372,15 @@ Proof.
       destruct retty2.
       - destruct (Ir.Config.get_val st opptr2) eqn:Hopptr2.
         + destruct v;try apply nstep_eq_refl.
-          admit. (* p2N does not change after free *)
+          unfold Ir.SmallStep.free in Heq0.
+          destruct p0.
+          { des_ifs.
+            { erewrite p2N_free_invariant. apply nstep_eq_refl.
+              eassumption. eassumption. symmetry in Heq0. eassumption. }
+            { erewrite p2N_free_invariant. apply nstep_eq_refl.
+              eassumption. eassumption. symmetry in Heq0. eassumption. }
+          }
+          { unfold Ir.SmallStep.p2N. apply nstep_eq_refl. }
         + apply nstep_eq_refl.
       - apply nstep_eq_refl.
     }
@@ -1341,7 +1504,16 @@ Proof.
       { rewrite get_val_update_m. rewrite get_val_incrpc. rewrite Heq1.
         rewrite <- nstep_eq_trans_3 with (md1 := md').
         rewrite m_update_m.
-        admit. (* p2N after free is the same *) }
+        unfold Ir.SmallStep.free in Heq0.
+        destruct p0.
+        { des_ifs.
+          { erewrite <- p2N_free_invariant. apply nstep_eq_refl.
+            eassumption. eassumption. symmetry in Heq0. eassumption. }
+          { erewrite <- p2N_free_invariant. apply nstep_eq_refl.
+            eassumption. eassumption. symmetry in Heq0. eassumption. }
+        }
+        { unfold Ir.SmallStep.p2N. apply nstep_eq_refl. }
+      }
     + eexists. split. eapply Ir.SmallStep.ns_success.
       eapply Ir.SmallStep.ns_one.
       eapply Ir.SmallStep.s_det.
@@ -2522,17 +2694,6 @@ Ltac inv_cur_inst_next HCUR HLOCATE2 HLOCATE_NEXT :=
   apply incrpc'_incrpc in HLOCATE_NEXT; rewrite HLOCATE_NEXT in HLOCATE2;
   try (rewrite incrpc_update_m in HCUR); try (rewrite cur_inst_update_m in HCUR);
   try (rewrite HLOCATE2 in HCUR); inv HCUR.
-
-Ltac get_val_independent_goal opval r2 :=
-  rewrite get_val_independent2; try eassumption;
-  try (destruct opval as [| r00];
-  [ congruence | assert (r00 <> r2) by admit; congruence ]).
-
-Ltac get_val_independent_H H opval r2 :=
-  rewrite get_val_independent2 in H;
-  try (destruct opval as [| r00];
-    [ congruence | assert (r00 <> r2) by admit; congruence ]);
-  try rewrite get_val_update_m in H.
 
 Ltac s_malloc_null_trivial HLOCATE2' :=
   eapply Ir.SmallStep.s_malloc_null;

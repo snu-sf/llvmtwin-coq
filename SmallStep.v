@@ -82,7 +82,7 @@ Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):N :=
     match Ir.log_to_phy m l o with
     | Some (Ir.pphy o' _ _) =>
       twos_compl2 o' sz
-    | _ => 0%N
+    | _ => twos_compl2 o sz (* unreachable in well-typed program *)
     end
   | Ir.pphy o _ _ =>
     twos_compl2 o sz
