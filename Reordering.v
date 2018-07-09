@@ -867,6 +867,20 @@ Ltac do_nseq_refl :=
    r1 = malloc ty opptr1.
 **********************************************)
 
+(* Lemma: Ir.SmallStep.p2N returns unchanged value even
+   if Memory.new is called *)
+Lemma p2N_new_invariant:
+  forall st op l0 o0 m' l blkty nsz a c P n0
+         (HGV: Ir.Config.get_val st op = Some (Ir.ptr (Ir.plog l0 o0)))
+         (HNEW:(m', l) = Ir.Memory.new (Ir.Config.m st) blkty nsz a c P),
+    Ir.SmallStep.p2N (Ir.plog l0 o0) m' n0 =
+    Ir.SmallStep.p2N (Ir.plog l0 o0) (Ir.Config.m st) n0.
+Proof.
+  intros.
+  unfold Ir.SmallStep.p2N.
+  unfold Ir.log_to_phy.
+  
+
 Theorem reorder_malloc_ptrtoint:
   forall i1 i2 r1 r2 opptr1 opptr2 ty1 ty2
          (HINST1:i1 = Ir.Inst.imalloc r1 ty1 opptr1)
@@ -947,7 +961,15 @@ Proof.
            destruct (Ir.Config.get_val st (Ir.opconst c)) eqn:Hopc.
            { destruct v; try do_nseq_refl.
              - destruct p.
-               + admit. (* about logical pointer *)
+               + destruct ty2.
+                 * (* Ir.Config.get_val st op = Some (Ir.ptr (Ir.plog b n)) *)
+                   (* (m', l) =
+         Ir.Memory.new (Ir.Config.m st) Ir.heap (N.to_nat nsz) Ir.SYSALIGN
+           (repeat Ir.Byte.poison (N.to_nat nsz)) P *)
+                   (* Ir.SmallStep.p2N (Ir.plog b n) m' n0 =
+                      Ir.SmallStep.p2N (Ir.plog b n) (Ir.Config.m st) n0 *)
+                   admit. (* about logical pointer *)
+                 * apply nstep_eq_refl.
                + unfold Ir.SmallStep.p2N. do_nseq_refl.
            }
            { do_nseq_refl. }
