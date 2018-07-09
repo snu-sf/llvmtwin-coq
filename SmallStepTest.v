@@ -189,7 +189,7 @@ Theorem icmp_eq_ptr_diffblock_false1:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := o1 == o2 *)
+           (* new state, with PC incremented & r := false *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0%N)).
 Proof.
   intros.
@@ -247,7 +247,7 @@ Theorem icmp_eq_ptr_diffblock_false2:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := o1 == o2 *)
+           (* new state, with PC incremented & r := false *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0%N)).
 Proof.
   intros.
@@ -636,7 +636,7 @@ Theorem icmp_ule_poison:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := false *)
+           (* new state, with PC incremented & r := poison *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.poison)).
 Proof.
   intros.
@@ -664,7 +664,7 @@ Theorem icmp_ule_ptr_sameblock_det:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := o1 == o2 *)
+           (* new state, with PC incremented & r := o1 <= o2 *)
            (Ir.SmallStep.update_reg_and_incrpc md st r
                                                (Ir.SmallStep.to_num (Nat.leb o1 o2))).
 Proof.
@@ -838,7 +838,7 @@ Theorem psub_poison:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := true *)
+           (* new state, with PC incremented & r := poison *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.poison)).
 Proof.
   intros.
@@ -864,7 +864,7 @@ Theorem psub_sameblock1:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := true *)
+           (* new state, with PC incremented & r := 1 *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1%N)).
 Proof.
   intros.
@@ -893,7 +893,7 @@ Theorem psub_sameblock2:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := true *)
+           (* new state, with PC incremented & r := 255 *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 255%N)).
 Proof.
   intros.
@@ -924,7 +924,7 @@ Theorem psub_diffblock:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := true *)
+           (* new state, with PC incremented & r := poison *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.poison)).
 Proof.
   intros.
@@ -954,7 +954,7 @@ Theorem psub_log_phy:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := true *)
+           (* new state, with PC incremented & r := 20 *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 20%N)).
 Proof.
   intros.
@@ -990,7 +990,7 @@ Theorem psub_log_phy2:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := true *)
+           (* new state, with PC incremented & r := 13 *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 13%N)).
 Proof.
   intros.
@@ -1023,7 +1023,7 @@ Theorem psub_phy_phy:
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
-           (* new state, with PC incremented & r := true *)
+           (* new state, with PC incremented & r := 2 *)
            (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 2%N)).
 Proof.
   intros.
