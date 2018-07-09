@@ -1430,6 +1430,113 @@ Proof.
   }
 Qed.
 
+Lemma get_new:
+  forall m m' l blkty nsz a c P l0
+         (HWF:Ir.Memory.wf m)
+         (HNEW:(m', l) = Ir.Memory.new m blkty nsz a c P)
+         (HDISJ:Ir.Memory.allocatable m (List.map (fun addr => (addr, nsz)) P) = true)
+         (HSZ2:nsz > 0)
+         (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk (Ir.heap) (begt, None) nsz
+                                                            (Ir.SYSALIGN) c P))
+         (HL0:l0 < Ir.Memory.fresh_bid m),
+    Ir.Memory.get m' l0 = Ir.Memory.get m l0.
+Proof.
+  intros.
+  unfold Ir.Memory.new in HNEW.
+  inv HNEW.
+  unfold Ir.Memory.get. simpl.
+  apply PeanoNat.Nat.lt_neq in HL0.
+  apply not_eq_sym in HL0.
+  rewrite <- PeanoNat.Nat.eqb_neq in HL0.
+  rewrite HL0. reflexivity.
+Qed.
+
+Lemma get_free_some:
+  forall m m' l l0 blk
+         (HWF:Ir.Memory.wf m)
+         (HFREE:Some m' = Ir.Memory.free m l0)
+         (HGET:Ir.Memory.get m l = Some blk),
+    exists blk', Ir.Memory.get m' l = Some blk'.
+Proof.
+  intros.
+  assert (HFREEWF:Ir.Memory.wf m').
+  { eapply Ir.Memory.free_wf. eassumption. eassumption. }
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  unfold Ir.MemBlock.set_lifetime_end in Heq2.
+  des_ifs.
+  symmetry in HGET.
+  (* apply Ir.Memory.get_In with (blks := Ir.Memory.blocks m) in HGET. *)
+  destruct (Nat.eqb l0 l) eqn:HL.
+  { rewrite PeanoNat.Nat.eqb_eq in HL.
+    subst l0.
+    erewrite Ir.Memory.get_set_id with (bid := l) (m := Ir.Memory.incr_time m).
+    { eexists. reflexivity. }
+    { eapply Ir.Memory.incr_time_wf. eapply HWF. reflexivity. }
+    { eassumption. }
+    { rewrite Ir.Memory.get_incr_time_id. symmetry in HGET. eassumption. }
+    { reflexivity. }
+  }
+  { rewrite PeanoNat.Nat.eqb_neq in HL.
+    erewrite Ir.Memory.get_set_diff with (bid := l) (bid' := l0) (m := Ir.Memory.incr_time m).
+    { eexists. reflexivity. }
+    { eapply Ir.Memory.incr_time_wf. eapply HWF. reflexivity. }
+    { eassumption. }
+    { rewrite Ir.Memory.get_incr_time_id. symmetry in HGET. eassumption. }
+    { reflexivity. }
+    { omega. }
+  }
+Qed.
+
+Lemma get_set_diff2:
+  forall m bid mb' m' bid'
+         (HWF:Ir.Memory.wf m)
+         (HWF':Ir.Memory.wf m')
+         (HGET:Ir.Memory.get m bid = None)
+         (HSET:m' = Ir.Memory.set m bid' mb')
+         (HDIFF:bid <> bid'),
+    Ir.Memory.get m' bid = None.
+Proof.
+  intros.
+  unfold Ir.Memory.get.
+  symmetry in HGET.
+  rewrite HSET.
+  unfold Ir.Memory.set.
+  simpl. rewrite list_find_key_set_diffkey.
+  unfold Ir.Memory.get in HGET. congruence.
+  congruence.
+Qed.
+
+Lemma get_free_none:
+  forall m m' l l0
+         (HWF:Ir.Memory.wf m)
+         (HFREE:Some m' = Ir.Memory.free m l0)
+         (HGET:Ir.Memory.get m l = None),
+    Ir.Memory.get m' l = None.
+Proof.
+  intros.
+  assert (HFREEWF:Ir.Memory.wf m').
+  { eapply Ir.Memory.free_wf. eassumption. eassumption. }
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  unfold Ir.MemBlock.set_lifetime_end in Heq2.
+  des_ifs.
+  destruct (Nat.eqb l0 l) eqn:HL.
+  { rewrite PeanoNat.Nat.eqb_eq in HL.
+    subst l0.
+    congruence. }
+  { rewrite PeanoNat.Nat.eqb_neq in HL.
+    erewrite get_set_diff2 with (bid := l) (bid' := l0) (m := Ir.Memory.incr_time m).
+    { reflexivity. }
+    { eapply Ir.Memory.incr_time_wf. eapply HWF. reflexivity. }
+    { eassumption. }
+    { rewrite Ir.Memory.get_incr_time_id. eassumption. }
+    { reflexivity. }
+    { omega. }
+  }
+Qed.
+
+
 (**********************************************
       Lemmas&Theorems about inboundness
  **********************************************)
