@@ -4247,6 +4247,87 @@ Proof.
     eexists. reflexivity. }
 Qed.
 
+Lemma icmp_ule_ptr_nondet_cond_new_invariant:
+  forall md l m' p1 p2 st nsz contents P op1 op2
+         (HWF:Ir.Config.wf md st)
+         (HGV1: Ir.Config.get_val st op1 = Some (Ir.ptr p1))
+         (HGV2: Ir.Config.get_val st op2 = Some (Ir.ptr p2))
+         (HALLOC:Ir.Memory.allocatable (Ir.Config.m st) (map (fun addr : nat => (addr, nsz)) P) = true)
+         (HSZ:nsz > 0)
+         (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk (Ir.heap) (begt, None) nsz
+                                                            (Ir.SYSALIGN) contents P))
+         (HNEW:(m', l) =
+               Ir.Memory.new (Ir.Config.m st) Ir.heap nsz Ir.SYSALIGN contents P),
+    Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m (Ir.Config.update_m st m')) =
+    Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m st).
+Proof.
+  intros.
+  unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond.
+  destruct p1.
+  { destruct p2.
+    { erewrite Ir.Memory.get_new with (m := Ir.Config.m st);
+        try reflexivity;
+        try (destruct HWF; eassumption);
+        try (try rewrite m_update_m; eassumption).
+      destruct (Ir.Memory.get (Ir.Config.m st) b) eqn:HGETB.
+      { destruct HWF. apply wf_no_bogus_ptr in HGV1. assumption. }
+      { destruct HWF. apply wf_no_bogus_ptr in HGV1. assumption. }
+    }
+    { reflexivity. }
+  }
+  { destruct p2.
+    { reflexivity. }
+    { unfold Ir.SmallStep.p2N. reflexivity. }
+  }
+Qed.
+
+Lemma icmp_ule_ptr_new_invariant:
+  forall md l m' p1 p2 st nsz contents P op1 op2
+         (HWF:Ir.Config.wf md st)
+         (HGV1: Ir.Config.get_val st op1 = Some (Ir.ptr p1))
+         (HGV2: Ir.Config.get_val st op2 = Some (Ir.ptr p2))
+         (HALLOC:Ir.Memory.allocatable (Ir.Config.m st) (map (fun addr : nat => (addr, nsz)) P) = true)
+         (HSZ:nsz > 0)
+         (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk (Ir.heap) (begt, None) nsz
+                                                            (Ir.SYSALIGN) contents P))
+         (HNEW:(m', l) =
+               Ir.Memory.new (Ir.Config.m st) Ir.heap nsz Ir.SYSALIGN contents P),
+    Ir.SmallStep.icmp_ule_ptr p1 p2 (Ir.Config.m (Ir.Config.update_m st m')) =
+    Ir.SmallStep.icmp_ule_ptr p1 p2 (Ir.Config.m st).
+Proof.
+  intros.
+  unfold Ir.SmallStep.icmp_ule_ptr.
+  erewrite icmp_ule_ptr_nondet_cond_new_invariant.
+  destruct (Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m st)) eqn:HNONDET; try reflexivity.
+  destruct p1.
+  { destruct p2.
+    { destruct (b =? b0) eqn:Heqb.
+      {
+        erewrite Ir.Memory.get_new with (m := Ir.Config.m st);
+          try reflexivity;
+          try (destruct HWF; eassumption);
+          try (try rewrite m_update_m; eassumption).
+        destruct HWF. apply wf_no_bogus_ptr in HGV1. assumption.
+      }
+      { unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond in HNONDET.
+        rewrite Heqb in HNONDET. inv HNONDET.
+      }
+    }
+    { erewrite p2N_new_invariant; try eassumption. reflexivity. }
+  }
+  { destruct p2.
+    { erewrite p2N_new_invariant;try eassumption. reflexivity. }
+    { unfold Ir.SmallStep.p2N. reflexivity. }
+  }
+  eassumption.
+  eassumption.
+  eassumption.
+  eassumption.
+  eassumption.
+  eassumption.
+  eassumption.
+Qed.
+
 
 Theorem reorder_malloc_icmp_ule:
   forall i1 i2 r1 r2 (opptr1 op21 op22:Ir.op) ty1 opty2
@@ -4346,7 +4427,10 @@ Proof.
               rewrite HLOCATE1'. rewrite Heq. rewrite Heq0.
               rewrite m_update_m in Heq1.
               assert (HPTR:Ir.SmallStep.icmp_ule_ptr p p0 (Ir.Config.m st) =
-                           Ir.SmallStep.icmp_ule_ptr p p0 m'). admit.
+                           Ir.SmallStep.icmp_ule_ptr p p0 m').
+              { erewrite <- icmp_ule_ptr_new_invariant. rewrite m_update_m. reflexivity.
+                eassumption. eassumption. eassumption. eassumption. eassumption.
+                eassumption. eassumption. }
               rewrite HPTR. rewrite Heq1. reflexivity.
             - s_malloc_trivial HLOCATE2'. get_val_independent_goal opptr1 r2.
           }
@@ -4391,7 +4475,10 @@ Proof.
           reflexivity. eapply HOP1. eapply HOP2.
           assert (HCMP: Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 m' =
                         Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m st)).
-          admit. rewrite <- HCMP. assumption.
+          { erewrite <- icmp_ule_ptr_nondet_cond_new_invariant. rewrite m_update_m.
+            reflexivity.
+            eassumption. eauto. eauto. eauto. eauto. eauto. eauto. }
+          rewrite <- HCMP. assumption.
           s_malloc_trivial HLOCATE2'.
           get_val_independent_goal opptr1 r2.
         }
@@ -4635,7 +4722,10 @@ Proof.
               rewrite m_update_m.
               assert (Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 m' =
                       Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m st)).
-              admit. congruence. }
+              { erewrite <- icmp_ule_ptr_nondet_cond_new_invariant.
+                rewrite m_update_m. reflexivity.
+                eauto. eauto. eauto. eauto. eauto. eauto. eauto. }
+              congruence. }
           }
         }
         { rewrite nstep_eq_trans_2.
@@ -4667,6 +4757,89 @@ Admitted.
    r2 = icmp_ule opty2 op21 op22
    free opptr1
 **********************************************)
+
+(* Lemma: Ir.SmallStep.icmp_ule_ptr_nondet_cond returns unchanged value even
+   if Memory.free is called *)
+Lemma icmp_ule_ptr_nondet_cond_free_invariant:
+  forall md st op1 op2 p1 p2 m' l
+         (HWF:Ir.Config.wf md st)
+         (HGV1: Ir.Config.get_val st op1 = Some (Ir.ptr p1))
+         (HGV2: Ir.Config.get_val st op2 = Some (Ir.ptr p2))
+         (HFREE:Some m' = Ir.Memory.free (Ir.Config.m st) l),
+    Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 m' =
+    Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m st).
+Proof.
+  intros.
+  destruct HWF.
+  assert (Ir.Memory.wf m').
+  { eapply Ir.Memory.free_wf. eassumption. eassumption. }
+  unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond.
+  destruct p1; try reflexivity.
+  destruct p2; try reflexivity.
+  destruct (Ir.Memory.get (Ir.Config.m st) b) eqn:Hgetb.
+  { dup Hgetb. apply Ir.Memory.get_free_some with (m' := m') (l0 := l) in Hgetb0.
+    destruct Hgetb0 as [blk' Hgetb'].
+    rewrite Hgetb'.
+
+    rewrite get_free_n with (m := Ir.Config.m st) (m' := m') (l := l) (l0 := b)
+                            (blk := t) (blk':= blk'); try assumption; try congruence.
+    assumption. eauto.
+  }
+  { (*( Ir.Memory.get (Ir.Config.m st) b = None *)
+    assert (H0:Ir.Memory.get m' b = None).
+    { eapply Ir.Memory.get_free_none. apply wf_m.
+      eassumption. eassumption. }
+    rewrite H0. reflexivity.
+  }
+Qed.
+
+(* Lemma: Ir.SmallStep.icmp_eq_ptr returns unchanged value even
+   if Memory.free is called *)
+Lemma icmp_ule_ptr_free_invariant:
+  forall md st op1 op2 p1 p2 m' l
+         (HWF:Ir.Config.wf md st)
+         (HGV1: Ir.Config.get_val st op1 = Some (Ir.ptr p1))
+         (HGV2: Ir.Config.get_val st op2 = Some (Ir.ptr p2))
+         (HFREE:Some m' = Ir.Memory.free (Ir.Config.m st) l),
+    Ir.SmallStep.icmp_ule_ptr p1 p2 m' =
+    Ir.SmallStep.icmp_ule_ptr p1 p2 (Ir.Config.m st).
+Proof.
+  intros.
+  unfold Ir.SmallStep.icmp_ule_ptr.
+  destruct p1.
+  { destruct p2.
+    { destruct (b =? b0) eqn:HBB0.
+      {
+        erewrite icmp_ule_ptr_nondet_cond_free_invariant.
+        destruct (Ir.Memory.get (Ir.Config.m st) b) eqn:Hgetb.
+        { dup Hgetb. apply Ir.Memory.get_free_some with (m' := m') (l0 := l) in Hgetb0.
+          destruct Hgetb0 as [blk' Hgetb'].
+          rewrite Hgetb'. reflexivity. destruct HWF.
+          eassumption. eauto. }
+        {
+          assert (H0:Ir.Memory.get m' b = None).
+          { eapply Ir.Memory.get_free_none.
+            destruct HWF.
+            eassumption. eassumption.
+            assumption. }
+          rewrite H0. reflexivity.
+        }
+        eassumption.
+        eassumption.
+        eassumption.
+        eassumption.
+      }
+      { unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond. rewrite HBB0. reflexivity. }
+    }
+    { erewrite p2N_free_invariant. reflexivity.
+      eassumption. eassumption. eassumption. }
+  }
+  { destruct p2.
+    { erewrite p2N_free_invariant. reflexivity.
+      eassumption. eassumption. eassumption. }
+    { unfold Ir.SmallStep.p2N. reflexivity. }
+  }
+Qed.
 
 Theorem reorder_free_icmp_ule:
   forall i1 i2 r2 (opptr1 op21 op22:Ir.op) opty2
@@ -4732,7 +4905,9 @@ Proof.
             rewrite m_update_m in Heq3.
             assert (HPTR:Ir.SmallStep.icmp_ule_ptr p0 p1 (Ir.Config.m st) =
                          Ir.SmallStep.icmp_ule_ptr p0 p1 t).
-            admit.
+            { unfold Ir.SmallStep.free in Heq0.
+              des_ifs; erewrite <- icmp_ule_ptr_free_invariant; try eauto.
+            }
             rewrite HPTR, Heq3. reflexivity.
           }
           { eapply Ir.SmallStep.s_det.
@@ -4772,7 +4947,8 @@ Proof.
           rewrite m_update_m in HNONDET.
           assert (HPTR:Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m st) =
                        Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 t).
-          admit.
+          { unfold Ir.SmallStep.free in Heq0.
+            des_ifs; erewrite <- icmp_ule_ptr_nondet_cond_free_invariant; eauto. }
           rewrite HPTR. assumption.
         }
         { eapply Ir.SmallStep.s_det.
@@ -4993,7 +5169,8 @@ Proof.
               rewrite m_update_m.
               assert (HPTR:Ir.SmallStep.icmp_ule_ptr p p0 t =
                            Ir.SmallStep.icmp_ule_ptr p p0 (Ir.Config.m st)).
-              admit.
+              { unfold Ir.SmallStep.free in Heq3.
+                des_ifs; erewrite <- icmp_ule_ptr_free_invariant; eauto. }
               rewrite HPTR. rewrite Heq1.
               reflexivity.
             }
@@ -5044,7 +5221,8 @@ Proof.
               assert (HNONDETCND:
                         Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 t =
                         Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m st)).
-              admit.
+              { unfold Ir.SmallStep.free in Heq0.
+                des_ifs; erewrite icmp_ule_ptr_nondet_cond_free_invariant; eauto. }
               rewrite HNONDETCND.
               eassumption. }
           }
@@ -5113,6 +5291,31 @@ Proof.
     try (des_ifs; eexists; reflexivity).
 Qed.
 
+Lemma psub_new_invariant:
+  forall md l m' (p1 p2:Ir.ptrval) st nsz contents P op1 op2 (sz:nat)
+         (HWF:Ir.Config.wf md st)
+         (HGV1: Ir.Config.get_val st op1 = Some (Ir.ptr p1))
+         (HGV2: Ir.Config.get_val st op2 = Some (Ir.ptr p2))
+         (HALLOC:Ir.Memory.allocatable (Ir.Config.m st) (map (fun addr : nat => (addr, nsz)) P) = true)
+         (HSZ:nsz > 0)
+         (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk (Ir.heap) (begt, None) nsz
+                                                            (Ir.SYSALIGN) contents P))
+         (HNEW:(m', l) =
+               Ir.Memory.new (Ir.Config.m st) Ir.heap nsz Ir.SYSALIGN contents P),
+    Ir.SmallStep.psub p1 p2 (Ir.Config.m (Ir.Config.update_m st m')) sz =
+    Ir.SmallStep.psub p1 p2 (Ir.Config.m st) sz.
+Proof.
+  intros.
+  unfold Ir.SmallStep.psub.
+  destruct p1.
+  { destruct p2; try reflexivity.
+    erewrite p2N_new_invariant; try eassumption. reflexivity.
+  }
+  { destruct p2.
+    { erewrite p2N_new_invariant;try eassumption. reflexivity. }
+    reflexivity.
+  }
+Qed.
 
 Theorem reorder_malloc_psub:
   forall i1 i2 r1 r2 (opptr1 op21 op22:Ir.op) ty1 retty2 ptrty2
@@ -5213,7 +5416,9 @@ Proof.
           { assert (r2 <> r1) by admit; congruence. }
           { assert (HPSUB:Ir.SmallStep.psub p p0 m' n =
                           Ir.SmallStep.psub p p0 (Ir.Config.m st) n).
-            admit. rewrite HPSUB. apply nstep_eq_refl. }
+            { erewrite <- psub_new_invariant; eauto. rewrite m_update_m.
+              reflexivity. }
+            rewrite HPSUB. apply nstep_eq_refl. }
         }
       }
   - (* malloc raised oom. *)
@@ -5402,7 +5607,7 @@ Proof.
               rewrite m_update_m.
               assert (HPTR:Ir.SmallStep.psub p p0 m' n =
                            Ir.SmallStep.psub p p0 (Ir.Config.m st) n).
-              admit.
+              { erewrite <- psub_new_invariant; eauto. rewrite m_update_m. reflexivity. }
               rewrite HPTR. reflexivity.
             }
           }
@@ -5439,6 +5644,29 @@ Admitted.
    r2 = psub retty2 ptrty2 op21 op22
    free opptr1
 **********************************************)
+
+(* Lemma: Ir.SmallStep.psub returns unchanged value even
+   if Memory.free is called *)
+Lemma psub_free_invariant:
+  forall md st op1 op2 p1 p2 m' l sz
+         (HWF:Ir.Config.wf md st)
+         (HGV1: Ir.Config.get_val st op1 = Some (Ir.ptr p1))
+         (HGV2: Ir.Config.get_val st op2 = Some (Ir.ptr p2))
+         (HFREE:Some m' = Ir.Memory.free (Ir.Config.m st) l),
+    Ir.SmallStep.psub p1 p2 m' sz =
+    Ir.SmallStep.psub p1 p2 (Ir.Config.m st) sz.
+Proof.
+  intros.
+  unfold Ir.SmallStep.psub.
+  destruct p1.
+  { destruct p2; try reflexivity.
+    { erewrite p2N_free_invariant; eauto. }
+  }
+  { destruct p2.
+    { erewrite p2N_free_invariant; eauto. }
+    { unfold Ir.SmallStep.p2N. reflexivity. }
+  }
+Qed.
 
 Theorem reorder_free_psub:
   forall i1 i2 r2 (opptr1 op21 op22:Ir.op) retty2 ptrty2
@@ -5503,7 +5731,8 @@ Proof.
             rewrite Heq1. rewrite Heq2.
             assert (HPTR:Ir.SmallStep.psub p0 p1 (Ir.Config.m st) n =
                          Ir.SmallStep.psub p0 p1 t n).
-            admit.
+            { unfold Ir.SmallStep.free in Heq0.
+              des_ifs; erewrite <- psub_free_invariant; eauto. }
             rewrite HPTR. reflexivity.
           }
           { eapply Ir.SmallStep.s_det.
@@ -5724,7 +5953,8 @@ Proof.
             rewrite m_update_m.
             assert (HPTR:Ir.SmallStep.psub p p0 t n =
                          Ir.SmallStep.psub p p0 (Ir.Config.m st) n).
-            admit.
+            { unfold Ir.SmallStep.free in Heq2.
+              des_ifs; erewrite <- psub_free_invariant; eauto. }
             rewrite HPTR.
             reflexivity.
           }
