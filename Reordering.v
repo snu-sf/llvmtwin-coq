@@ -3380,6 +3380,49 @@ Admitted.
    free opptr1
 **********************************************)
 
+Lemma get_free_n:
+  forall m m' l l0 blk blk'
+         (HWF:Ir.Memory.wf m)
+         (HFREE:Some m' = Ir.Memory.free m l)
+         (HGET: Some blk  = Ir.Memory.get m l0)
+         (HGET':Some blk' = Ir.Memory.get m' l0),
+    Ir.MemBlock.n blk = Ir.MemBlock.n blk'.
+Proof.
+  intros.
+  assert (Ir.Memory.wf m').
+  { eapply Ir.Memory.free_wf. eassumption. eassumption. }
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  destruct (PeanoNat.Nat.eqb l l0) eqn:HLEQ.
+  { rewrite PeanoNat.Nat.eqb_eq in HLEQ.
+    subst l.
+    Check Ir.Memory.get_set_id.
+    rewrite Ir.Memory.get_set_id with (m := Ir.Memory.incr_time m)
+      (mb := blk)
+      (mb' := t0) (m' := Ir.Memory.set (Ir.Memory.incr_time m) l0 t0) in HGET';
+      try congruence.
+    { unfold Ir.MemBlock.set_lifetime_end in Heq2.
+      destruct (Ir.MemBlock.alive t).
+      { inv Heq2. inv HGET'. rewrite Heq in HGET.
+        inv HGET. unfold Ir.MemBlock.inbounds.
+        simpl. reflexivity. }
+      { congruence. }
+    }
+    { apply Ir.Memory.incr_time_wf with (m := m). assumption.
+      reflexivity. }
+    { unfold Ir.Memory.get in *.
+      unfold Ir.Memory.incr_time. simpl. congruence.
+    }
+  }
+  { rewrite PeanoNat.Nat.eqb_neq in HLEQ.
+    rewrite Ir.Memory.get_set_diff with (m := Ir.Memory.incr_time m)
+                              (mb' := t0) (mb := blk) (bid' := l)
+      in HGET'; try assumption; try congruence.
+    { eapply Ir.Memory.incr_time_wf. eapply HWF. reflexivity. }
+    { rewrite Ir.Memory.get_incr_time_id. congruence. }
+  }
+Qed.
+
 (* Lemma: Ir.SmallStep.icmp_eq_ptr_nondet_cond returns unchanged value even
    if Memory.free is called *)
 Lemma icmp_eq_ptr_nondet_cond_free_invariant:
@@ -3392,41 +3435,238 @@ Lemma icmp_eq_ptr_nondet_cond_free_invariant:
     Ir.SmallStep.icmp_eq_ptr_nondet_cond p1 p2 (Ir.Config.m st).
 Proof.
   intros.
+  destruct HWF.
+  assert (Ir.Memory.wf m').
+  { eapply Ir.Memory.free_wf. eassumption. eassumption. }
   unfold Ir.SmallStep.icmp_eq_ptr_nondet_cond.
   destruct p1.
   { destruct p2.
-    { destruct (Ir.Memory.get (Ir.Config.m 
-  destruct p as [l0 o0 | ].
-  { 
-    unfold Ir.SmallStep.gep.
-    destruct (Ir.Memory.get m' l0) eqn:Hget';
-      destruct (Ir.Memory.get (Ir.Config.m st) l0) eqn:Hget; try reflexivity.
-    { repeat (rewrite get_free_inbounds with (m := Ir.Config.m st) (m' := m')
-                                             (l := l) (l0 := l0) (blk := t0) (blk' := t));
-        try ( destruct HWF; assumption );
-        try congruence;
-        try eassumption.
-    }
-    { assert (Ir.Memory.get m' l0 = None).
-      { eapply Ir.Memory.get_free_none.
-        { destruct HWF. eassumption. }
-        { eassumption. }
-        { eassumption. }
+    { destruct (Ir.Memory.get (Ir.Config.m st) b) eqn:Hgetb.
+      { dup Hgetb. apply Ir.Memory.get_free_some with (m' := m') (l0 := l) in Hgetb0.
+        destruct Hgetb0 as [blk' Hgetb'].
+        rewrite Hgetb'.
+
+        destruct (Ir.Memory.get (Ir.Config.m st) b0) eqn:Hgetb1.
+        { dup Hgetb1. apply Ir.Memory.get_free_some with (m' := m') (l0 := l) in Hgetb0.
+          destruct Hgetb0 as [blk0' Hgetb1'].
+          rewrite Hgetb1'.
+          { rewrite get_free_n with (m := Ir.Config.m st) (m' := m') (l := l) (l0 := b)
+                                    (blk := t) (blk':= blk'); try assumption; try congruence.
+            rewrite get_free_n with (m := Ir.Config.m st) (m' := m') (l := l) (l0 := b0)
+                                    (blk := t0) (blk':= blk0'); try assumption; try congruence.
+            destruct (l =? b) eqn:HLB.
+            { rewrite PeanoNat.Nat.eqb_eq in HLB.
+              subst l.
+              unfold Ir.Memory.free in HFREE.
+              rewrite Hgetb in HFREE.
+              destruct (Ir.MemBlock.bt t) eqn:Hbt; try congruence.
+              destruct (Ir.MemBlock.alive t) eqn:Halivet; try congruence.
+              destruct (Ir.MemBlock.set_lifetime_end t (Ir.Memory.mt (Ir.Config.m st))) eqn:HLIFETIME;
+                try congruence.
+              rewrite Ir.Memory.get_set_id with (mb' := t1) (mb := t)
+                                                (m := Ir.Memory.incr_time (Ir.Config.m st)) in Hgetb'.
+              { inv Hgetb'. inv HFREE. unfold Ir.MemBlock.set_lifetime_end in HLIFETIME.
+                rewrite Halivet in HLIFETIME. inv HLIFETIME. simpl.
+                destruct (b =? b0) eqn:HBB0.
+                { rewrite PeanoNat.Nat.eqb_eq in HBB0.
+                  subst b.
+                  rewrite Ir.Memory.get_set_id with (m := Ir.Memory.incr_time (Ir.Config.m st))
+                    (mb := t0) (mb' := {|
+                                        Ir.MemBlock.bt := Ir.MemBlock.bt t;
+                                        Ir.MemBlock.r := (fst (Ir.MemBlock.r t),
+                                                          Some (Ir.Memory.mt (Ir.Config.m st)));
+                                        Ir.MemBlock.n := Ir.MemBlock.n t;
+                                        Ir.MemBlock.a := Ir.MemBlock.a t;
+                                        Ir.MemBlock.c := Ir.MemBlock.c t;
+                                        Ir.MemBlock.P := Ir.MemBlock.P t |}) in Hgetb1'.
+                  inv Hgetb1'.
+                  simpl. reflexivity.
+                  { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
+                  { eassumption. }
+                  { rewrite Ir.Memory.get_incr_time_id. eassumption. }
+                  { reflexivity. }
+                }
+                { rewrite Ir.Memory.get_set_diff with (m := Ir.Memory.incr_time (Ir.Config.m st))
+                      (mb := t0) (mb' := {|
+                                          Ir.MemBlock.bt := Ir.MemBlock.bt t;
+                                          Ir.MemBlock.r := (fst (Ir.MemBlock.r t),
+                                                            Some (Ir.Memory.mt (Ir.Config.m st)));
+                                          Ir.MemBlock.n := Ir.MemBlock.n t;
+                                          Ir.MemBlock.a := Ir.MemBlock.a t;
+                                          Ir.MemBlock.c := Ir.MemBlock.c t;
+                                          Ir.MemBlock.P := Ir.MemBlock.P t |})
+                      (bid' := b) in Hgetb1'.
+                  inv Hgetb1'.
+                  unfold Ir.MemBlock.alive in Halivet.
+                  destruct (Ir.MemBlock.r t) eqn:Htr.
+                  simpl in Halivet. destruct o; try congruence.
+                  destruct (Ir.MemBlock.r blk0') eqn:Hrblk0'.
+                  destruct o.
+                  { simpl. destruct wf_m.
+                    assert (fst (Ir.MemBlock.r blk0') < Ir.Memory.mt (Ir.Config.m st)).
+                    { eapply wf_blocktime. symmetry in Hgetb1. eapply Ir.Memory.get_In in Hgetb1.
+                      eapply Hgetb1. reflexivity. }
+                    rewrite Hrblk0' in H0. SearchAbout (PeanoNat.Nat.ltb).
+                    simpl in H0.
+                    assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
+                    { intros HH. omega. }
+                    rewrite <- Nat.ltb_nlt in H1.
+                    rewrite H1. simpl. reflexivity.
+                  }
+                  { simpl. destruct wf_m.
+                    assert (fst (Ir.MemBlock.r blk0') < Ir.Memory.mt (Ir.Config.m st)).
+                    { eapply wf_blocktime. symmetry in Hgetb1. eapply Ir.Memory.get_In in Hgetb1.
+                      eapply Hgetb1. reflexivity. }
+                    rewrite Hrblk0' in H0. SearchAbout (PeanoNat.Nat.ltb).
+                    simpl in H0.
+                    assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
+                    { intros HH. omega. }
+                    rewrite <- Nat.ltb_nlt in H1.
+                    rewrite H1. simpl. reflexivity.
+                  }
+                  { eapply Ir.Memory.incr_time_wf. apply wf_m. reflexivity. }
+                  { eassumption. }
+                  { erewrite Ir.Memory.get_incr_time_id. assumption. }
+                  { reflexivity. }
+                  { rewrite PeanoNat.Nat.eqb_neq in HBB0. omega. }
+                }
+              }
+              { eapply Ir.Memory.incr_time_wf. apply wf_m. reflexivity. }
+              { eassumption. }
+              { erewrite Ir.Memory.get_incr_time_id. assumption. }
+              { inv HFREE. reflexivity. }
+            }
+            { (* okay, freed block l is different from b. *)
+              destruct (l =? b0) eqn:HLB0.
+              { rewrite PeanoNat.Nat.eqb_eq in HLB0.
+                subst l.
+                rewrite Nat.eqb_sym in HLB.
+                rewrite HLB. simpl.
+                unfold Ir.Memory.free in HFREE.
+                rewrite Hgetb1 in HFREE.
+                destruct (Ir.MemBlock.bt t0) eqn:HBT0; try congruence.
+                destruct (Ir.MemBlock.set_lifetime_end t0 (Ir.Memory.mt (Ir.Config.m st))) eqn:HLIFETIME0;
+                  try congruence.
+                { 
+                  unfold Ir.MemBlock.set_lifetime_end in HLIFETIME0.
+                  destruct (Ir.MemBlock.alive t0) eqn:HALIVE0; try congruence.
+                  inv HLIFETIME0.
+                  inv HFREE.
+                  rewrite Ir.Memory.get_set_diff with (m := Ir.Memory.incr_time (Ir.Config.m st))
+                                                      (bid' := b0) (mb := t) (mb' := {|
+                                                                                      Ir.MemBlock.bt := Ir.MemBlock.bt t0;
+                                                                                      Ir.MemBlock.r := (fst (Ir.MemBlock.r t0), Some (Ir.Memory.mt (Ir.Config.m st)));
+                                                                                      Ir.MemBlock.n := Ir.MemBlock.n t0;
+                                                                                      Ir.MemBlock.a := Ir.MemBlock.a t0;
+                                                                                      Ir.MemBlock.c := Ir.MemBlock.c t0;
+                                                                                      Ir.MemBlock.P := Ir.MemBlock.P t0 |}) in Hgetb'.
+                  inv Hgetb'.
+                  unfold Ir.MemBlock.alive in HALIVE0.
+                  destruct (Ir.MemBlock.r t0) eqn:HRT0.
+                  simpl in HALIVE0. destruct o; try congruence.
+                  destruct (Ir.MemBlock.r blk') eqn:Hrblk'.
+                  rewrite Ir.Memory.get_set_id with (m := Ir.Memory.incr_time (Ir.Config.m st))
+                                                    (mb := t0)
+                                                    (mb' := {|
+                                                             Ir.MemBlock.bt := Ir.MemBlock.bt t0;
+                                                             Ir.MemBlock.r := (fst (t, @None nat),
+                                                                               Some (Ir.Memory.mt (Ir.Config.m st)));
+                                                             Ir.MemBlock.n := Ir.MemBlock.n t0;
+                                                             Ir.MemBlock.a := Ir.MemBlock.a t0;
+                                                             Ir.MemBlock.c := Ir.MemBlock.c t0;
+                                                             Ir.MemBlock.P := Ir.MemBlock.P t0 |}) in Hgetb1'.
+                  inv Hgetb1'.
+                  simpl.
+                  destruct o.
+                  {
+                    (* blk' has (_, Some) *)
+                    destruct wf_m.
+                    assert (fst (Ir.MemBlock.r blk') < Ir.Memory.mt (Ir.Config.m st)).
+                    { eapply wf_blocktime. symmetry in Hgetb. eapply Ir.Memory.get_In in Hgetb.
+                      eapply Hgetb. reflexivity. }
+                    rewrite Hrblk' in H0.
+                    simpl in H0.
+                    assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
+                    { intros HH. omega. }
+                    rewrite <- Nat.ltb_nlt in H1.
+                    rewrite H1. simpl. rewrite orb_false_r. reflexivity.
+                  }
+                  { (* blk' has (_, None) lifetime *)
+                    destruct wf_m.
+                    assert (fst (Ir.MemBlock.r blk') < Ir.Memory.mt (Ir.Config.m st)).
+                    { eapply wf_blocktime. symmetry in Hgetb. eapply Ir.Memory.get_In in Hgetb.
+                      eapply Hgetb. reflexivity. }
+                    rewrite Hrblk' in H0.
+                    simpl in H0.
+                    assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
+                    { intros HH. omega. }
+                    rewrite <- Nat.ltb_nlt in H1.
+                    rewrite H1. simpl. rewrite orb_false_r. reflexivity.
+                  } 
+                  { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
+                  { assumption. }
+                  { rewrite Ir.Memory.get_incr_time_id. assumption. }
+                  { reflexivity. }
+                  { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
+                  { assumption. }
+                  { rewrite Ir.Memory.get_incr_time_id. assumption. }
+                  { reflexivity. }
+                  { rewrite PeanoNat.Nat.eqb_neq in HLB. congruence. }
+                }
+                { unfold Ir.MemBlock.set_lifetime_end in HLIFETIME0.
+                  des_ifs.
+                }
+              }
+              { (* freed block l is diferent from both b and b0! *)
+                rewrite PeanoNat.Nat.eqb_neq in HLB, HLB0.
+                unfold Ir.Memory.free in HFREE.
+                destruct (Ir.Memory.get (Ir.Config.m st) l) eqn:Hgetl; try congruence.
+                destruct (Ir.MemBlock.bt t1) eqn:Hbtt1; try congruence.
+                destruct (Ir.MemBlock.alive t1) eqn:Halivet1; try congruence.
+                destruct (Ir.MemBlock.set_lifetime_end t1 (Ir.Memory.mt (Ir.Config.m st))) eqn:Hlifetimet1;
+                  try congruence.
+                simpl in *.
+                inv HFREE.
+                rewrite Ir.Memory.get_set_diff with (m := Ir.Memory.incr_time (Ir.Config.m st))
+                                                    (bid' := l) (mb := t) (mb' := t2) in Hgetb'.
+                inv Hgetb'.
+                rewrite Ir.Memory.get_set_diff with (m := Ir.Memory.incr_time (Ir.Config.m st))
+                                                    (bid' := l) (mb := t0) (mb' := t2) in Hgetb1'.
+                inv Hgetb1'.
+                reflexivity.
+                { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
+                { assumption. }
+                { rewrite Ir.Memory.get_incr_time_id. assumption. }
+                { reflexivity. }
+                { congruence. }
+                { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
+                { assumption. }
+                { rewrite Ir.Memory.get_incr_time_id. assumption. }
+                { reflexivity. }
+                { congruence. }
+              }
+            }
+          }
+          assumption. congruence.
+        }
+        { (* Ir.Memory.get (Ir.Config.m st) b0 = None *)
+          assert (H0:Ir.Memory.get m' b0 = None).
+          { eapply Ir.Memory.get_free_none. apply wf_m.
+            eassumption. eassumption. }
+          rewrite H0. reflexivity.
+        }
+        assumption. congruence.
       }
-      congruence.
-    }
-    { assert (exists blk', Ir.Memory.get m' l0 = Some blk').
-      { eapply Ir.Memory.get_free_some.
-        { destruct HWF. eassumption. }
-        { eassumption. }
-        { eassumption. }
+      { (*( Ir.Memory.get (Ir.Config.m st) b = None *)
+        assert (H0:Ir.Memory.get m' b = None).
+        { eapply Ir.Memory.get_free_none. apply wf_m.
+          eassumption. eassumption. }
+        rewrite H0. reflexivity.
       }
-      destruct H.
-      congruence.
     }
+    reflexivity.
   }
-  { unfold Ir.SmallStep.gep.
-    simpl. reflexivity. }
+  { reflexivity. }
 Qed.
 
 (* Lemma: Ir.SmallStep.icmp_eq_ptr returns unchanged value even
@@ -3441,38 +3681,18 @@ Lemma icmp_eq_ptr_free_invariant:
     Ir.SmallStep.icmp_eq_ptr p1 p2 (Ir.Config.m st).
 Proof.
   intros.
-  unfold Ir.
-  destruct p as [l0 o0 | ].
-  { 
-    unfold Ir.SmallStep.gep.
-    destruct (Ir.Memory.get m' l0) eqn:Hget';
-      destruct (Ir.Memory.get (Ir.Config.m st) l0) eqn:Hget; try reflexivity.
-    { repeat (rewrite get_free_inbounds with (m := Ir.Config.m st) (m' := m')
-                                             (l := l) (l0 := l0) (blk := t0) (blk' := t));
-        try ( destruct HWF; assumption );
-        try congruence;
-        try eassumption.
-    }
-    { assert (Ir.Memory.get m' l0 = None).
-      { eapply Ir.Memory.get_free_none.
-        { destruct HWF. eassumption. }
-        { eassumption. }
-        { eassumption. }
-      }
-      congruence.
-    }
-    { assert (exists blk', Ir.Memory.get m' l0 = Some blk').
-      { eapply Ir.Memory.get_free_some.
-        { destruct HWF. eassumption. }
-        { eassumption. }
-        { eassumption. }
-      }
-      destruct H.
-      congruence.
-    }
+  unfold Ir.SmallStep.icmp_eq_ptr.
+  destruct p1.
+  { destruct p2.
+    { destruct (b =? b0); try reflexivity.
+      erewrite icmp_eq_ptr_nondet_cond_free_invariant. reflexivity.
+      eassumption. eassumption. eassumption. eassumption. }
+    { erewrite p2N_free_invariant. reflexivity.
+      eassumption. eassumption. eassumption. }
   }
-  { unfold Ir.SmallStep.gep.
-    simpl. reflexivity. }
+  { destruct p2; try (unfold Ir.SmallStep.p2N; reflexivity).
+    erewrite p2N_free_invariant. reflexivity. eassumption. eassumption. eassumption.
+  }
 Qed.
 
 Theorem reorder_free_icmp_eq:
@@ -3539,7 +3759,13 @@ Proof.
             rewrite m_update_m in Heq3.
             assert (HPTR:Ir.SmallStep.icmp_eq_ptr p0 p1 (Ir.Config.m st) =
                          Ir.SmallStep.icmp_eq_ptr p0 p1 t).
-            admit.
+            { unfold Ir.SmallStep.free in Heq0.
+              des_ifs.
+              erewrite <- icmp_eq_ptr_free_invariant. reflexivity. eassumption.
+              eassumption. eassumption. symmetry in Heq0. eapply Heq0.
+              erewrite <- icmp_eq_ptr_free_invariant. reflexivity. eassumption.
+              eassumption. eassumption. symmetry in Heq0. eapply Heq0.
+            }
             rewrite HPTR, Heq3. reflexivity.
           }
           { eapply Ir.SmallStep.s_det.
@@ -3579,7 +3805,13 @@ Proof.
           rewrite m_update_m in HNONDET.
           assert (HPTR:Ir.SmallStep.icmp_eq_ptr_nondet_cond p1 p2 (Ir.Config.m st) =
                        Ir.SmallStep.icmp_eq_ptr_nondet_cond p1 p2 t).
-          admit.
+          { unfold Ir.SmallStep.free in Heq0.
+            des_ifs.
+            erewrite <- icmp_eq_ptr_nondet_cond_free_invariant.
+            eassumption. eassumption. eauto. eauto. eauto.
+            erewrite <- icmp_eq_ptr_nondet_cond_free_invariant.
+            eassumption. eassumption. eauto. eauto. eauto.
+          }
           rewrite HPTR. assumption.
         }
         { eapply Ir.SmallStep.s_det.
@@ -3807,7 +4039,8 @@ Proof.
               rewrite m_update_m.
               assert (HPTR:Ir.SmallStep.icmp_eq_ptr p p0 t =
                            Ir.SmallStep.icmp_eq_ptr p p0 (Ir.Config.m st)).
-              admit.
+              { unfold Ir.SmallStep.free in Heq3. des_ifs;
+                erewrite <- icmp_eq_ptr_free_invariant; try eauto. }
               rewrite HPTR. rewrite Heq1.
               reflexivity.
             }
@@ -3858,7 +4091,8 @@ Proof.
               assert (HNONDETCND:
                         Ir.SmallStep.icmp_eq_ptr_nondet_cond p1 p2 t =
                         Ir.SmallStep.icmp_eq_ptr_nondet_cond p1 p2 (Ir.Config.m st)).
-              admit.
+              { unfold Ir.SmallStep.free in Heq0.
+                des_ifs; erewrite icmp_eq_ptr_nondet_cond_free_invariant; eauto. }
               rewrite HNONDETCND.
               eassumption. }
           }
