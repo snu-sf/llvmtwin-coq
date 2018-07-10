@@ -26,6 +26,28 @@ Definition has_data_dependency (i1 i2:Ir.Inst.t): bool :=
   | None => false
   | Some (r1, _) => (List.existsb (fun r => Nat.eqb r r1) (Ir.Inst.regops i2))
   end.
+
+(* Checks whether a program `i1;i2` is well-formed.
+   This checks two things:
+   (1) defs of i1 and i2 aren't the same (by SSA)
+   (2) i1's use never contains i2's def, because i1 is never phi-node by definition of Ir.Inst.
+       (Note that this is possible if i1;i2 is in a dead loop,
+       but for simplity I'll assume that there's no dead loop.)
+   (3) i2's use never contains i2's def, in the same reason, and
+   (4) i1's use never contains i1's def. *)
+Definition program_wellformed (i1 i2:Ir.Inst.t): bool :=
+  match (Ir.Inst.def i2) with
+  | None => true
+  | Some (r2, _) =>
+    match Ir.Inst.def i1 with
+    | None => true
+    | Some (r1, _) =>
+      (negb (Nat.eqb r1 r2))
+      && (negb (List.existsb (fun r => Nat.eqb r r1) (Ir.Inst.regops i1)))
+    end
+      && (negb (List.existsb (fun r => Nat.eqb r r2) (Ir.Inst.regops i1)))
+      && (negb (List.existsb (fun r => Nat.eqb r r2) (Ir.Inst.regops i2)))
+  end.
     
 (* Analogous to Ir.SmallStep.incrpc, except that it returns None if there's no
    trivial next pc. *)
@@ -223,51 +245,6 @@ Proof.
         des_ifs.
 Qed.
 
-Lemma update_rval_update_m:
-  forall m st r v,
-    Ir.Config.update_rval (Ir.Config.update_m st m) r v =
-    Ir.Config.update_m (Ir.Config.update_rval st r v) m.
-Proof.
-  intros.
-  unfold Ir.Config.update_rval.
-  unfold Ir.Config.update_m.
-  simpl. des_ifs. rewrite Heq. reflexivity.
-Qed.
-
-Lemma get_funid_update_m:
-  forall st m cid,
-    Ir.Config.get_funid (Ir.Config.update_m st m) cid =
-    Ir.Config.get_funid st cid.
-Proof.
-  intros.
-  unfold Ir.Config.get_funid.
-  unfold Ir.Config.update_m.
-  simpl. reflexivity.
-Qed.
-
-Lemma cur_fdef_pc_update_m:
-  forall m (md:Ir.IRModule.t) st,
-    Ir.Config.cur_fdef_pc md (Ir.Config.update_m st m) =
-    Ir.Config.cur_fdef_pc md st.
-Proof.
-  intros.
-  unfold Ir.Config.cur_fdef_pc.
-  unfold Ir.Config.update_m. simpl.
-  unfold Ir.Config.update_rval.
-  unfold Ir.Config.update_m.
-  simpl. des_ifs.
-Qed.
-
-Lemma update_pc_update_m:
-  forall m st pc,
-    Ir.Config.update_pc (Ir.Config.update_m st m) pc =
-    Ir.Config.update_m (Ir.Config.update_pc st pc) m.
-Proof.
-  intros.
-  unfold Ir.Config.update_pc.
-  unfold Ir.Config.update_m.
-  simpl. des_ifs. rewrite Heq. reflexivity.
-Qed.
 
 Lemma eq_wopc_update_m:
   forall m st1 st2 (HEQ:Ir.Config.eq_wopc st1 st2),
@@ -288,8 +265,8 @@ Lemma incrpc_update_m:
 Proof.
   intros.
   unfold Ir.SmallStep.incrpc.
-  rewrite cur_fdef_pc_update_m.
-  des_ifs. rewrite update_pc_update_m. reflexivity.
+  rewrite Ir.Config.cur_fdef_pc_update_m.
+  des_ifs. rewrite Ir.Config.update_pc_update_m. reflexivity.
 Qed.
 
 Lemma m_update_m:
@@ -307,7 +284,7 @@ Lemma update_reg_and_incrpc_update_m:
 Proof.
   intros.
   unfold Ir.SmallStep.update_reg_and_incrpc.
-  rewrite update_rval_update_m.
+  rewrite Ir.Config.update_rval_update_m.
   rewrite incrpc_update_m. reflexivity.
 Qed.
 
@@ -339,51 +316,23 @@ Proof.
   des_ifs.
 Qed.
 
-Lemma stack_eq_wopc_update_pc1:
-  forall st1 st2 pc1
-         (HEQ:Ir.Stack.eq_wopc (Ir.Config.s st1) (Ir.Config.s st2)),
-    Ir.Stack.eq_wopc (Ir.Config.s (Ir.Config.update_pc st1 pc1)) (Ir.Config.s st2).
-Proof.
-  intros.
-  unfold Ir.Config.update_pc.
-  inv HEQ.
-  - rewrite <- H0. constructor.
-  - desH H1.
-    des_ifs.
-    simpl. constructor.
-    simpl. split; assumption. assumption.
-Qed.
-
-Lemma stack_eq_wopc_update_pc2:
-  forall st1 st2 pc2
-         (HEQ:Ir.Stack.eq_wopc (Ir.Config.s st1) (Ir.Config.s st2)),
-    Ir.Stack.eq_wopc (Ir.Config.s st1) (Ir.Config.s (Ir.Config.update_pc st2 pc2)).
-Proof.
-  intros.
-  unfold Ir.Config.update_pc.
-  inv HEQ.
-  - rewrite <- H. constructor.
-  - desH H1.
-    des_ifs.
-    simpl. constructor.
-    simpl. split; assumption. assumption.
-Qed.
-
 Lemma stack_eq_wopc_incrpc:
   forall st1 st2  md1 md2
          (HEQ:Ir.Stack.eq_wopc (Ir.Config.s st1) (Ir.Config.s st2)),
     Ir.Stack.eq_wopc (Ir.Config.s (Ir.SmallStep.incrpc md1 st1))
-                     (Ir.Config.s (Ir.SmallStep.incrpc md2 st2)).
+                  (Ir.Config.s (Ir.SmallStep.incrpc md2 st2)).
 Proof.
   intros.
   unfold Ir.SmallStep.incrpc.
   des_ifs.
-  - apply stack_eq_wopc_update_pc1. apply stack_eq_wopc_update_pc2. assumption.
-  - apply stack_eq_wopc_update_pc1. assumption.
-  - apply stack_eq_wopc_update_pc1. assumption.
-  - apply stack_eq_wopc_update_pc2. assumption.
-  - apply stack_eq_wopc_update_pc2. assumption.
+  - apply Ir.Config.stack_eq_wopc_update_pc1.
+    apply Ir.Config.stack_eq_wopc_update_pc2. assumption.
+  - apply Ir.Config.stack_eq_wopc_update_pc1. assumption.
+  - apply Ir.Config.stack_eq_wopc_update_pc1. assumption.
+  - apply Ir.Config.stack_eq_wopc_update_pc2. assumption.
+  - apply Ir.Config.stack_eq_wopc_update_pc2. assumption.
 Qed.
+
 
 Lemma config_eq_wopc_update_reg_and_incrpc_update_m_reorder:
   forall md1 md2 st r v m,
@@ -457,28 +406,6 @@ Proof.
   }
 Qed.
 
-Lemma cur_inst_update_rval:
-  forall md st r v,
-    Ir.Config.cur_inst md (Ir.Config.update_rval st r v) =
-    Ir.Config.cur_inst md st.
-Proof.
-  intros.
-  unfold Ir.Config.cur_inst.
-  rewrite Ir.Config.cur_fdef_pc_update_rval. reflexivity.
-Qed.
-
-Lemma update_pc_update_rval:
-  forall st r v p,
-    Ir.Config.update_pc (Ir.Config.update_rval st r v) p =
-    Ir.Config.update_rval (Ir.Config.update_pc st p) r v.
-Proof.
-  intros.
-  unfold Ir.Config.update_pc.
-  unfold Ir.Config.update_rval.
-  des_ifs; simpl in *.
-  inv Heq1. inv Heq. reflexivity.
-Qed.
-
 Lemma update_pc_incrpc:
   forall md st p,
     Ir.Config.update_pc (Ir.SmallStep.incrpc md st) p =
@@ -492,18 +419,6 @@ Proof.
   - inv Heq.  reflexivity.
 Qed.
 
-Lemma cur_inst_update_m:
-  forall md st m,
-    Ir.Config.cur_inst md (Ir.Config.update_m st m) =
-    Ir.Config.cur_inst md st.
-Proof.
-  intros.
-  unfold Ir.Config.cur_inst.
-  unfold Ir.Config.cur_fdef_pc.
-  unfold Ir.Config.update_m.
-  des_ifs.
-Qed.
-
 Lemma cur_inst_incrpc_update_m:
   forall md m st,
     Ir.Config.cur_inst md (Ir.SmallStep.incrpc md (Ir.Config.update_m st m)) =
@@ -511,20 +426,8 @@ Lemma cur_inst_incrpc_update_m:
 Proof.
   intros.
   rewrite incrpc_update_m.
-  rewrite cur_inst_update_m.
+  rewrite Ir.Config.cur_inst_update_m.
   reflexivity.
-Qed.
-
-Lemma get_val_update_m:
-  forall st m opv,
-    Ir.Config.get_val (Ir.Config.update_m st m) opv =
-    Ir.Config.get_val st opv.
-Proof.
-  intros.
-  unfold Ir.Config.get_val.
-  unfold Ir.Config.get_rval.
-  unfold Ir.Config.update_m.
-  simpl. reflexivity.
 Qed.
 
 Lemma get_val_update_reg_and_incrpc:
@@ -550,10 +453,10 @@ Proof.
   - unfold Ir.SmallStep.inst_det_step in HNEXT.
     des_ifs;
       try(rewrite cur_inst_update_reg_and_incrpc; reflexivity);
-      try(rewrite incrpc_update_m; rewrite cur_inst_update_m; reflexivity).
+      try(rewrite incrpc_update_m; rewrite Ir.Config.cur_inst_update_m; reflexivity).
   - rewrite cur_inst_update_reg_and_incrpc.
     rewrite incrpc_update_m.
-    rewrite cur_inst_update_m.
+    rewrite Ir.Config.cur_inst_update_m.
     reflexivity.
 Qed.
 
@@ -573,7 +476,7 @@ Lemma get_val_incrpc_update_m:
 Proof.
   intros.
   rewrite incrpc_update_m.
-  rewrite get_val_update_m.
+  rewrite Ir.Config.get_val_update_m.
   rewrite get_val_incrpc.
   reflexivity.
 Qed.
@@ -839,7 +742,8 @@ Qed.
 Definition inst_reordering_valid (i1 i2:Ir.Inst.t): Prop :=
   forall
     (* If there's no data dependency from i1 to i2 *)
-    (HNODEP:has_data_dependency i1 i2 = false),
+    (HNODEP:has_data_dependency i1 i2 = false)
+    (HPROGWF:program_wellformed i1 i2 = true),
     (* 'i1;i2' -> 'i2;i1' is allowed *)
     forall (md md':Ir.IRModule.t) (* IR Modules *)
            (sr:Ir.trace * Ir.SmallStep.step_res)
@@ -895,15 +799,15 @@ Proof.
 Qed. 
 
 Ltac get_val_independent_goal opval r2 :=
-  rewrite get_val_independent2; try eassumption;
+  rewrite get_val_independent2;
   try (destruct opval as [| r00];
-  [ congruence | assert (r00 <> r2) by admit; congruence ]).
+       try congruence).
 
 Ltac get_val_independent_H H opval r2 :=
   rewrite get_val_independent2 in H;
   try (destruct opval as [| r00];
-    [ congruence | assert (r00 <> r2) by admit; congruence ]);
-  try rewrite get_val_update_m in H.
+       try congruence);
+  try rewrite Ir.Config.get_val_update_m in H.
 
 
 Theorem reorder_malloc_ptrtoint:
@@ -946,12 +850,29 @@ Proof.
         apply incrpc'_incrpc in HLOCATE_NEXT'. rewrite HLOCATE_NEXT' in HLOCATE2'. rewrite HLOCATE2'. reflexivity.
         reflexivity.
       * rewrite nstep_eq_trans_1. apply nseq_success. reflexivity.
-        destruct opptr2. rewrite get_val_const_update_reg_and_incrpc. rewrite m_update_reg_and_incrpc.
+        get_val_independent_goal opptr2 r1.
+        rewrite m_update_reg_and_incrpc.
         apply Ir.Config.eq_wopc_refl.
-        rewrite get_val_independent.  rewrite m_update_reg_and_incrpc.
+        rewrite m_update_reg_and_incrpc.
         apply Ir.Config.eq_wopc_refl.
-        admit. (* SSa *)
-        admit. (* HNODEP *)
+        { (* r00 <> r1 *)
+          unfold program_wellformed in HPROGWF. simpl in HPROGWF.
+          unfold has_data_dependency in HNODEP. simpl in HNODEP.
+          assert (r00 <> r1). {
+            rewrite <- PeanoNat.Nat.eqb_neq.
+            destruct (r00 =? r1).
+            { simpl in HPROGWF. inv HNODEP. }
+            { reflexivity. }
+          } congruence.
+        }
+        { (* r1 <> r2 *)
+          unfold program_wellformed in HPROGWF. simpl in HPROGWF.
+          unfold has_data_dependency in HNODEP. simpl in HNODEP.
+          rewrite <- PeanoNat.Nat.eqb_neq.
+          destruct (r1 =? r2).
+          { inv HPROGWF. }
+           reflexivity.
+        }
     + (* malloc succeeded. *)
       rewrite HLOCATE1 in HCUR. inv HCUR.
       rewrite m_update_reg_and_incrpc.
@@ -967,16 +888,29 @@ Proof.
         apply incrpc'_incrpc in HLOCATE_NEXT'. rewrite HLOCATE_NEXT' in HLOCATE2'. rewrite HLOCATE2'. reflexivity.
         reflexivity.
         destruct opptr1. rewrite get_val_const_update_reg_and_incrpc. eassumption.
-        rewrite get_val_independent. assumption. 
-        admit. (* Impossible *)
+        rewrite get_val_independent. assumption.
+        { (* r <> r2*)
+          unfold program_wellformed in HPROGWF. simpl in HPROGWF.
+          rewrite <- PeanoNat.Nat.eqb_neq.
+          destruct (r =? r2). { simpl in HPROGWF. repeat (rewrite andb_false_r in HPROGWF). inv HPROGWF. }
+                              { reflexivity. }
+        }
         assumption.
         reflexivity. eassumption.
         rewrite m_update_reg_and_incrpc. eassumption.
         rewrite m_update_reg_and_incrpc. eassumption.
       * eapply nstep_eq_trans_2 with (md1 := md').
-        admit. (* SSA *)
+        { (* r2 <> r1 *)
+          unfold program_wellformed in HPROGWF. simpl in HPROGWF.
+          assert (r1 <> r2). {
+            rewrite <- PeanoNat.Nat.eqb_neq.
+            destruct (r1 =? r2).
+            { simpl in HPROGWF. inv HPROGWF. }
+            { reflexivity. }
+          } congruence.
+        }
         rewrite update_reg_and_incrpc_update_m with (m := m') (md := md).
-        rewrite get_val_update_m.
+        rewrite Ir.Config.get_val_update_m.
         (* now we should show that opptr2 isn't something like (l, ofs).
            Note that l is a new block id. *)
         (* opptr2 (which is operand of ptrtoint) cannot be log (l, 0). *)
@@ -1002,7 +936,15 @@ Proof.
                + unfold Ir.SmallStep.p2N. do_nseq_refl.
            }
            { do_nseq_refl. }
-           admit. (* r <> r1 *)
+           { (* r <> r1 *)
+             unfold has_data_dependency in HNODEP. simpl in HNODEP.
+             assert (r <> r1). {
+               rewrite <- PeanoNat.Nat.eqb_neq.
+               destruct (r =? r1).
+               { simpl in HNODEP. inv HNODEP. }
+               { reflexivity. }
+             } congruence.
+           }
   - (* malloc raised oom. *)
     inv HOOM.
     inv HSINGLE.
@@ -1020,6 +962,17 @@ Proof.
       rewrite HLOCATE2'. reflexivity. reflexivity.
       rewrite HLOCATE1 in HCUR. inv HCUR.
       get_val_independent_goal opptr1 r2.
+      eassumption. eassumption.
+      {
+        unfold program_wellformed in HPROGWF. simpl in HPROGWF.
+        assert (r00 <> r2). {
+          rewrite <- PeanoNat.Nat.eqb_neq.
+          destruct (r00 =? r2).
+          { simpl in HPROGWF. rewrite andb_false_r in HPROGWF.
+            inv HPROGWF. }
+          { reflexivity. }
+        } congruence.
+      }
       rewrite m_update_reg_and_incrpc. assumption.
       constructor. reflexivity.
     + inv HSUCC.
@@ -1030,7 +983,7 @@ Proof.
       unfold Ir.SmallStep.inst_det_step in HNEXT. rewrite HLOCATE1 in HNEXT. congruence.
     + inv HSUCC.
     + inv HGW0.
-Admitted.
+Qed.
 
 
 
@@ -1127,7 +1080,7 @@ Proof.
         unfold Ir.SmallStep.inst_det_step.
         rewrite cur_inst_update_reg_and_incrpc.
         rewrite incrpc_update_m.
-        rewrite cur_inst_update_m.
+        rewrite Ir.Config.cur_inst_update_m.
         apply incrpc'_incrpc in HLOCATE_NEXT'.
         rewrite HLOCATE_NEXT' in HLOCATE2'.
         rewrite HLOCATE2'. reflexivity.
@@ -1135,7 +1088,7 @@ Proof.
       { eapply nstep_eq_trans_2 with (md2 := md').
         assert (r1 <> r2). admit. assumption.
         get_val_independent_goal opptr1 r2.
-        rewrite get_val_update_m.
+        rewrite Ir.Config.get_val_update_m.
         rewrite m_update_reg_and_incrpc.
         destruct (Ir.Config.get_val st opptr1) eqn:Hopptr1; try apply nstep_eq_refl.
         destruct v; try apply nstep_eq_refl.
@@ -1229,12 +1182,12 @@ Proof.
     rewrite HLOCATE1 in HNEXT.
     des_ifs.
     inv HSINGLE; try
-      (rewrite incrpc_update_m in HCUR; rewrite cur_inst_update_m in HCUR;
+      (rewrite incrpc_update_m in HCUR; rewrite Ir.Config.cur_inst_update_m in HCUR;
        apply incrpc'_incrpc in HLOCATE_NEXT; rewrite HLOCATE_NEXT in HLOCATE2;
        congruence; fail).
     rewrite incrpc_update_m in HNEXT.
     unfold Ir.SmallStep.inst_det_step in HNEXT.
-    rewrite cur_inst_update_m in HNEXT.
+    rewrite Ir.Config.cur_inst_update_m in HNEXT.
     apply incrpc'_incrpc in HLOCATE_NEXT.
     rewrite HLOCATE_NEXT in HLOCATE2.
     rewrite HLOCATE2 in HNEXT.
@@ -1258,7 +1211,7 @@ Proof.
       rewrite Heq0.
       reflexivity.
     }
-    { rewrite get_val_update_m.
+    { rewrite Ir.Config.get_val_update_m.
       rewrite get_val_incrpc.
       rewrite nstep_eq_trans_3 with (md2 := md').
       destruct retty2.
@@ -1367,11 +1320,11 @@ Proof.
         |
           eapply Ir.SmallStep.s_det;
           unfold Ir.SmallStep.inst_det_step; rewrite incrpc_update_m;
-          rewrite cur_inst_update_m; rewrite HLOCATE2';
+          rewrite Ir.Config.cur_inst_update_m; rewrite HLOCATE2';
           reflexivity
         ]
       |
-        rewrite get_val_update_m; rewrite get_val_incrpc; rewrite Heq1;
+        rewrite Ir.Config.get_val_update_m; rewrite get_val_incrpc; rewrite Heq1;
         rewrite <- nstep_eq_trans_3 with (md1 := md');
         apply nstep_eq_refl
       ]; fail).
@@ -1390,10 +1343,10 @@ Proof.
         }
         { eapply Ir.SmallStep.s_det.
           unfold Ir.SmallStep.inst_det_step. rewrite incrpc_update_m. 
-          rewrite cur_inst_update_m. rewrite HLOCATE2'.
+          rewrite Ir.Config.cur_inst_update_m. rewrite HLOCATE2'.
           reflexivity. }
       }
-      { rewrite get_val_update_m. rewrite get_val_incrpc. rewrite Heq1.
+      { rewrite Ir.Config.get_val_update_m. rewrite get_val_incrpc. rewrite Heq1.
         rewrite <- nstep_eq_trans_3 with (md1 := md').
         rewrite m_update_m.
         unfold Ir.SmallStep.free in Heq0.
@@ -1413,7 +1366,7 @@ Proof.
       rewrite Heq. rewrite Heq0. reflexivity.
       eapply Ir.SmallStep.s_det.
       unfold Ir.SmallStep.inst_det_step. rewrite incrpc_update_m. 
-      rewrite cur_inst_update_m. rewrite HLOCATE2'.
+      rewrite Ir.Config.cur_inst_update_m. rewrite HLOCATE2'.
       reflexivity.
       rewrite <- nstep_eq_trans_3 with (md1 := md').
       apply nstep_eq_refl.
@@ -1683,16 +1636,16 @@ Proof.
         rewrite m_update_reg_and_incrpc. eassumption.
       * inv HSINGLE; try (rewrite cur_inst_update_reg_and_incrpc in HCUR;
                           rewrite incrpc_update_m in HCUR;
-                          rewrite cur_inst_update_m in HCUR; congruence).
+                          rewrite Ir.Config.cur_inst_update_m in HCUR; congruence).
         unfold Ir.SmallStep.inst_det_step in HNEXT.
         rewrite cur_inst_update_reg_and_incrpc in HNEXT.
-        rewrite incrpc_update_m in HNEXT. rewrite cur_inst_update_m in HNEXT.
+        rewrite incrpc_update_m in HNEXT. rewrite Ir.Config.cur_inst_update_m in HNEXT.
         rewrite HLOCATE2 in HNEXT.
         inv HNEXT.
         rewrite m_update_reg_and_incrpc.
         get_val_independent_goal opptr2 r1.
         get_val_independent_goal opidx2 r1.
-        rewrite get_val_update_m. rewrite get_val_update_m.
+        rewrite Ir.Config.get_val_update_m. rewrite Ir.Config.get_val_update_m.
         eapply nstep_eq_trans_2 with (md1 := md').
         assert (r2 <> r1). admit. assumption.
         destruct ty2; try (apply nstep_eq_refl; fail).
@@ -1841,7 +1794,7 @@ Proof.
         unfold Ir.SmallStep.inst_det_step.
         rewrite cur_inst_update_reg_and_incrpc.
         rewrite incrpc_update_m.
-        rewrite cur_inst_update_m.
+        rewrite Ir.Config.cur_inst_update_m.
         apply incrpc'_incrpc in HLOCATE_NEXT'.
         rewrite HLOCATE_NEXT' in HLOCATE2'.
         rewrite HLOCATE2'. reflexivity.
@@ -1850,12 +1803,12 @@ Proof.
         assert (r1 <> r2). admit. assumption.
         get_val_independent_goal opptr1 r2.
         get_val_independent_goal opidx1 r2.
-        rewrite get_val_update_m.
+        rewrite Ir.Config.get_val_update_m.
         rewrite m_update_reg_and_incrpc.
         destruct (Ir.Config.get_val st opptr1) eqn:Hopptr1; try apply nstep_eq_refl.
         destruct v; try apply nstep_eq_refl.
         destruct ty1; try apply nstep_eq_refl.
-        rewrite get_val_update_m.
+        rewrite Ir.Config.get_val_update_m.
         destruct (Ir.Config.get_val st opidx1) eqn:Hopidx1; try apply nstep_eq_refl.
         destruct v; try apply nstep_eq_refl.
         destruct p; try (unfold Ir.SmallStep.gep; apply nstep_eq_refl).
@@ -1997,12 +1950,12 @@ Proof.
     rewrite HLOCATE1 in HNEXT.
     des_ifs.
     inv HSINGLE; try
-      (rewrite incrpc_update_m in HCUR; rewrite cur_inst_update_m in HCUR;
+      (rewrite incrpc_update_m in HCUR; rewrite Ir.Config.cur_inst_update_m in HCUR;
        apply incrpc'_incrpc in HLOCATE_NEXT; rewrite HLOCATE_NEXT in HLOCATE2;
        congruence; fail).
     rewrite incrpc_update_m in HNEXT.
     unfold Ir.SmallStep.inst_det_step in HNEXT.
-    rewrite cur_inst_update_m in HNEXT.
+    rewrite Ir.Config.cur_inst_update_m in HNEXT.
     apply incrpc'_incrpc in HLOCATE_NEXT.
     rewrite HLOCATE_NEXT in HLOCATE2.
     rewrite HLOCATE2 in HNEXT.
@@ -2026,14 +1979,14 @@ Proof.
       rewrite Heq0.
       reflexivity.
     }
-    { rewrite get_val_update_m.
+    { rewrite Ir.Config.get_val_update_m.
       rewrite get_val_incrpc.
       rewrite nstep_eq_trans_3 with (md2 := md').
       destruct retty2.
       - destruct (Ir.Config.get_val st opptr2) eqn:Hopptr2.
         + destruct v;try apply nstep_eq_refl.
         + apply nstep_eq_refl.
-      - rewrite get_val_update_m.
+      - rewrite Ir.Config.get_val_update_m.
         rewrite get_val_incrpc.
         destruct (Ir.Config.get_val st opptr2) eqn:Hopptr2; try apply nstep_eq_refl.
         destruct (v) ; try apply nstep_eq_refl.
@@ -2139,11 +2092,11 @@ Proof.
         |
           eapply Ir.SmallStep.s_det;
           unfold Ir.SmallStep.inst_det_step; rewrite incrpc_update_m;
-          rewrite cur_inst_update_m; rewrite HLOCATE2';
+          rewrite Ir.Config.cur_inst_update_m; rewrite HLOCATE2';
           reflexivity
         ]
       |
-        rewrite get_val_update_m; rewrite get_val_incrpc; rewrite Heq1;
+        rewrite Ir.Config.get_val_update_m; rewrite get_val_incrpc; rewrite Heq1;
         rewrite <- nstep_eq_trans_3 with (md1 := md');
         apply nstep_eq_refl
       ]; fail).
@@ -2162,7 +2115,7 @@ Proof.
         }
         { eapply Ir.SmallStep.s_det.
           unfold Ir.SmallStep.inst_det_step. rewrite incrpc_update_m. 
-          rewrite cur_inst_update_m. rewrite HLOCATE2'.
+          rewrite Ir.Config.cur_inst_update_m. rewrite HLOCATE2'.
           reflexivity. }
       }
       { rewrite <- nstep_eq_trans_3 with (md1 := md'). apply nstep_eq_refl. }
@@ -2173,11 +2126,11 @@ Proof.
       rewrite Heq. rewrite Heq0. reflexivity.
       eapply Ir.SmallStep.s_det.
       unfold Ir.SmallStep.inst_det_step. rewrite incrpc_update_m. 
-      rewrite cur_inst_update_m. rewrite HLOCATE2'.
+      rewrite Ir.Config.cur_inst_update_m. rewrite HLOCATE2'.
       reflexivity.
       rewrite <- nstep_eq_trans_3 with (md1 := md').
       repeat (rewrite update_reg_and_incrpc_update_m).
-      repeat (rewrite get_val_update_m).
+      repeat (rewrite Ir.Config.get_val_update_m).
       repeat (rewrite get_val_incrpc).
       rewrite Heq1. rewrite Heq2. rewrite m_update_m.
       unfold Ir.SmallStep.free in Heq0.
@@ -2199,11 +2152,11 @@ Proof.
       rewrite Heq. rewrite Heq0. reflexivity.
       eapply Ir.SmallStep.s_det.
       unfold Ir.SmallStep.inst_det_step. rewrite incrpc_update_m. 
-      rewrite cur_inst_update_m. rewrite HLOCATE2'.
+      rewrite Ir.Config.cur_inst_update_m. rewrite HLOCATE2'.
       reflexivity.
       rewrite <- nstep_eq_trans_3 with (md1 := md').
       repeat (rewrite update_reg_and_incrpc_update_m).
-      repeat (rewrite get_val_update_m).
+      repeat (rewrite Ir.Config.get_val_update_m).
       repeat (rewrite get_val_incrpc).
       rewrite Heq1. rewrite Heq2. apply nstep_eq_refl.
     + eexists. split. eapply Ir.SmallStep.ns_success.
@@ -2213,11 +2166,11 @@ Proof.
       rewrite Heq. rewrite Heq0. reflexivity.
       eapply Ir.SmallStep.s_det.
       unfold Ir.SmallStep.inst_det_step. rewrite incrpc_update_m. 
-      rewrite cur_inst_update_m. rewrite HLOCATE2'.
+      rewrite Ir.Config.cur_inst_update_m. rewrite HLOCATE2'.
       reflexivity.
       rewrite <- nstep_eq_trans_3 with (md1 := md').
       repeat (rewrite update_reg_and_incrpc_update_m).
-      repeat (rewrite get_val_update_m).
+      repeat (rewrite Ir.Config.get_val_update_m).
       repeat (rewrite get_val_incrpc).
       rewrite Heq1. rewrite Heq2. apply nstep_eq_refl.
     + eexists. split. eapply Ir.SmallStep.ns_success.
@@ -2227,11 +2180,11 @@ Proof.
       rewrite Heq. rewrite Heq0. reflexivity.
       eapply Ir.SmallStep.s_det.
       unfold Ir.SmallStep.inst_det_step. rewrite incrpc_update_m. 
-      rewrite cur_inst_update_m. rewrite HLOCATE2'.
+      rewrite Ir.Config.cur_inst_update_m. rewrite HLOCATE2'.
       reflexivity.
       rewrite <- nstep_eq_trans_3 with (md1 := md').
       repeat (rewrite update_reg_and_incrpc_update_m).
-      repeat (rewrite get_val_update_m).
+      repeat (rewrite Ir.Config.get_val_update_m).
       repeat (rewrite get_val_incrpc).
       rewrite Heq1. rewrite Heq2. apply nstep_eq_refl.
     + eexists. split. eapply Ir.SmallStep.ns_goes_wrong.
@@ -2338,14 +2291,14 @@ Proof.
         rewrite m_update_reg_and_incrpc. eassumption.
       * inv HSINGLE; try (rewrite cur_inst_update_reg_and_incrpc in HCUR;
                           rewrite incrpc_update_m in HCUR;
-                          rewrite cur_inst_update_m in HCUR; congruence).
+                          rewrite Ir.Config.cur_inst_update_m in HCUR; congruence).
         unfold Ir.SmallStep.inst_det_step in HNEXT.
         rewrite cur_inst_update_reg_and_incrpc in HNEXT.
-        rewrite incrpc_update_m in HNEXT. rewrite cur_inst_update_m in HNEXT.
+        rewrite incrpc_update_m in HNEXT. rewrite Ir.Config.cur_inst_update_m in HNEXT.
         rewrite HLOCATE2 in HNEXT.
         inv HNEXT.
         rewrite get_val_independent2.
-        rewrite get_val_update_m.
+        rewrite Ir.Config.get_val_update_m.
         eapply nstep_eq_trans_2 with (md1 := md').
         assert (r2 <> r1). admit. assumption.
         destruct retty2; try (apply nstep_eq_refl; fail).
@@ -2480,7 +2433,7 @@ Proof.
         unfold Ir.SmallStep.inst_det_step.
         rewrite cur_inst_update_reg_and_incrpc.
         rewrite incrpc_update_m.
-        rewrite cur_inst_update_m.
+        rewrite Ir.Config.cur_inst_update_m.
         apply incrpc'_incrpc in HLOCATE_NEXT'.
         rewrite HLOCATE_NEXT' in HLOCATE2'.
         rewrite HLOCATE2'. reflexivity.
@@ -2488,7 +2441,7 @@ Proof.
       { eapply nstep_eq_trans_2 with (md2 := md').
         assert (r1 <> r2). admit. assumption.
         rewrite get_val_independent2.
-        rewrite get_val_update_m.
+        rewrite Ir.Config.get_val_update_m.
         destruct retty1; try apply nstep_eq_refl.
         destruct opint1. congruence.
         assert (r <> r2). admit. congruence.
@@ -2538,12 +2491,12 @@ Proof.
     rewrite HLOCATE1 in HNEXT.
     des_ifs.
     inv HSINGLE; try
-      (rewrite incrpc_update_m in HCUR; rewrite cur_inst_update_m in HCUR;
+      (rewrite incrpc_update_m in HCUR; rewrite Ir.Config.cur_inst_update_m in HCUR;
        apply incrpc'_incrpc in HLOCATE_NEXT; rewrite HLOCATE_NEXT in HLOCATE2;
        congruence; fail).
     rewrite incrpc_update_m in HNEXT.
     unfold Ir.SmallStep.inst_det_step in HNEXT.
-    rewrite cur_inst_update_m in HNEXT.
+    rewrite Ir.Config.cur_inst_update_m in HNEXT.
     apply incrpc'_incrpc in HLOCATE_NEXT.
     rewrite HLOCATE_NEXT in HLOCATE2.
     rewrite HLOCATE2 in HNEXT.
@@ -2569,7 +2522,7 @@ Proof.
       destruct opptr1. intros H0. congruence.
       assert (r <> r2). admit. congruence.
     }
-    { rewrite get_val_update_m.
+    { rewrite Ir.Config.get_val_update_m.
       rewrite get_val_incrpc.
       rewrite nstep_eq_trans_3 with (md2 := md').
       destruct retty2; try apply nstep_eq_refl.
@@ -2658,11 +2611,11 @@ Proof.
         |
           eapply Ir.SmallStep.s_det;
           unfold Ir.SmallStep.inst_det_step; rewrite incrpc_update_m;
-          rewrite cur_inst_update_m; rewrite HLOCATE2';
+          rewrite Ir.Config.cur_inst_update_m; rewrite HLOCATE2';
           reflexivity
         ]
       |
-        rewrite get_val_update_m; rewrite get_val_incrpc; rewrite Heq1;
+        rewrite Ir.Config.get_val_update_m; rewrite get_val_incrpc; rewrite Heq1;
         rewrite <- nstep_eq_trans_3 with (md1 := md');
         apply nstep_eq_refl
       ]; fail);
@@ -2683,7 +2636,7 @@ Proof.
         }
         { eapply Ir.SmallStep.s_det.
           unfold Ir.SmallStep.inst_det_step. rewrite incrpc_update_m. 
-          rewrite cur_inst_update_m. rewrite HLOCATE2'.
+          rewrite Ir.Config.cur_inst_update_m. rewrite HLOCATE2'.
           reflexivity. }
       }
       { rewrite <- nstep_eq_trans_3 with (md1 := md'). apply nstep_eq_refl. }
@@ -2720,7 +2673,7 @@ Ltac inv_cur_inst HCUR HLOCATE :=
 
 Ltac inv_cur_inst_next HCUR HLOCATE2 HLOCATE_NEXT :=
   apply incrpc'_incrpc in HLOCATE_NEXT; rewrite HLOCATE_NEXT in HLOCATE2;
-  try (rewrite incrpc_update_m in HCUR); try (rewrite cur_inst_update_m in HCUR);
+  try (rewrite incrpc_update_m in HCUR); try (rewrite Ir.Config.cur_inst_update_m in HCUR);
   try (rewrite HLOCATE2 in HCUR); inv HCUR.
 
 Ltac s_malloc_null_trivial HLOCATE2' :=
@@ -3027,7 +2980,7 @@ Proof.
         get_val_independent_H HNEXT op21 r.
         get_val_independent_H HNEXT op22 r.
         inv_cur_inst HCUR HLOCATE1.
-        repeat (rewrite get_val_update_m in HNEXT).
+        repeat (rewrite Ir.Config.get_val_update_m in HNEXT).
         des_ifs; try (
           eexists; split;
           [ eapply Ir.SmallStep.ns_success;
@@ -3281,10 +3234,10 @@ Proof.
                   rewrite cur_inst_incrpc_update_m;
                   rewrite HLOCATE2';
                   get_val_independent_goal op11 r2;
-                  rewrite get_val_update_m;
+                  rewrite Ir.Config.get_val_update_m;
                   rewrite Heq;
                   try (get_val_independent_goal op12 r2;
-                  rewrite get_val_update_m;
+                  rewrite Ir.Config.get_val_update_m;
                   rewrite Heq0);
                   reflexivity
                 ]
@@ -3304,9 +3257,9 @@ Proof.
               rewrite cur_inst_incrpc_update_m.
               rewrite HLOCATE2'.
               get_val_independent_goal op11 r2.
-              rewrite get_val_update_m, Heq.
+              rewrite Ir.Config.get_val_update_m, Heq.
               get_val_independent_goal op12 r2.
-              rewrite get_val_update_m, Heq0.
+              rewrite Ir.Config.get_val_update_m, Heq0.
               rewrite m_update_reg_and_incrpc.
               rewrite m_update_m.
               assert (HPTR:Ir.SmallStep.icmp_eq_ptr p p0 m' =
@@ -3714,17 +3667,17 @@ Proof.
     rewrite HLOCATE1 in HNEXT.
     des_ifs.
     inv HSINGLE; try
-      (rewrite incrpc_update_m in HCUR; rewrite cur_inst_update_m in HCUR;
+      (rewrite incrpc_update_m in HCUR; rewrite Ir.Config.cur_inst_update_m in HCUR;
        apply incrpc'_incrpc in HLOCATE_NEXT; rewrite HLOCATE_NEXT in HLOCATE2;
        congruence; fail).
     {
       rewrite incrpc_update_m in HNEXT.
       unfold Ir.SmallStep.inst_det_step in HNEXT.
-      rewrite cur_inst_update_m in HNEXT.
+      rewrite Ir.Config.cur_inst_update_m in HNEXT.
       apply incrpc'_incrpc in HLOCATE_NEXT.
       rewrite HLOCATE_NEXT in HLOCATE2.
       rewrite HLOCATE2 in HNEXT.
-      repeat (rewrite get_val_update_m in HNEXT).
+      repeat (rewrite Ir.Config.get_val_update_m in HNEXT).
       repeat (rewrite get_val_incrpc in HNEXT).
       des_ifs; try(
                    eexists; split;
@@ -3794,8 +3747,8 @@ Proof.
       inv HCUR.
       rewrite get_val_incrpc in HOP1.
       rewrite get_val_incrpc in HOP2.
-      rewrite get_val_update_m in HOP1.
-      rewrite get_val_update_m in HOP2.
+      rewrite Ir.Config.get_val_update_m in HOP1.
+      rewrite Ir.Config.get_val_update_m in HOP2.
       eexists. split.
       { eapply Ir.SmallStep.ns_success.
         { eapply Ir.SmallStep.ns_one.
@@ -3995,7 +3948,7 @@ Proof.
                   rewrite cur_inst_incrpc_update_m;
                   rewrite HLOCATE2';
                   repeat (rewrite get_val_incrpc);
-                  repeat (rewrite get_val_update_m);
+                  repeat (rewrite Ir.Config.get_val_update_m);
                   rewrite Heq; try rewrite Heq0; reflexivity
                 ]
               | rewrite <- nstep_eq_trans_3;
@@ -4033,7 +3986,7 @@ Proof.
               rewrite cur_inst_incrpc_update_m.
               rewrite HLOCATE2'.
               repeat (rewrite get_val_incrpc).
-              repeat (rewrite get_val_update_m).
+              repeat (rewrite Ir.Config.get_val_update_m).
               rewrite Heq, Heq0.
               rewrite incrpc_update_m.
               rewrite m_update_m.
@@ -4408,7 +4361,7 @@ Proof.
         get_val_independent_H HNEXT op21 r.
         get_val_independent_H HNEXT op22 r.
         inv_cur_inst HCUR HLOCATE1.
-        repeat (rewrite get_val_update_m in HNEXT).
+        repeat (rewrite Ir.Config.get_val_update_m in HNEXT).
         des_ifs; try (
           eexists; split;
           [ eapply Ir.SmallStep.ns_success;
@@ -4660,10 +4613,10 @@ Proof.
                   rewrite cur_inst_incrpc_update_m;
                   rewrite HLOCATE2';
                   get_val_independent_goal op11 r2;
-                  rewrite get_val_update_m;
+                  rewrite Ir.Config.get_val_update_m;
                   rewrite Heq;
                   try (get_val_independent_goal op12 r2;
-                  rewrite get_val_update_m;
+                  rewrite Ir.Config.get_val_update_m;
                   rewrite Heq0);
                   reflexivity
                 ]
@@ -4683,9 +4636,9 @@ Proof.
               rewrite cur_inst_incrpc_update_m.
               rewrite HLOCATE2'.
               get_val_independent_goal op11 r2.
-              rewrite get_val_update_m, Heq.
+              rewrite Ir.Config.get_val_update_m, Heq.
               get_val_independent_goal op12 r2.
-              rewrite get_val_update_m, Heq0.
+              rewrite Ir.Config.get_val_update_m, Heq0.
               rewrite m_update_reg_and_incrpc.
               rewrite m_update_m.
               assert (HPTR:Ir.SmallStep.icmp_ule_ptr p p0 m' =
@@ -4860,17 +4813,17 @@ Proof.
     rewrite HLOCATE1 in HNEXT.
     des_ifs.
     inv HSINGLE; try
-      (rewrite incrpc_update_m in HCUR; rewrite cur_inst_update_m in HCUR;
+      (rewrite incrpc_update_m in HCUR; rewrite Ir.Config.cur_inst_update_m in HCUR;
        apply incrpc'_incrpc in HLOCATE_NEXT; rewrite HLOCATE_NEXT in HLOCATE2;
        congruence; fail).
     {
       rewrite incrpc_update_m in HNEXT.
       unfold Ir.SmallStep.inst_det_step in HNEXT.
-      rewrite cur_inst_update_m in HNEXT.
+      rewrite Ir.Config.cur_inst_update_m in HNEXT.
       apply incrpc'_incrpc in HLOCATE_NEXT.
       rewrite HLOCATE_NEXT in HLOCATE2.
       rewrite HLOCATE2 in HNEXT.
-      repeat (rewrite get_val_update_m in HNEXT).
+      repeat (rewrite Ir.Config.get_val_update_m in HNEXT).
       repeat (rewrite get_val_incrpc in HNEXT).
       des_ifs; try(
                    eexists; split;
@@ -4936,8 +4889,8 @@ Proof.
       inv HCUR.
       rewrite get_val_incrpc in HOP1.
       rewrite get_val_incrpc in HOP2.
-      rewrite get_val_update_m in HOP1.
-      rewrite get_val_update_m in HOP2.
+      rewrite Ir.Config.get_val_update_m in HOP1.
+      rewrite Ir.Config.get_val_update_m in HOP2.
       eexists. split.
       { eapply Ir.SmallStep.ns_success.
         { eapply Ir.SmallStep.ns_one.
@@ -5125,7 +5078,7 @@ Proof.
                   rewrite cur_inst_incrpc_update_m;
                   rewrite HLOCATE2';
                   repeat (rewrite get_val_incrpc);
-                  repeat (rewrite get_val_update_m);
+                  repeat (rewrite Ir.Config.get_val_update_m);
                   rewrite Heq; try rewrite Heq0; reflexivity
                 ]
               | rewrite <- nstep_eq_trans_3;
@@ -5163,7 +5116,7 @@ Proof.
               rewrite cur_inst_incrpc_update_m.
               rewrite HLOCATE2'.
               repeat (rewrite get_val_incrpc).
-              repeat (rewrite get_val_update_m).
+              repeat (rewrite Ir.Config.get_val_update_m).
               rewrite Heq, Heq0.
               rewrite incrpc_update_m.
               rewrite m_update_m.
@@ -5388,7 +5341,7 @@ Proof.
       get_val_independent_H HNEXT op21 r.
       get_val_independent_H HNEXT op22 r.
       inv_cur_inst HCUR HLOCATE1.
-      repeat (rewrite get_val_update_m in HNEXT).
+      repeat (rewrite Ir.Config.get_val_update_m in HNEXT).
       rewrite m_update_reg_and_incrpc in HNEXT.
       des_ifs; try (
         eexists; split;
@@ -5577,10 +5530,10 @@ Proof.
                   rewrite cur_inst_incrpc_update_m;
                   rewrite HLOCATE2';
                   try (get_val_independent_goal op11 r2;
-                  rewrite get_val_update_m;
+                  rewrite Ir.Config.get_val_update_m;
                   rewrite Heq);
                   try (get_val_independent_goal op12 r2;
-                  rewrite get_val_update_m;
+                  rewrite Ir.Config.get_val_update_m;
                   rewrite Heq0);
                   reflexivity
                 ]
@@ -5600,9 +5553,9 @@ Proof.
               rewrite cur_inst_incrpc_update_m.
               rewrite HLOCATE2'.
               get_val_independent_goal op11 r2.
-              rewrite get_val_update_m, Heq.
+              rewrite Ir.Config.get_val_update_m, Heq.
               get_val_independent_goal op12 r2.
-              rewrite get_val_update_m, Heq0.
+              rewrite Ir.Config.get_val_update_m, Heq0.
               rewrite m_update_reg_and_incrpc.
               rewrite m_update_m.
               assert (HPTR:Ir.SmallStep.psub p p0 m' n =
@@ -5687,17 +5640,17 @@ Proof.
     rewrite HLOCATE1 in HNEXT.
     des_ifs.
     inv HSINGLE; try
-      (rewrite incrpc_update_m in HCUR; rewrite cur_inst_update_m in HCUR;
+      (rewrite incrpc_update_m in HCUR; rewrite Ir.Config.cur_inst_update_m in HCUR;
        apply incrpc'_incrpc in HLOCATE_NEXT; rewrite HLOCATE_NEXT in HLOCATE2;
        congruence; fail).
     {
       rewrite incrpc_update_m in HNEXT.
       unfold Ir.SmallStep.inst_det_step in HNEXT.
-      rewrite cur_inst_update_m in HNEXT.
+      rewrite Ir.Config.cur_inst_update_m in HNEXT.
       apply incrpc'_incrpc in HLOCATE_NEXT.
       rewrite HLOCATE_NEXT in HLOCATE2.
       rewrite HLOCATE2 in HNEXT.
-      repeat (rewrite get_val_update_m in HNEXT).
+      repeat (rewrite Ir.Config.get_val_update_m in HNEXT).
       repeat (rewrite get_val_incrpc in HNEXT).
       des_ifs; try(
                    eexists; split;
@@ -5909,7 +5862,7 @@ Proof.
                 rewrite cur_inst_incrpc_update_m;
                 rewrite HLOCATE2';
                 repeat (rewrite get_val_incrpc);
-                repeat (rewrite get_val_update_m);
+                repeat (rewrite Ir.Config.get_val_update_m);
                 try rewrite Heq; try rewrite Heq0; reflexivity
               ]
             | rewrite <- nstep_eq_trans_3;
@@ -5947,7 +5900,7 @@ Proof.
             rewrite cur_inst_incrpc_update_m.
             rewrite HLOCATE2'.
             repeat (rewrite get_val_incrpc).
-            repeat (rewrite get_val_update_m).
+            repeat (rewrite Ir.Config.get_val_update_m).
             rewrite Heq, Heq0.
             rewrite incrpc_update_m.
             rewrite m_update_m.

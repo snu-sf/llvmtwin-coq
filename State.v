@@ -549,6 +549,127 @@ Proof.
   - simpl in H. omega.
 Qed.
 
+Lemma update_rval_update_m:
+  forall m st r v,
+    update_rval (update_m st m) r v =
+    update_m (update_rval st r v) m.
+Proof.
+  intros.
+  unfold update_rval.
+  unfold update_m.
+  simpl. des_ifs. rewrite Heq. reflexivity.
+Qed.
+
+Lemma get_funid_update_m:
+  forall st m cid,
+    get_funid (update_m st m) cid =
+    get_funid st cid.
+Proof.
+  intros.
+  unfold get_funid.
+  unfold update_m.
+  simpl. reflexivity.
+Qed.
+
+Lemma cur_fdef_pc_update_m:
+  forall m st,
+    cur_fdef_pc (update_m st m) =
+    cur_fdef_pc st.
+Proof.
+  intros.
+  unfold cur_fdef_pc.
+  unfold update_m. simpl.
+  unfold update_rval.
+  unfold update_m.
+  simpl. des_ifs.
+Qed.
+
+Lemma update_pc_update_m:
+  forall m st pc,
+    update_pc (update_m st m) pc =
+    update_m (update_pc st pc) m.
+Proof.
+  intros.
+  unfold update_pc.
+  unfold update_m.
+  simpl. des_ifs. rewrite Heq. reflexivity.
+Qed.
+
+Lemma stack_eq_wopc_update_pc1:
+  forall st1 st2 pc1
+         (HEQ:Stack.eq_wopc (s st1) (s st2)),
+    Stack.eq_wopc (s (update_pc st1 pc1)) (s st2).
+Proof.
+  intros.
+  unfold update_pc.
+  inv HEQ.
+  - rewrite <- H0. constructor.
+  - desH H1.
+    des_ifs.
+    simpl. constructor.
+    simpl. split; assumption. assumption.
+Qed.
+
+Lemma stack_eq_wopc_update_pc2:
+  forall st1 st2 pc2
+         (HEQ:Stack.eq_wopc (s st1) (s st2)),
+    Stack.eq_wopc (s st1) (s (update_pc st2 pc2)).
+Proof.
+  intros.
+  unfold update_pc.
+  inv HEQ.
+  - rewrite <- H. constructor.
+  - desH H1.
+    des_ifs.
+    simpl. constructor.
+    simpl. split; assumption. assumption.
+Qed.
+
+Lemma cur_inst_update_rval:
+  forall st r v,
+    cur_inst (update_rval st r v) =
+    cur_inst st.
+Proof.
+  intros.
+  unfold cur_inst.
+  rewrite cur_fdef_pc_update_rval. reflexivity.
+Qed.
+
+Lemma update_pc_update_rval:
+  forall st r v p,
+    update_pc (update_rval st r v) p =
+    update_rval (update_pc st p) r v.
+Proof.
+  intros.
+  unfold update_pc.
+  unfold update_rval.
+  des_ifs; simpl in *.
+  inv Heq1. inv Heq. reflexivity.
+Qed.
+
+Lemma cur_inst_update_m:
+  forall st m,
+    cur_inst (update_m st m) =
+    cur_inst st.
+Proof.
+  intros.
+  unfold cur_inst.
+  unfold cur_fdef_pc.
+  unfold update_m.
+  des_ifs.
+Qed.
+
+Lemma get_val_update_m:
+  forall st m opv,
+    get_val (update_m st m) opv =
+    get_val st opv.
+Proof.
+  intros.
+  unfold get_val.
+  unfold get_rval.
+  unfold update_m.
+  simpl. reflexivity.
+Qed.
 
 End CONFIG.
 
