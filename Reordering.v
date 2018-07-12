@@ -5773,24 +5773,54 @@ Proof.
       {
         unfold Ir.SmallStep.inst_det_step in HNEXT.
         rewrite HLOCATE1 in HNEXT. inv HNEXT.
-        des_ifs;
-          try (
-              eexists; split;
-              [ eapply Ir.SmallStep.ns_success;
-                [ eapply Ir.SmallStep.ns_one;
-                  s_malloc_null_trivial HLOCATE1';
-                  get_val_independent_H HZERO opptr2 r1
-                | eapply Ir.SmallStep.s_det;
-                  unfold Ir.SmallStep.inst_det_step;
-                  rewrite cur_inst_update_reg_and_incrpc;
-                  rewrite HLOCATE2';
-                  get_val_independent_goal op11 r2;
-                  rewrite Heq;
-                  try (get_val_independent_goal op12 r2;
-                       rewrite Heq0);
-                  reflexivity ]
-              | rewrite nstep_eq_trans_1;
-                [ apply nstep_eq_refl | assert (r1 <> r2) by admit; congruence ] ]).
+        des_ifs; try
+          (eexists; split;
+          [ eapply Ir.SmallStep.ns_success;
+            [ eapply Ir.SmallStep.ns_one;
+              s_malloc_null_trivial HLOCATE1'
+            | eapply Ir.SmallStep.s_det;
+              unfold Ir.SmallStep.inst_det_step;
+              rewrite cur_inst_update_reg_and_incrpc;
+              rewrite HLOCATE2';
+              rewrite get_val_independent2;
+              [ rewrite Heq;
+                try (rewrite get_val_independent2;
+                [ rewrite Heq0;
+                  reflexivity
+                | destruct op12; try congruence;
+                  assert (r <> r2);
+                  [ rewrite <- PeanoNat.Nat.eqb_neq;
+                    unfold program_wellformed in HPROGWF;
+                    simpl in HPROGWF;
+                    destruct op11; simpl in HPROGWF;
+                      destruct (r =? r2); try reflexivity;
+                        simpl in HPROGWF; try (rewrite orb_true_r in HPROGWF);
+                          try (rewrite andb_false_r in HPROGWF);
+                          inv HPROGWF
+                  | congruence ]
+                ]); try reflexivity
+              | destruct op11;
+                [ congruence
+                | assert (r <> r2);
+                  [ rewrite <- PeanoNat.Nat.eqb_neq;
+                    unfold program_wellformed in HPROGWF;
+                    simpl in HPROGWF;
+                    destruct (r =? r2); try reflexivity;
+                      simpl in HPROGWF; rewrite andb_false_r in HPROGWF;
+                        inv HPROGWF
+                  | congruence ]
+                ]
+              ]
+            ]
+          | rewrite nstep_eq_trans_1;
+            [ apply nstep_eq_refl
+            | rewrite <- PeanoNat.Nat.eqb_neq;
+              unfold program_wellformed in HPROGWF;
+              simpl in HPROGWF;
+              destruct (r1 =? r2); try reflexivity; inv HPROGWF
+            ]
+          ]; fail
+        ).
         { eexists. split.
           { eapply Ir.SmallStep.ns_success.
             { eapply Ir.SmallStep.ns_one.
@@ -5800,17 +5830,47 @@ Proof.
               unfold Ir.SmallStep.inst_det_step.
               rewrite cur_inst_update_reg_and_incrpc.
               rewrite HLOCATE2'.
-              get_val_independent_goal op11 r2.
+              rewrite get_val_independent2.
               rewrite Heq.
-              get_val_independent_goal op12 r2.
+              rewrite get_val_independent2.
               rewrite Heq0.
               rewrite m_update_reg_and_incrpc.
               rewrite Heq1.
               reflexivity.
+              destruct op12. congruence.
+              { assert (r <> r2).
+                { rewrite <- PeanoNat.Nat.eqb_neq.
+                  unfold program_wellformed in HPROGWF.
+                  simpl in HPROGWF.
+                  destruct op11; simpl in HPROGWF;
+                    destruct (r =? r2); try reflexivity;
+                      try (rewrite orb_true_r in HPROGWF);
+                      simpl in HPROGWF;
+                      try (rewrite andb_false_r in HPROGWF); inv HPROGWF.
+                }
+                congruence.
+              }
+              destruct op11. congruence.
+              { assert (r <> r2).
+                { rewrite <- PeanoNat.Nat.eqb_neq.
+                  unfold program_wellformed in HPROGWF.
+                  simpl in HPROGWF.
+                  destruct op12; simpl in HPROGWF;
+                    destruct (r =? r2); try reflexivity;
+                      try (rewrite orb_true_r in HPROGWF);
+                      simpl in HPROGWF;
+                      try (rewrite andb_false_r in HPROGWF); inv HPROGWF.
+                }
+                congruence.
+              }
             }
           }
           { rewrite nstep_eq_trans_1. apply nstep_eq_refl.
-            assert (r1 <> r2). admit. congruence. }
+            rewrite <- PeanoNat.Nat.eqb_neq.
+            unfold program_wellformed in HPROGWF.
+            simpl in HPROGWF.
+            destruct (r1 =? r2); eauto.
+          }
         }
       }
       { rewrite HLOCATE1 in HCUR. inv HCUR.
@@ -5823,14 +5883,46 @@ Proof.
             rewrite cur_inst_update_reg_and_incrpc.
             rewrite HLOCATE2'. reflexivity.
             reflexivity.
-            get_val_independent_goal op11 r2.
-            get_val_independent_goal op12 r2.
+            {
+              rewrite get_val_independent2. eassumption.
+              { destruct op11. congruence.
+                assert (r <> r2).
+                { rewrite <- PeanoNat.Nat.eqb_neq.
+                  unfold program_wellformed in HPROGWF.
+                  simpl in HPROGWF.
+                  destruct (r =? r2); try reflexivity.
+                  simpl in HPROGWF. rewrite andb_false_r in HPROGWF.
+                  inv HPROGWF. }
+                congruence.
+              }
+            }
+            {
+              rewrite get_val_independent2. eassumption.
+              { destruct op12. congruence.
+                assert (r <> r2).
+                { rewrite <- PeanoNat.Nat.eqb_neq.
+                  unfold program_wellformed in HPROGWF.
+                  simpl in HPROGWF.
+                  destruct op11; simpl in HPROGWF;
+                    destruct (r =? r2); try reflexivity;
+                    simpl in HPROGWF; try (rewrite orb_true_r in HPROGWF);
+                      simpl in HPROGWF;
+                      try (rewrite andb_false_r in HPROGWF);
+                      inv HPROGWF.
+                }
+                congruence.
+              }
+            }
             rewrite m_update_reg_and_incrpc.
             assumption.
           }
         }
         { rewrite nstep_eq_trans_1. apply nstep_eq_refl.
-          assert (r1 <> r2). admit. congruence. }
+          rewrite <- PeanoNat.Nat.eqb_neq.
+          unfold program_wellformed in HPROGWF.
+          simpl in HPROGWF.
+          destruct (r1 =? r2); eauto.
+        }
       }
     + (* oom *)
       rewrite HCUR' in HCUR. rewrite HLOCATE2 in HCUR. inv HCUR.
@@ -5843,7 +5935,16 @@ Proof.
         eapply Ir.SmallStep.ns_one.
         eapply Ir.SmallStep.s_malloc_oom.
         rewrite HLOCATE1'. reflexivity. reflexivity.
-        get_val_independent_H HSZ opptr2 r1. eassumption.
+        rewrite get_val_independent2 in HSZ. eassumption.
+        { destruct opptr2. congruence.
+          assert (r <> r1).
+          { rewrite <- PeanoNat.Nat.eqb_neq.
+            unfold has_data_dependency in HNODEP.
+            simpl in HNODEP.
+            destruct (r =? r1); eauto.
+          }
+          congruence.
+        }
         rewrite m_update_reg_and_incrpc in HNOSPACE.
         assumption.
       }
@@ -5860,59 +5961,155 @@ Proof.
         des_ifs;
           rewrite m_update_reg_and_incrpc in *;
           rewrite cur_inst_update_reg_and_incrpc in *;
-          try (
-              eexists; split;
-              [ eapply Ir.SmallStep.ns_success;
-                [ (* malloc *)
-                  eapply Ir.SmallStep.ns_one;
-                  eapply Ir.SmallStep.s_malloc; try (eauto; fail);
-                  try eassumption;
-                  try get_val_independent_H HSZ opptr2 r1
-                | (* icmp, det *)
-                  eapply Ir.SmallStep.s_det;
-                  unfold Ir.SmallStep.inst_det_step;
-                  rewrite cur_inst_update_reg_and_incrpc;
-                  rewrite cur_inst_incrpc_update_m;
-                  rewrite HLOCATE2';
-                  get_val_independent_goal op11 r2;
-                  rewrite Ir.Config.get_val_update_m;
-                  rewrite Heq;
-                  try (get_val_independent_goal op12 r2;
-                  rewrite Ir.Config.get_val_update_m;
-                  rewrite Heq0);
-                  reflexivity
+        try (
+          eexists; split;
+          [ eapply Ir.SmallStep.ns_success;
+            [ (* malloc *)
+              eapply Ir.SmallStep.ns_one;
+              eapply Ir.SmallStep.s_malloc; try (eauto; fail);
+              try eassumption;
+              rewrite get_val_independent2 in HSZ;
+              [ eassumption
+              | destruct opptr2;
+                [ congruence
+                | assert (r <> r1);
+                  [ rewrite <- PeanoNat.Nat.eqb_neq;
+                    unfold has_data_dependency in HNODEP;
+                    simpl in HNODEP;
+                    destruct (r =? r1); eauto
+                  | congruence ]
                 ]
-              | eapply nstep_eq_trans_2;
-                [ assert (r1 <> r2) by admit; assumption
-                | apply nstep_eq_refl ]
-              ]).
+              ]
+            | (* icmp, det *)
+              eapply Ir.SmallStep.s_det;
+              unfold Ir.SmallStep.inst_det_step;
+              rewrite cur_inst_update_reg_and_incrpc;
+              rewrite cur_inst_incrpc_update_m;
+              rewrite HLOCATE2';
+              rewrite get_val_independent2;
+              [ rewrite Ir.Config.get_val_update_m;
+                rewrite Heq;
+                try (
+                rewrite get_val_independent2;
+                [ rewrite Ir.Config.get_val_update_m;
+                  rewrite Heq0;
+                  reflexivity
+                | destruct op12;
+                  [ congruence
+                  | assert (r <> r2);
+                    [ rewrite <- PeanoNat.Nat.eqb_neq;
+                      unfold program_wellformed in HPROGWF;
+                      simpl in HPROGWF;
+                      destruct op11; simpl in HPROGWF;
+                        destruct (r =? r2); try reflexivity;
+                          simpl in HPROGWF;
+                          try (rewrite orb_true_r in HPROGWF);
+                          simpl in HPROGWF;
+                          try (rewrite andb_false_r in HPROGWF);
+                          inv HPROGWF
+                    | congruence ]
+                  ]
+                ]); try reflexivity
+              | destruct op11;
+                [ congruence
+                | assert (r <> r2);
+                  [ rewrite <- PeanoNat.Nat.eqb_neq;
+                    unfold program_wellformed in HPROGWF;
+                    simpl in HPROGWF;
+                    destruct op12; simpl in HPROGWF;
+                      destruct (r =? r2); try reflexivity;
+                        simpl in HPROGWF;
+                        try (rewrite orb_true_r in HPROGWF);
+                        simpl in HPROGWF;
+                        try (rewrite andb_false_r in HPROGWF);
+                        inv HPROGWF
+                  | congruence ]
+                ]
+              ]
+            ]
+          | eapply nstep_eq_trans_2;
+            [ rewrite <- PeanoNat.Nat.eqb_neq;
+              unfold program_wellformed in HPROGWF;
+              simpl in HPROGWF;
+              destruct (r1 =? r2); eauto
+            | apply nstep_eq_refl ]
+          ]; fail
+        ).
         { (* icmp ptr deterministic *)
           eexists. split.
           { eapply Ir.SmallStep.ns_success.
             { eapply Ir.SmallStep.ns_one.
               s_malloc_trivial HLOCATE1'.
-              get_val_independent_H HSZ opptr2 r1. }
+              rewrite get_val_independent2 in HSZ.
+              { eassumption. }
+              { destruct opptr2. congruence.
+                assert (r <> r1).
+                { rewrite <- PeanoNat.Nat.eqb_neq.
+                  unfold has_data_dependency in HNODEP.
+                  simpl in HNODEP. destruct (r =? r1); eauto.
+                }
+                congruence.
+              }
+            }
             { eapply Ir.SmallStep.s_det.
               unfold Ir.SmallStep.inst_det_step.
               rewrite cur_inst_update_reg_and_incrpc.
               rewrite cur_inst_incrpc_update_m.
               rewrite HLOCATE2'.
-              get_val_independent_goal op11 r2.
-              rewrite Ir.Config.get_val_update_m, Heq.
-              get_val_independent_goal op12 r2.
-              rewrite Ir.Config.get_val_update_m, Heq0.
-              rewrite m_update_reg_and_incrpc.
-              rewrite m_update_m.
-              assert (HPTR:Ir.SmallStep.icmp_ule_ptr p p0 m' =
+              rewrite get_val_independent2.
+              {
+                rewrite Ir.Config.get_val_update_m, Heq.
+                rewrite get_val_independent2.
+                {
+                  rewrite Ir.Config.get_val_update_m, Heq0.
+                  rewrite m_update_reg_and_incrpc.
+                  rewrite m_update_m.
+                  assert (HPTR:Ir.SmallStep.icmp_ule_ptr p p0 m' =
                            Ir.SmallStep.icmp_ule_ptr p p0 (Ir.Config.m st)).
-              admit.
-              rewrite HPTR. rewrite Heq1. reflexivity.
+                  { erewrite <- icmp_ule_ptr_new_invariant.
+                    rewrite m_update_m. reflexivity.
+                    eapply HWF. eassumption. eassumption. eassumption.
+                    eassumption. eassumption. eassumption.
+                  }
+                  rewrite HPTR. rewrite Heq1. reflexivity.
+                }
+                { destruct op12. congruence.
+                  assert (r <> r2).
+                  { rewrite <- PeanoNat.Nat.eqb_neq.
+                    unfold program_wellformed in HPROGWF.
+                    simpl in HPROGWF.
+                    destruct op11; simpl in HPROGWF;
+                      destruct (r =? r2); try reflexivity;
+                        simpl in HPROGWF; try rewrite orb_true_r in HPROGWF;
+                          simpl in HPROGWF; try rewrite andb_false_r in HPROGWF;
+                          inv HPROGWF.
+                  }
+                  congruence.
+                }
+              }
+              { destruct op11. congruence.
+                assert (r <> r2).
+                { rewrite <- PeanoNat.Nat.eqb_neq.
+                  unfold program_wellformed in HPROGWF.
+                  simpl in HPROGWF.
+                  destruct op12; simpl in HPROGWF;
+                    destruct (r =? r2); try reflexivity;
+                      simpl in HPROGWF; try rewrite orb_true_r in HPROGWF;
+                        simpl in HPROGWF; try rewrite andb_false_r in HPROGWF;
+                          inv HPROGWF.
+                }
+                congruence.
+              }
             }
           }
           {
             rewrite nstep_eq_trans_2.
             { apply nstep_eq_refl. }
-            { assert (r1 <> r2) by admit. congruence. }
+            { rewrite <- PeanoNat.Nat.eqb_neq.
+              unfold program_wellformed in HPROGWF.
+              simpl in HPROGWF.
+              destruct (r1 =? r2); eauto.
+            }
           }
         }
       }
@@ -5924,15 +6121,50 @@ Proof.
         { eapply Ir.SmallStep.ns_success.
           { eapply Ir.SmallStep.ns_one.
             s_malloc_trivial HLOCATE1'.
-            get_val_independent_H HSZ opptr2 r1.
+            rewrite get_val_independent2 in HSZ. eassumption.
+            { destruct opptr2. congruence.
+              assert (r <> r1).
+              { rewrite <- PeanoNat.Nat.eqb_neq.
+                unfold has_data_dependency in HNODEP.
+                simpl in HNODEP. destruct (r =? r1); eauto.
+              }
+              congruence.
+            }
           }
           { eapply Ir.SmallStep.s_icmp_ule_nondet.
             { rewrite cur_inst_update_reg_and_incrpc.
               rewrite cur_inst_incrpc_update_m.
               eauto. }
             { reflexivity. }
-            { get_val_independent_goal op11 r2. }
-            { get_val_independent_goal op12 r2. }
+            {
+              rewrite get_val_independent2. eassumption.
+              { destruct op11. congruence.
+                assert (r <> r2).
+                { rewrite <- PeanoNat.Nat.eqb_neq.
+                  unfold program_wellformed in HPROGWF.
+                  simpl in HPROGWF.
+                  destruct op12; simpl in HPROGWF;
+                    destruct (r =? r2); try reflexivity;
+                      try (rewrite andb_false_r in HPROGWF); inv HPROGWF.
+                }
+                congruence.
+              }
+            }
+            {
+              rewrite get_val_independent2. eassumption.
+              { destruct op12. congruence.
+                assert (r <> r2).
+                { rewrite <- PeanoNat.Nat.eqb_neq.
+                  unfold program_wellformed in HPROGWF.
+                  simpl in HPROGWF.
+                  destruct op11; simpl in HPROGWF;
+                    destruct (r =? r2); try reflexivity;
+                      try (rewrite orb_true_r in HPROGWF); simpl;
+                      try (rewrite andb_false_r in HPROGWF); inv HPROGWF.
+                }
+                congruence.
+              }
+            }
             { rewrite m_update_reg_and_incrpc.
               rewrite m_update_m.
               assert (Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 m' =
@@ -5945,7 +6177,12 @@ Proof.
         }
         { rewrite nstep_eq_trans_2.
           apply nstep_eq_refl.
-          assert (r1 <> r2). admit. congruence. }
+          { rewrite <- PeanoNat.Nat.eqb_neq.
+            unfold program_wellformed in HPROGWF.
+            simpl in HPROGWF.
+            destruct (r1 =? r2); eauto.
+          }
+        }
       }
   - (* icmp never raises OOM. *)
     inv HOOM.
@@ -5959,7 +6196,7 @@ Proof.
       reflexivity. eapply HLOCATE1. assumption. intros. assumption.
     + inv HSUCC.
     + inv HGW0.
-Admitted.
+Qed.
 
 
 
