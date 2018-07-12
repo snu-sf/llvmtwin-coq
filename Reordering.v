@@ -28,7 +28,7 @@ Definition has_data_dependency (i1 i2:Ir.Inst.t): bool :=
   end.
 
 (* Checks whether a program `i1;i2` is well-formed.
-   This checks two things:
+   This checks four things:
    (1) defs of i1 and i2 aren't the same (by SSA)
    (2) i1's use never contains i2's def, because i1 is never phi-node by definition of Ir.Inst.
        (Note that this is possible if i1;i2 is in a dead loop,
