@@ -318,6 +318,12 @@ Definition eq_wopc (c1 c2:t): Prop :=
   c1.(m) = c2.(m) /\ Stack.eq_wopc c1.(s) c2.(s) /\ c1.(cid_to_f) = c2.(cid_to_f) /\
   c1.(cid_fresh) = c2.(cid_fresh).
 
+(* Equality without memory. *)
+Definition eq_wom (c1 c2:t): Prop :=
+  Stack.eq c1.(s) c2.(s) /\ c1.(cid_to_f) = c2.(cid_to_f) /\
+  c1.(cid_fresh) = c2.(cid_fresh).
+
+
 (***************************************************
               Lemmas about Config.
  ***************************************************)
