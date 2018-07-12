@@ -632,14 +632,5 @@ Proof.
   - inversion H.
 Qed.
 
-(* Theorem:
-   storing loaded bytes into the same location doesn't
-   change memory. *)
-Theorem store_val_wf:
-  forall m m' (HWF:Ir.Memory.wf m) p v t
-      (HSTORE:m' = store_val m p v t)
-      (HDEREF:deref m p (Ir.ty_bytesz t) = true),
-    Ir.Memory.wf m'.
-Admitted.
 
 End Ir.
