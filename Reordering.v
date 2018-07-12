@@ -4981,105 +4981,88 @@ Proof.
   rewrite HLOCATE_NEXT' in HLOCATE2'.
   inv HSTEP.
   - inv HSUCC; try (inv HSUCC0; fail).
-    (*
-    (* exploit that iicmp always succeeds, with update_reg_and_incrpc..! *)
-    exploit icmp_eq_always_succeeds2.
-    + eapply HLOCATE1.
-    + eapply HSINGLE0.
-    + intros HSUCCEED.
-    destruct HSUCCEED as [vtmp HSUCCEED]. inv HSUCCEED.
-    *)
     inv HSINGLE0; try congruence.
     { (* icmp det *)
       unfold_det HNEXT HLOCATE1.
       des_ifs;
         inv HSINGLE; try (rewrite cur_inst_update_reg_and_incrpc in HCUR;
                           rewrite HLOCATE2 in HCUR; congruence);
-        try (
-            (* icmp int , int / int , poison / .. *)
-            (* free deterministic. *)
-            unfold_det HNEXT HLOCATE2;
-            get_val_independent_H HNEXT opptr2 r1;
-            rewrite m_update_reg_and_incrpc in HNEXT;
-            des_ifs; try
-                       ( (* free went wrong. *)
-                         eexists; split;
-                         [ eapply Ir.SmallStep.ns_goes_wrong;
-                           eapply Ir.SmallStep.ns_one;
-                           eapply Ir.SmallStep.s_det;
-                           unfold Ir.SmallStep.inst_det_step;
-                           rewrite HLOCATE1';
-                           try rewrite Heq0; try rewrite Heq1;
-                           try rewrite Heq2; try rewrite Heq3; reflexivity
-                         | constructor; reflexivity ]
-                       );
-            ( (* free succeed. *)
-              eexists; split;
-              [ eapply Ir.SmallStep.ns_success;
-                [ eapply Ir.SmallStep.ns_one;
-                  eapply Ir.SmallStep.s_det;
-                  unfold Ir.SmallStep.inst_det_step;
-                  rewrite HLOCATE1';
-                  try rewrite Heq0; try rewrite Heq1;
-                  try rewrite Heq2; try rewrite Heq3; reflexivity
-                | eapply Ir.SmallStep.s_det;
-                  unfold Ir.SmallStep.inst_det_step;
-                  rewrite cur_inst_incrpc_update_m;
-                  rewrite HLOCATE2';
-                  repeat (rewrite get_val_incrpc);
-                  repeat (rewrite Ir.Config.get_val_update_m);
-                  rewrite Heq; try rewrite Heq0; reflexivity
-                ]
-              | rewrite <- nstep_eq_trans_3;
-                rewrite incrpc_update_m;
-                apply nstep_eq_refl
-              ]
-            )
-          ).
-      { (* icmp_eq_ptr succeeds *)
-        unfold_det HNEXT HLOCATE2.
-        get_val_independent_H HNEXT opptr2 r1.
-        rewrite m_update_reg_and_incrpc in HNEXT.
-        des_ifs;
-          try ( (* free went wrong. *)
-              eexists; split;
-              [ eapply Ir.SmallStep.ns_goes_wrong;
-                eapply Ir.SmallStep.ns_one;
+      try (
+        (* icmp int , int / int , poison / .. *)
+        (* free deterministic. *)
+        unfold_det HNEXT HLOCATE2;
+        rewrite get_val_independent2 in HNEXT;
+        rewrite m_update_reg_and_incrpc in HNEXT;
+        des_ifs; try
+                   ( (* free went wrong. *)
+                     eexists; split;
+                     [ eapply Ir.SmallStep.ns_goes_wrong;
+                       eapply Ir.SmallStep.ns_one;
+                       eapply Ir.SmallStep.s_det;
+                       unfold Ir.SmallStep.inst_det_step;
+                       rewrite HLOCATE1';
+                       try rewrite Heq0; try rewrite Heq1;
+                       try rewrite Heq2; try rewrite Heq3; reflexivity
+                     | constructor; reflexivity ]
+                   );
+        try ((* free succeed. *)
+          eexists; split;
+            [ eapply Ir.SmallStep.ns_success;
+              [ eapply Ir.SmallStep.ns_one;
                 eapply Ir.SmallStep.s_det;
                 unfold Ir.SmallStep.inst_det_step;
                 rewrite HLOCATE1';
-                try rewrite Heq1; try rewrite Heq2; try rewrite Heq3; reflexivity
-              | constructor; reflexivity ]
-            ).
-        { (* free succeed. *)
-          eexists. split.
-          { eapply Ir.SmallStep.ns_success.
-            { eapply Ir.SmallStep.ns_one.
-              eapply Ir.SmallStep.s_det.
-              unfold Ir.SmallStep.inst_det_step.
-              rewrite HLOCATE1'.
-              try rewrite Heq1; try rewrite Heq2; rewrite Heq3. reflexivity.
-            }
-            { eapply Ir.SmallStep.s_det.
-              unfold Ir.SmallStep.inst_det_step.
-              rewrite cur_inst_incrpc_update_m.
-              rewrite HLOCATE2'.
-              repeat (rewrite get_val_incrpc).
-              repeat (rewrite Ir.Config.get_val_update_m).
-              rewrite Heq, Heq0.
-              rewrite incrpc_update_m.
-              rewrite m_update_m.
-              assert (HPTR:Ir.SmallStep.icmp_eq_ptr p p0 t =
-                           Ir.SmallStep.icmp_eq_ptr p p0 (Ir.Config.m st)).
-              { unfold Ir.SmallStep.free in Heq3. des_ifs;
+                try rewrite Heq0; try rewrite Heq1;
+                try rewrite Heq2; try rewrite Heq3; reflexivity
+              | eapply Ir.SmallStep.s_det;
+                unfold Ir.SmallStep.inst_det_step;
+                rewrite cur_inst_incrpc_update_m;
+                rewrite HLOCATE2';
+                repeat (rewrite get_val_incrpc);
+                repeat (rewrite Ir.Config.get_val_update_m);
+                rewrite Heq; try rewrite Heq0; reflexivity
+              ]
+            | rewrite <- nstep_eq_trans_3;
+              rewrite incrpc_update_m;
+              apply nstep_eq_refl
+            ]
+        );
+        try (destruct opptr2; try congruence;
+            assert (r <> r1);
+            [ rewrite <- PeanoNat.Nat.eqb_neq;
+              unfold has_data_dependency in HNODEP;
+              simpl in HNODEP; destruct (r =? r1); eauto
+            | congruence ]
+         )
+      ).
+      { (* free succeed. *)
+        eexists. split.
+        { eapply Ir.SmallStep.ns_success.
+          { eapply Ir.SmallStep.ns_one.
+            eapply Ir.SmallStep.s_det.
+            unfold Ir.SmallStep.inst_det_step.
+            rewrite HLOCATE1'.
+            try rewrite Heq1; try rewrite Heq2; rewrite Heq3. reflexivity.
+          }
+          { eapply Ir.SmallStep.s_det.
+            unfold Ir.SmallStep.inst_det_step.
+            rewrite cur_inst_incrpc_update_m.
+            rewrite HLOCATE2'.
+            repeat (rewrite get_val_incrpc).
+            repeat (rewrite Ir.Config.get_val_update_m).
+            rewrite Heq, Heq0.
+            rewrite incrpc_update_m.
+            rewrite m_update_m.
+            assert (HPTR:Ir.SmallStep.icmp_eq_ptr p p0 t =
+                         Ir.SmallStep.icmp_eq_ptr p p0 (Ir.Config.m st)).
+            { unfold Ir.SmallStep.free in Heq3. des_ifs;
                 erewrite <- icmp_eq_ptr_free_invariant; try eauto. }
-              rewrite HPTR. rewrite Heq1.
-              reflexivity.
-            }
+            rewrite HPTR. rewrite Heq1.
+            reflexivity.
           }
-          { rewrite <- nstep_eq_trans_3.
-            apply nstep_eq_refl.
-          }
+        }
+        { rewrite <- nstep_eq_trans_3.
+          apply nstep_eq_refl.
         }
       }
     }
@@ -5089,7 +5072,7 @@ Proof.
         rewrite HLOCATE2 in HCUR0; congruence).
       (* getting free cases by destruct.. *)
       unfold_det HNEXT HLOCATE2.
-      get_val_independent_H HNEXT opptr2 r.
+      rewrite get_val_independent2 in HNEXT.
       rewrite m_update_reg_and_incrpc in HNEXT.
       rewrite HLOCATE1 in HCUR. inv HCUR.
       symmetry in HNEXT.
@@ -5134,6 +5117,16 @@ Proof.
           apply nstep_eq_refl.
         }
       }
+      { rewrite HLOCATE1 in HCUR. inv HCUR.
+        destruct opptr2. congruence.
+        assert (r <> r1).
+        { rewrite <- PeanoNat.Nat.eqb_neq.
+          unfold has_data_dependency in HNODEP.
+          simpl in HNODEP.
+          destruct (r =? r1); eauto.
+        }
+        congruence.
+      }
     }
   - (* icmp never rases oom. *)
     inv HOOM.
@@ -5147,7 +5140,7 @@ Proof.
       reflexivity. eapply HLOCATE1. assumption. intros. assumption.
     + inv HSUCC.
     + inv HGW0.
-Admitted.
+Qed.
 
 
 
