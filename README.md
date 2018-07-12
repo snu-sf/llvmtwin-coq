@@ -45,3 +45,8 @@ This is a Coq formalization of OOPSLA'18 LLVM memory model.
 ### Proofs
 
 - Reordering of interested instructions: [Reordering.v](Reordering.v) 
+    - This proves that ptrtoint/inttoptr/getelementptr/icmp eq/icmp ule/psub can be freely reordered with respect to malloc/free.
+    
+- Proof of a property of a guessed address (sec. 4.11): [TwinProperty.v](TwinProperty.v)
+    - This proves that if a memory block is never observed, it is guaranteed that there exists a twin-execution with respect to the memory block.
+    - This implies that twin allocation prevents unobserved blocks from being accessed via guessed addresses.
