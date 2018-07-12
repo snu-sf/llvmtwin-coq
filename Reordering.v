@@ -2134,7 +2134,6 @@ Proof.
   destruct (PeanoNat.Nat.eqb l l0) eqn:HLEQ.
   { rewrite PeanoNat.Nat.eqb_eq in HLEQ.
     subst l.
-    Check Ir.Memory.get_set_id.
     rewrite Ir.Memory.get_set_id with (m := Ir.Memory.incr_time m)
       (mb := blk)
       (mb' := t0) (m' := Ir.Memory.set (Ir.Memory.incr_time m) l0 t0) in HGET';
@@ -4371,7 +4370,6 @@ Proof.
   destruct (PeanoNat.Nat.eqb l l0) eqn:HLEQ.
   { rewrite PeanoNat.Nat.eqb_eq in HLEQ.
     subst l.
-    Check Ir.Memory.get_set_id.
     rewrite Ir.Memory.get_set_id with (m := Ir.Memory.incr_time m)
       (mb := blk)
       (mb' := t0) (m' := Ir.Memory.set (Ir.Memory.incr_time m) l0 t0) in HGET';
@@ -4481,7 +4479,7 @@ Proof.
                     assert (fst (Ir.MemBlock.r blk0') < Ir.Memory.mt (Ir.Config.m st)).
                     { eapply wf_blocktime. symmetry in Hgetb1. eapply Ir.Memory.get_In in Hgetb1.
                       eapply Hgetb1. reflexivity. }
-                    rewrite Hrblk0' in H0. SearchAbout (PeanoNat.Nat.ltb).
+                    rewrite Hrblk0' in H0.
                     simpl in H0.
                     assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
                     { intros HH. omega. }
@@ -4492,7 +4490,7 @@ Proof.
                     assert (fst (Ir.MemBlock.r blk0') < Ir.Memory.mt (Ir.Config.m st)).
                     { eapply wf_blocktime. symmetry in Hgetb1. eapply Ir.Memory.get_In in Hgetb1.
                       eapply Hgetb1. reflexivity. }
-                    rewrite Hrblk0' in H0. SearchAbout (PeanoNat.Nat.ltb).
+                    rewrite Hrblk0' in H0.
                     simpl in H0.
                     assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
                     { intros HH. omega. }
