@@ -10,4 +10,4 @@ all:
 	coqc WellTyped.v
 	coqc SmallStep.v SmallStepTest.v
 	coqc Refinement.v
-	coqc Reordering.v
+	coqc Reordering.v TwinProperty.v

@@ -125,6 +125,18 @@ Proof.
     assumption.
 Qed.
 
+Theorem eq_symm:
+  forall s1 s2 (HEQ:eq s1 s2),
+    eq s2 s1.
+Proof.
+  intros. unfold eq in *.
+  induction HEQ.
+  - intros. constructor.
+  - desH H. constructor.
+    split. congruence. split. congruence. apply Regfile.eq_symm. assumption.
+    assumption.
+Qed.
+
 Theorem eq_wopc_refl:
   forall s, eq_wopc s s.
 Proof.
