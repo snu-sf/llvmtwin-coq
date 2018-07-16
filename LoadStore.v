@@ -1,11 +1,13 @@
+Require Import Bool.
+Require Import List.
+Require Import Omega.
+Require Import BinNatDef.
+Require Import sflib.
+
 Require Import Common.
 Require Import Lang.
 Require Import Value.
 Require Import Memory.
-Require Import Bool.
-Require Import List.
-Require Import BinNatDef.
-Require Import Omega.
 
 Module Ir.
 
@@ -81,17 +83,26 @@ Definition store_bytes (m:Ir.Memory.t) (p:Ir.ptrval) (bs:list Ir.Byte.t)
   match get_deref m p (List.length bs) with
   | nil => m
   | (bid, blk, ofs)::_ =>
-    Ir.Memory.set m bid (Ir.MemBlock.set_bytes blk ofs bs)
+    if (Ir.MemBlock.n blk) <? (ofs + length bs) then
+      m (* it does not change memory. *)
+    else
+      Ir.Memory.set m bid (Ir.MemBlock.set_bytes blk ofs bs)
   end.
 
 Definition store_val (m:Ir.Memory.t) (p:Ir.ptrval) (v:Ir.val) (t:Ir.ty)
 : Ir.Memory.t :=
   match (t, v) with
   | (Ir.ity bitsz, Ir.num n) =>
-    store_bytes m p (Ir.Byte.ofint n bitsz)
+    let bs := Ir.Byte.ofint n bitsz in
+    if (Ir.ty_bytesz (Ir.ity bitsz)) =? List.length bs then
+      store_bytes m p bs
+    else m (* Wrongly typed. *)
   | (Ir.ptrty pty, Ir.ptr pv) =>
-    store_bytes m p (Ir.Byte.ofptr pv)
-  | _ => m
+    let bs := Ir.Byte.ofptr pv in
+    if (Ir.ty_bytesz (Ir.ptrty pty)) =? List.length bs then
+      store_bytes m p bs
+    else m (*Wrongly typed*)
+  | _ => m (*Wrongly typed*)
   end.
 
 (* Convert a logical pointer to physical pointer. *)
@@ -617,8 +628,12 @@ Proof.
     rewrite Ir.MemBlock.bytes_length.
     rewrite Heqbos.
     rewrite Ir.MemBlock.set_bytes_self.
-    apply Ir.Memory.set_get_id. assumption. assumption.
-
+    { rewrite Nat.leb_le in HC.
+      rewrite Nat.le_ngt in HC.
+      rewrite <- Nat.ltb_nlt in HC.
+      rewrite HC.
+      apply Ir.Memory.set_get_id. assumption. assumption.
+    }
     rewrite Ir.MemBlock.wf_clen.
     apply leb_complete. assumption.
     apply Ir.Memory.wf_blocks with (m := m) (i := bid).
@@ -632,5 +647,171 @@ Proof.
   - inversion H.
 Qed.
 
+
+Lemma skipn_length {X:Type}:
+  forall n (l:list X),
+    List.length (List.skipn n l) = (List.length l) - n.
+Proof.
+  intro.
+  induction n.
+  { simpl. intros. omega. }
+  { intros.
+    destruct l.
+    simpl. omega.
+    simpl. rewrite IHn. reflexivity.
+  }
+Qed.    
+
+Lemma get_set_diff_inv:
+  forall m bid mb' mb bid'
+         (HWF:Ir.Memory.wf m)
+         (HGET:Ir.Memory.get (Ir.Memory.set m bid' mb') bid = Some mb)
+         (HDIFF:bid <> bid'),
+    Ir.Memory.get m bid = Some mb.
+Proof.
+  intros.
+  unfold Ir.Memory.get.
+  symmetry in HGET.
+  unfold Ir.Memory.set in HGET.
+  unfold Ir.Memory.get in HGET.
+  simpl in *.
+  rewrite list_find_key_set_diffkey in HGET; congruence.
+Qed.
+
+Lemma alive_P_ranges_set_bytes:
+  forall m bid mb ofs bs
+         (HGET:Some mb = Ir.Memory.get m bid),
+    Ir.Memory.alive_P_ranges (Ir.Memory.set m bid (Ir.MemBlock.set_bytes mb ofs bs)) =
+    Ir.Memory.alive_P_ranges m.
+Proof.
+  intros.
+  unfold Ir.Memory.set.
+  unfold Ir.Memory.alive_P_ranges.
+  simpl.
+  destruct m.
+  simpl.
+Admitted.
+
+Lemma set_bytes_wf:
+  forall m bid mb ofs bs thety
+         (HSZ:Ir.ty_bytesz thety > 0)
+         (HWF:Ir.Memory.wf m)
+         (HGET:Some mb = Ir.Memory.get m bid)
+         (HLEN:Ir.ty_bytesz thety = List.length bs)
+         (HOFS:ofs + List.length bs <= Ir.MemBlock.n mb),
+    Ir.Memory.wf (Ir.Memory.set m bid
+        (Ir.MemBlock.set_bytes mb ofs bs)).
+Proof.
+  intros.
+  split. (* start to show wf of memory *)
+  { intros.
+    inv HWF.
+    destruct (i =? bid) eqn:HBID.
+    { rewrite PeanoNat.Nat.eqb_eq in HBID.
+      subst i.
+      apply Ir.Memory.get_In with (blks := Ir.Memory.blocks m) in HGET;
+        try reflexivity.
+      apply wf_blocks in HGET.
+      unfold Ir.Memory.set in HAS.
+      simpl in *.
+      apply list_set_NoDup_In_unique in HAS.
+      { rewrite HAS. unfold Ir.MemBlock.set_bytes.
+        inv HGET.
+        rewrite <- wf_clen in HOFS.
+        split; try (simpl; assumption).
+        simpl.
+        repeat (rewrite app_length).
+        rewrite skipn_length.
+        rewrite firstn_length.
+        rewrite Nat.min_l; try omega.
+      }
+      { assumption. }
+    }
+    { (* i != b *)
+      rewrite PeanoNat.Nat.eqb_neq in HBID.
+      apply wf_blocks with (i := i).
+      unfold Ir.Memory.set in HAS.
+      simpl in HAS.
+      apply list_set_In_not_In in HAS; auto.
+    }
+  }
+  { inv HWF.
+    unfold Ir.Memory.set.
+    simpl. eapply list_set_NoDup_key; eauto.
+  }
+  { inv HWF.
+    unfold Ir.Memory.set. simpl.
+    erewrite list_set_keys_eq; eauto.
+  }
+  { inv HWF.
+    rewrite alive_P_ranges_set_bytes; assumption.
+  }
+  { inv HWF.
+    simpl.
+    intros.
+    destruct (i =? bid) eqn:HBID.
+    { rewrite PeanoNat.Nat.eqb_eq in HBID.
+      subst i.
+      apply list_set_NoDup_In_unique in HAS; try assumption.
+      rewrite HAS. unfold Ir.MemBlock.set_bytes.
+      simpl. eapply wf_blocktime.
+      eapply Ir.Memory.get_In in HGET. eapply HGET.
+      reflexivity.
+    }
+    { rewrite PeanoNat.Nat.eqb_neq in HBID.
+      apply list_set_In_not_In in HAS.
+      { eapply wf_blocktime. eassumption. }
+      { eassumption. }
+    }
+  }
+Qed.
+
+(* Theorem:
+   store_val preservees wellformedness of memory. *)
+Theorem store_val_wf:
+  forall m (HWF:Ir.Memory.wf m) p v t
+      (HSZ:Ir.ty_bytesz t > 0)
+      (HDEREF:deref m p (Ir.ty_bytesz t) = true),
+    Ir.Memory.wf (store_val m p v t).
+Proof.
+  intros.
+  unfold deref in HDEREF.
+  des_ifs.
+  unfold store_val.
+  unfold store_bytes.
+  destruct t as [isz | pty].
+  { destruct v; try assumption.
+    des_ifs.
+    eapply set_bytes_wf; try eassumption.
+    { apply get_deref_singleton in Heq1.
+      destruct Heq1.
+      { destruct H. destruct H. inv H. simpl in H0. congruence. }
+      { inv H. }
+      { assumption. }
+      { rewrite PeanoNat.Nat.eqb_eq in Heq0.
+        omega. }
+    }
+    { rewrite PeanoNat.Nat.eqb_eq in Heq0.
+      assumption. }
+    { rewrite Nat.ltb_ge in Heq2.
+      assumption. }
+  }
+  { destruct v; try assumption.
+    des_ifs.
+    eapply set_bytes_wf; try eassumption.
+    { apply get_deref_singleton in Heq1.
+      destruct Heq1.
+      { destruct H. destruct H. inv H. simpl in H0. congruence. }
+      { inv H. }
+      { assumption. }
+      { rewrite PeanoNat.Nat.eqb_eq in Heq0.
+        omega. }
+    }
+    { rewrite PeanoNat.Nat.eqb_eq in Heq0.
+      assumption. }
+    { rewrite Nat.ltb_ge in Heq2.
+      assumption. }
+  }
+Qed.
 
 End Ir.

@@ -1402,7 +1402,6 @@ Proof.
   destruct (PeanoNat.Nat.eqb l l0) eqn:HLEQ.
   { rewrite PeanoNat.Nat.eqb_eq in HLEQ.
     subst l.
-    Check Ir.Memory.get_set_id.
     rewrite Ir.Memory.get_set_id with (m := Ir.Memory.incr_time m)
       (mb := blk)
       (mb' := t1) (m' := Ir.Memory.set (Ir.Memory.incr_time m) l0 t1) in HGET';
@@ -1421,7 +1420,6 @@ Proof.
     }
   }
   { rewrite PeanoNat.Nat.eqb_neq in HLEQ.
-    Check get_set_diff.
     rewrite get_set_diff with (m := Ir.Memory.incr_time m)
                               (mb' := t1) (mb := blk) (bid' := l)
       in HGET'; try assumption; try congruence.

@@ -693,7 +693,6 @@ Proof.
   }
 Qed.
 
-
 Lemma twin_state_load_val_eq:
   forall st1 st2 blkid (HTWIN:twin_state st1 st2 blkid) l ofs thety,
     LoadStore.Ir.load_val (Ir.Config.m st1) (Ir.plog l ofs) thety =
@@ -708,6 +707,295 @@ Proof.
     eassumption. }
 Qed.
 
+Lemma list_find_key_set_none {X:Type}:
+  forall (m:list (nat * X)) k v
+         (HNO:list_find_key m k = nil),
+    list_find_key (list_set m k v) k = nil.
+Proof.
+  intros.
+  unfold list_find_key in *.
+  unfold list_set in *.
+  induction m.
+  { reflexivity. }
+  { simpl in HNO.
+    destruct (fst a =? k) eqn:HK; des_ifs.
+    apply IHm in HNO.
+    simpl. rewrite HK. rewrite HK. assumption.
+  }
+Qed.
+
+Lemma get_set_id_none:
+  forall m bid mb' m'
+         (HWF:Ir.Memory.wf m)
+         (HWF':Ir.Memory.wf m')
+         (HGET:Ir.Memory.get m bid = None)
+         (HSET:m' = Ir.Memory.set m bid mb'),
+    Ir.Memory.get m' bid = None.
+Proof.
+  intros.
+  unfold Ir.Memory.get in *.
+  unfold Ir.Memory.set in *.
+  rewrite HSET. simpl. rewrite list_find_key_set_none. reflexivity.
+  des_ifs.
+Qed.
+
+Lemma twin_state_store_val :
+  forall md st1 st2 blkid
+         (HTWIN:twin_state st1 st2 blkid) l ofs v t
+         (HWF1:Ir.Config.wf md st1) (HWF2:Ir.Config.wf md st2),
+  twin_state
+    (Ir.Config.update_m st1 (LoadStore.Ir.store_val (Ir.Config.m st1)
+                                                    (Ir.plog l ofs) v t))
+    (Ir.Config.update_m st2 (LoadStore.Ir.store_val (Ir.Config.m st2)
+                                                    (Ir.plog l ofs) v t))
+    blkid.
+Proof.
+  intros.
+  decompose_HTWIN HTWIN l.
+  split.
+  { apply eq_wom_update_m. assumption. }
+  unfold LoadStore.Ir.store_val.
+  unfold LoadStore.Ir.store_bytes.
+  split.
+  { (* memory time is the same. *)
+    unfold Ir.Config.update_m.
+    simpl.
+    destruct (l =? blkid) eqn:HBLKID.
+    { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+      subst l.
+      destruct HTWIN5'.
+      exploit H. reflexivity. intros HH. clear H H0.
+      decompose_mbs HH.
+      destruct t.
+      { destruct v; try congruence.
+        rewrite <- HH0, <- HH1.
+        unfold Ir.MemBlock.alive.
+        unfold Ir.MemBlock.inbounds.
+        rewrite HH3, HH4.
+        des_ifs;
+        congruence. }
+      { destruct v; try congruence.
+        { rewrite <- HH0, <- HH1.
+          unfold Ir.MemBlock.alive.
+          unfold Ir.MemBlock.inbounds.
+          rewrite HH3, HH4.
+          des_ifs; congruence. }
+      }
+    }
+    { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+      destruct HTWIN5'.
+      exploit H0. assumption.
+      intros HH.
+      destruct t.
+      { destruct v; try assumption.
+        { rewrite HH.
+          des_ifs. }
+      }
+      { destruct v; try assumption.
+        rewrite HH. des_ifs. }
+    }
+  }
+  split.
+  { (* call times is the same. *)
+    unfold Ir.Config.update_m.
+    simpl.
+    destruct (l =? blkid) eqn:HBLKID.
+    { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+      subst l.
+      destruct HTWIN5'.
+      exploit H. reflexivity. intros HH. clear H H0.
+      decompose_mbs HH.
+      destruct t.
+      { destruct v; try congruence.
+        rewrite <- HH0, <- HH1.
+        unfold Ir.MemBlock.alive.
+        unfold Ir.MemBlock.inbounds.
+        rewrite HH3, HH4.
+        des_ifs;
+        congruence. }
+      { destruct v; try congruence.
+        { rewrite <- HH0, <- HH1.
+          unfold Ir.MemBlock.alive.
+          unfold Ir.MemBlock.inbounds.
+          rewrite HH3, HH4.
+          des_ifs; congruence. }
+      }
+    }
+    { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+      destruct HTWIN5'.
+      exploit H0. assumption.
+      intros HH.
+      destruct t.
+      { destruct v; try assumption.
+        { rewrite HH.
+          des_ifs. }
+      }
+      { destruct v; try assumption.
+        rewrite HH. des_ifs. }
+    }
+  }
+  split.
+  { (* fresh_bid is the same. *)
+    unfold Ir.Config.update_m.
+    simpl.
+    destruct (l =? blkid) eqn:HBLKID.
+    { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+      subst l.
+      destruct HTWIN5'.
+      exploit H. reflexivity. intros HH. clear H H0.
+      decompose_mbs HH.
+      destruct t.
+      { destruct v; try congruence.
+        rewrite <- HH0, <- HH1.
+        unfold Ir.MemBlock.alive.
+        unfold Ir.MemBlock.inbounds.
+        rewrite HH3, HH4.
+        des_ifs;
+        congruence. }
+      { destruct v; try congruence.
+        { rewrite <- HH0, <- HH1.
+          unfold Ir.MemBlock.alive.
+          unfold Ir.MemBlock.inbounds.
+          rewrite HH3, HH4.
+          des_ifs; congruence. }
+      }
+    }
+    { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+      destruct HTWIN5'.
+      exploit H0. assumption.
+      intros HH.
+      destruct t.
+      { destruct v; try assumption.
+        { rewrite HH.
+          des_ifs. }
+      }
+      { destruct v; try assumption.
+        rewrite HH. des_ifs. }
+    }
+  }
+  split.
+  { (* bid' = blkid *)
+    intros HEQ.
+    repeat (rewrite Ir.Reordering.m_update_m).
+    destruct t.
+    { destruct v.
+      {
+        destruct (LoadStore.Ir.get_deref (Ir.Config.m st1) (Ir.plog l ofs)
+          (length (Ir.Byte.ofint n0 n))) eqn:HDEREF1;
+        destruct (LoadStore.Ir.get_deref (Ir.Config.m st2) (Ir.plog l ofs)
+          (length (Ir.Byte.ofint n0 n))) eqn:HDEREF2.
+        { clear HTWIN5'.
+          assert (HTWIN5' := HTWIN5 bid').
+          destruct HTWIN5'. exploit H. congruence. intros HH.
+          clear H. decompose_mbs HH.
+          eexists; eexists; repeat (split; try eassumption). }
+        { (* get_deref contradiction *)
+          unfold LoadStore.Ir.get_deref in *.
+          destruct HTWIN5'.
+          destruct (l =? blkid) eqn:HBLKID.
+          { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+            exploit H. assumption. intros HH.
+            decompose_mbs HH.
+            subst l.
+            rewrite <- HH0 in HDEREF1.
+            rewrite <- HH1 in HDEREF2.
+            unfold Ir.MemBlock.alive, Ir.MemBlock.inbounds in *.
+            rewrite HH3, HH4 in HDEREF1.
+            des_ifs.
+          }
+          { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+            exploit H0. assumption. intros HH.
+            rewrite HH in HDEREF1. congruence. }
+        }
+        { (* get_deref contradiction *)
+          unfold LoadStore.Ir.get_deref in *.
+          destruct HTWIN5'.
+          destruct (l =? blkid) eqn:HBLKID.
+          { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+            exploit H. assumption. intros HH.
+            decompose_mbs HH.
+            subst l.
+            rewrite <- HH0 in HDEREF1.
+            rewrite <- HH1 in HDEREF2.
+            unfold Ir.MemBlock.alive, Ir.MemBlock.inbounds in *.
+            rewrite HH3, HH4 in HDEREF1.
+            des_ifs.
+          }
+          { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+            exploit H0. assumption. intros HH.
+            rewrite HH in HDEREF1. congruence. }
+        }
+        { unfold LoadStore.Ir.get_deref in *.
+          destruct HTWIN5'.
+          destruct (l =? blkid) eqn:HBLKID.
+          { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+            exploit H. assumption. intros HH.
+            decompose_mbs HH.
+            subst l.
+            rewrite <- HH0 in HDEREF1.
+            rewrite <- HH1 in HDEREF2.
+            unfold Ir.MemBlock.alive, Ir.MemBlock.inbounds in *.
+            rewrite HH3, HH4 in HDEREF1.
+            des_ifs.
+            exists t.
+            exists t0.
+            split.
+            { erewrite Ir.Memory.get_set_id with (m := Ir.Config.m st1).
+              { reflexivity. }
+              { inv HWF1. assumption. }
+              { 
+          }
+          { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+            exploit H0. assumption. intros HH.
+            rewrite HH in HDEREF1. congruence. }
+          
+      }
+      { clear HTWIN5'.
+        assert (HTWIN5' := HTWIN5 bid').
+        destruct HTWIN5'. exploit H. congruence. intros HH.
+        clear H. decompose_mbs HH.
+        exists mb1, mb2.
+        repeat (split; try assumption).
+      }
+      { clear HTWIN5'.
+        assert (HTWIN5' := HTWIN5 bid').
+        destruct HTWIN5'. exploit H. congruence. intros HH.
+        clear H. decompose_mbs HH.
+        exists mb1, mb2.
+        repeat (split; try assumption).
+      }
+    }
+    { destruct v.
+      { clear HTWIN5'.
+        assert (HTWIN5' := HTWIN5 bid').
+        destruct HTWIN5'. exploit H. congruence. intros HH.
+        clear H. decompose_mbs HH.
+        exists mb1, mb2.
+        repeat (split; try assumption).
+      }
+      { admit. }
+      { clear HTWIN5'.
+        assert (HTWIN5' := HTWIN5 bid').
+        destruct HTWIN5'. exploit H. congruence. intros HH.
+        clear H. decompose_mbs HH.
+        exists mb1, mb2.
+        repeat (split; try assumption).
+      }
+    }
+  }
+  { intros.
+    repeat (rewrite Ir.Reordering.m_update_m).
+  { clear HTWIN5'.
+    assert (HTWIN5' := HTWIN5 bid').
+    destruct t.
+    { destruct v; try (destruct HTWIN5'; auto; fail).
+      admit.
+    }
+    { destruct v; try (destruct HTWIN5'; auto; fail).
+      admit.
+    }
+  }
+Admitted.
 
 (*******************************************************
                  Main Theorems 
@@ -1153,9 +1441,95 @@ Proof.
             try apply HTWIN; congruence);
       try(erewrite twin_state_get_val_eq with (st2 := st2) in Hop12;
             try apply HTWIN; congruence).
+      { destruct v eqn:HV; inv H0;
+        try (erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+            try apply HTWIN;
+            rewrite Hop21 in Hop11; inv Hop11;
+            eexists; split;
+            [ apply Ir.SmallStep.s_det; unfold Ir.SmallStep.inst_det_step;
+              rewrite <- Heqoi1;
+              rewrite Hop21; reflexivity
+            | eapply ts_success;
+              [ reflexivity
+                | reflexivity
+                | apply twin_state_incrpc; assumption ]
+            ]).
+        destruct (LoadStore.Ir.deref (Ir.Config.m st1) p (Ir.ty_bytesz t))
+                 eqn:HDEREF; inv H1; destruct p.
+        {
+          dup HDEREF.
+          erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+            try apply HTWIN.
+          rewrite Hop21 in Hop11. inv Hop11.
+          rewrite twin_state_deref_eq with (st1 := st1) (st2 := st2)
+                                           (blkid := blkid) in HDEREF0;
+            try assumption.
+          eexists.
+          split.
+          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi1.
+            rewrite Hop21, Hop22.
+            rewrite HDEREF0. reflexivity. }
+          { eapply ts_success.
+            { reflexivity. }
+            { reflexivity. }
+            { eapply twin_state_incrpc.
+              decompose_HTWIN HTWIN blkid.
+              unfold twin_state.
+              split.
+              { apply eq_wom_update_m. assumption. }
+              split.
+              { unfold Ir.Config.update_m.
+                simpl.
+                u
+              . }
+          *)
+        }
+        { dest
+      }
+      { destruct v; inv H0;
+        ( erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+            try apply HTWIN;
+            rewrite Hop21 in Hop11; inv Hop11;
+            eexists; split;
+            [ apply Ir.SmallStep.s_det; unfold Ir.SmallStep.inst_det_step;
+              rewrite <- Heqoi1;
+              try rewrite Hop22; rewrite Hop21; reflexivity
+            | eapply ts_success;
+              [ reflexivity
+                | reflexivity
+                | apply twin_state_incrpc; assumption ]
+            ]).
+      }
+      { destruct v; inv H0;
+        ( erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+            try apply HTWIN;
+            rewrite Hop21 in Hop11; inv Hop11;
+            eexists; split;
+            [ apply Ir.SmallStep.s_det; unfold Ir.SmallStep.inst_det_step;
+              rewrite <- Heqoi1;
+              try rewrite Hop22; rewrite Hop21; reflexivity
+            | eapply ts_success;
+              [ reflexivity
+                | reflexivity
+                | apply twin_state_incrpc; assumption ]
+            ]).
+      }
+      {
+        inv H0.
+        eexists; split.
+        { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+          rewrite <- Heqoi1, Hop21. reflexivity.
+        }
+        { eapply ts_success;
+            [ reflexivity
+            | reflexivity
+            | apply twin_state_incrpc; assumption ].
+        }
+      }
+    }
+    { (* free *)    
 
-      
-  
 Qed.
 
 Theorem twin_exe:
