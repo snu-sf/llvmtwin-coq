@@ -739,7 +739,7 @@ Qed.
  **************************************************)
 
 (* Is it valid to reorder 'i1;i2' into 'i2;i1'? *)
-Definition inst_reordering_valid (i1 i2:Ir.Inst.t): Prop :=
+Definition inst_reordering_valid (i2 i1:Ir.Inst.t): Prop :=
   forall
     (* If there's no data dependency from i1 to i2 *)
     (HNODEP:has_data_dependency i1 i2 = false)
@@ -798,23 +798,11 @@ Proof.
   erewrite Ir.Memory.get_new; try eassumption. reflexivity.
 Qed. 
 
-(*Ltac get_val_independent_goal opval r2 :=
-  rewrite get_val_independent2;
-  try (destruct opval as [| r00];
-       try congruence).
-
-Ltac get_val_independent_H H opval r2 :=
-  rewrite get_val_independent2 in H;
-  try (destruct opval as [| r00];
-       try congruence);
-  try rewrite Ir.Config.get_val_update_m in H.
-*)
-
 Theorem reorder_malloc_ptrtoint:
   forall i1 i2 r1 r2 opptr1 opptr2 ty1 ty2
          (HINST1:i1 = Ir.Inst.imalloc r1 ty1 opptr1)
          (HINST2:i2 = Ir.Inst.iptrtoint r2 opptr2 ty2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -1001,7 +989,7 @@ Theorem reorder_ptrtoint_malloc:
   forall i1 i2 r1 r2 opptr1 opptr2 ty1 ty2
          (HINST1:i1 = Ir.Inst.iptrtoint r1 opptr1 ty1)
          (HINST2:i2 = Ir.Inst.imalloc r2 ty2 opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -1224,7 +1212,7 @@ Theorem reorder_free_ptrtoint:
   forall i1 i2 r2 opptr1 (opptr2:Ir.op) retty2
          (HINST1:i1 = Ir.Inst.ifree opptr1)
          (HINST2:i2 = Ir.Inst.iptrtoint r2 opptr2 retty2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -1357,7 +1345,7 @@ Theorem reorder_ptrtoint_free:
   forall i1 i2 r1 opptr1 (opptr2:Ir.op) retty1
          (HINST1:i1 = Ir.Inst.iptrtoint r1 opptr1 retty1)
          (HINST2:i2 = Ir.Inst.ifree opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -1498,7 +1486,7 @@ Theorem reorder_ptrtoint_inttoptr:
   forall i1 i2 r1 r2 (opptr1 opint2:Ir.op) retty1 retty2
          (HINST1:i1 = Ir.Inst.iptrtoint r1 opptr1 retty1)
          (HINST2:i2 = Ir.Inst.iinttoptr r2 opint2 retty2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -1589,7 +1577,7 @@ Theorem reorder_inttoptr_ptrtoint:
   forall i1 i2 r1 r2 (opint1 opptr2:Ir.op) retty1 retty2
          (HINST1:i1 = Ir.Inst.iinttoptr r1 opint1 retty1)
          (HINST2:i2 = Ir.Inst.iptrtoint r2 opptr2 retty2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -1708,7 +1696,7 @@ Theorem reorder_malloc_gep:
   forall i1 i2 r1 r2 opptr1 opptr2 opidx2 ty1 ty2 inb
          (HINST1:i1 = Ir.Inst.imalloc r1 ty1 opptr1)
          (HINST2:i2 = Ir.Inst.igep r2 ty2 opptr2 opidx2 inb),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -1899,7 +1887,7 @@ Theorem reorder_gep_malloc:
   forall i1 i2 r1 r2 (opptr1 opidx1 opptr2:Ir.op) (inb:bool) ty1 ty2
          (HINST1:i1 = Ir.Inst.igep r1 ty1 opptr1 opidx1 inb)
          (HINST2:i2 = Ir.Inst.imalloc r2 ty2 opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -2208,7 +2196,7 @@ Theorem reorder_free_gep:
   forall i1 i2 r2 opptr1 (opptr2 opidx2:Ir.op) retty2 (inb:bool)
          (HINST1:i1 = Ir.Inst.ifree opptr1)
          (HINST2:i2 = Ir.Inst.igep r2 retty2 opptr2 opidx2 inb),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -2354,7 +2342,7 @@ Theorem reorder_gep_free:
   forall i1 i2 r1 (opptr1 opptr2 opidx1:Ir.op) retty1 inb
          (HINST1:i1 = Ir.Inst.igep r1 retty1 opptr1 opidx1 inb)
          (HINST2:i2 = Ir.Inst.ifree opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -2538,7 +2526,7 @@ Theorem reorder_malloc_inttoptr:
   forall i1 i2 r1 r2 (opptr1 opint2:Ir.op) ty1 retty2
          (HINST1:i1 = Ir.Inst.imalloc r1 ty1 opptr1)
          (HINST2:i2 = Ir.Inst.iinttoptr r2 opint2 retty2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -2703,7 +2691,7 @@ Theorem reorder_inttoptr_malloc:
   forall i1 i2 r1 r2 (opint1 opptr2:Ir.op) retty1 ty2
          (HINST1:i1 = Ir.Inst.iinttoptr r1 opint1 retty1)
          (HINST2:i2 = Ir.Inst.imalloc r2 ty2 opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -2887,7 +2875,7 @@ Theorem reorder_free_inttoptr:
   forall i1 i2 r2 (opptr1 opint2:Ir.op) retty2
          (HINST1:i1 = Ir.Inst.ifree opptr1)
          (HINST2:i2 = Ir.Inst.iinttoptr r2 opint2 retty2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -3009,7 +2997,7 @@ Theorem reorder_inttoptr_free:
   forall i1 i2 r1 (opint1 opptr2:Ir.op) retty1
          (HINST1:i1 = Ir.Inst.iinttoptr r1 opint1 retty1)
          (HINST2:i2 = Ir.Inst.ifree opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -3343,7 +3331,7 @@ Theorem reorder_malloc_icmp_eq:
   forall i1 i2 r1 r2 (opptr1 op21 op22:Ir.op) ty1 opty2
          (HINST1:i1 = Ir.Inst.imalloc r1 ty1 opptr1)
          (HINST2:i2 = Ir.Inst.iicmp_eq r2 opty2 op21 op22),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -3731,7 +3719,7 @@ Theorem reorder_icmp_eq_malloc:
   forall i1 i2 r1 r2 (op11 op12 opptr2:Ir.op) opty1 ty2
          (HINST1:i1 = Ir.Inst.iicmp_eq r1 opty1 op11 op12)
          (HINST2:i2 = Ir.Inst.imalloc r2 ty2 opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -4672,7 +4660,7 @@ Theorem reorder_free_icmp_eq:
   forall i1 i2 r2 (opptr1 op21 op22:Ir.op) opty2
          (HINST1:i1 = Ir.Inst.ifree opptr1)
          (HINST2:i2 = Ir.Inst.iicmp_eq r2 opty2 op21 op22),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -4967,7 +4955,7 @@ Theorem reorder_icmp_eq_free:
   forall i1 i2 r1 (op11 op12 opptr2:Ir.op) opty1
          (HINST1:i1 = Ir.Inst.iicmp_eq r1 opty1 op11 op12)
          (HINST2:i2 = Ir.Inst.ifree opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -5357,7 +5345,7 @@ Theorem reorder_malloc_icmp_ule:
   forall i1 i2 r1 r2 (opptr1 op21 op22:Ir.op) ty1 opty2
          (HINST1:i1 = Ir.Inst.imalloc r1 ty1 opptr1)
          (HINST2:i2 = Ir.Inst.iicmp_ule r2 opty2 op21 op22),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -5748,7 +5736,7 @@ Theorem reorder_icmp_ule_malloc:
   forall i1 i2 r1 r2 (op11 op12 opptr2:Ir.op) opty1 ty2
          (HINST1:i1 = Ir.Inst.iicmp_ule r1 opty1 op11 op12)
          (HINST2:i2 = Ir.Inst.imalloc r2 ty2 opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -6296,7 +6284,7 @@ Theorem reorder_free_icmp_ule:
   forall i1 i2 r2 (opptr1 op21 op22:Ir.op) opty2
          (HINST1:i1 = Ir.Inst.ifree opptr1)
          (HINST2:i2 = Ir.Inst.iicmp_ule r2 opty2 op21 op22),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -6587,7 +6575,7 @@ Theorem reorder_icmp_ule_free:
   forall i1 i2 r1 (op11 op12 opptr2:Ir.op) opty1
          (HINST1:i1 = Ir.Inst.iicmp_ule r1 opty1 op11 op12)
          (HINST2:i2 = Ir.Inst.ifree opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -6870,7 +6858,7 @@ Theorem reorder_malloc_psub:
   forall i1 i2 r1 r2 (opptr1 op21 op22:Ir.op) ty1 retty2 ptrty2
          (HINST1:i1 = Ir.Inst.imalloc r1 ty1 opptr1)
          (HINST2:i2 = Ir.Inst.ipsub r2 retty2 ptrty2 op21 op22),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -7124,7 +7112,7 @@ Theorem reorder_psub_malloc:
   forall i1 i2 r1 r2 (op11 op12 opptr2:Ir.op) retty1 ptrty1 ty2
          (HINST1:i1 = Ir.Inst.ipsub r1 retty1 ptrty1 op11 op12)
          (HINST2:i2 = Ir.Inst.imalloc r2 ty2 opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -7504,7 +7492,7 @@ Theorem reorder_free_psub:
   forall i1 i2 r2 (opptr1 op21 op22:Ir.op) retty2 ptrty2
          (HINST1:i1 = Ir.Inst.ifree opptr1)
          (HINST2:i2 = Ir.Inst.ipsub r2 retty2 ptrty2 op21 op22),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.
@@ -7746,7 +7734,7 @@ Theorem reorder_psub_free:
   forall i1 i2 r1 (op11 op12 opptr2:Ir.op) retty1 ptrty1
          (HINST1:i1 = Ir.Inst.ipsub r1 retty1 ptrty1 op11 op12)
          (HINST2:i2 = Ir.Inst.ifree opptr2),
-    inst_reordering_valid i1 i2.
+    inst_reordering_valid i2 i1.
 Proof.
   intros.
   unfold inst_reordering_valid.

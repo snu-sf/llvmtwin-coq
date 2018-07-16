@@ -766,16 +766,15 @@ Ltac thats_it := apply twin_state_update_reg_and_incrpc;
 
 Lemma twin_execution_unidir:
   forall (md:Ir.IRModule.t) (blkid:Ir.blockid)
-    (* If block blkid is never observed.. *)
-    (HNEVER_OBSERVED: forall (st:Ir.Config.t), ~ observes_block md st blkid),
-
-    forall (st1 st2:Ir.Config.t) (sr1 sr2:Ir.SmallStep.step_res)
-           (* Input state st1 and st2 are twin-state. *)
-           (HTWIN:twin_state st1 st2 blkid)
-           (* Current instruction wouldn't do memory access
-              from a guessed pointer. *)
-           (HNOGUESSEDACCESS:~ memaccess_from_possibly_guessedptr md st1),
-    (* one way dir *)  
+         (st1 st2:Ir.Config.t) (sr1 sr2:Ir.SmallStep.step_res)
+         (* Input state st1 and st2 are twin-state. *)
+         (HTWIN:twin_state st1 st2 blkid)
+         (* Current instruction wouldn't do memory access
+            from a guessed pointer. *)
+         (HNOGUESSEDACCESS:~ memaccess_from_possibly_guessedptr md st1)
+         (* Current instruction never observes block id blkid. *)
+         (HNOTOBSERVE: ~observes_block md st1 blkid),
+    (* one way dir *)
     forall sr1 (HSTEP1:Ir.SmallStep.inst_step md st1 sr1),
           exists sr2, Ir.SmallStep.inst_step md st2 sr2 /\
                       twin_sresult sr1 sr2 blkid.
@@ -807,17 +806,17 @@ Proof.
         { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
           rewrite <- Heqoi1.
           reflexivity. }
-        { erewrite twin_state_get_val_eq with (st1 := st1);
+        { erewrite <- twin_state_get_val_eq with (st1 := st1) (st2 := st2);
             try (apply HTWIN; fail).
-          erewrite twin_state_get_val_eq with (st1 := st1);
+          erewrite <- twin_state_get_val_eq with (st1 := st1) (st2 := st2);
             try (apply HTWIN; fail).
           eapply ts_success.
           { reflexivity. }
           { reflexivity. }
           { destruct t; try thats_it.
-            destruct (Ir.Config.get_val st2 o) eqn:Hop1; try thats_it.
+            destruct (Ir.Config.get_val st1 o) eqn:Hop1; try thats_it.
             destruct v; try thats_it.
-            destruct (Ir.Config.get_val st2 o0) eqn:Hop2; try thats_it.
+            destruct (Ir.Config.get_val st1 o0) eqn:Hop2; try thats_it.
             destruct v; try thats_it.
             destruct p; destruct p0.
             { unfold Ir.SmallStep.psub. thats_it. }
@@ -825,16 +824,15 @@ Proof.
               { (* observed. *)
                 rewrite PeanoNat.Nat.eqb_eq in HBLKID.
                 subst b.
-                assert (HNO2 := HNEVER_OBSERVED st2).
                 assert (Heqoi2 := Heqoi1).
                 rewrite twin_state_cur_inst_eq with (st2 := st1) (blkid := blkid)
                   in Heqoi2 by (apply twin_state_sym in HTWIN; assumption).
-                assert (observes_block md st2 blkid).
+                assert (observes_block md st1 blkid).
                 { eapply ob_by_psub_l.
-                  { rewrite Heqoi1. reflexivity. }
+                  { rewrite Heqoi2. reflexivity. }
                   { rewrite Hop1. reflexivity. }
                   { rewrite Hop2. reflexivity. }
-                }
+                }                
                 congruence.
               }
               { unfold Ir.SmallStep.psub.
@@ -848,13 +846,12 @@ Proof.
               { (* observed. *)
                 rewrite PeanoNat.Nat.eqb_eq in HBLKID.
                 subst b.
-                assert (HNO2 := HNEVER_OBSERVED st2).
                 assert (Heqoi2 := Heqoi1).
                 rewrite twin_state_cur_inst_eq with (st2 := st1) (blkid := blkid)
                   in Heqoi2 by (apply twin_state_sym in HTWIN; assumption).
-                assert (observes_block md st2 blkid).
+                assert (observes_block md st1 blkid).
                 { eapply ob_by_psub_r.
-                  { rewrite Heqoi1. reflexivity. }
+                  { rewrite Heqoi2. reflexivity. }
                   { rewrite Hop2. reflexivity. }
                   { rewrite Hop1. reflexivity. }
                 }
@@ -876,17 +873,17 @@ Proof.
       { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
         rewrite <- Heqoi1.
         reflexivity. }
-      { erewrite twin_state_get_val_eq with (st1 := st1);
+      { erewrite <- twin_state_get_val_eq with (st2 := st2);
           try (apply HTWIN; fail).
-        erewrite twin_state_get_val_eq with (st1 := st1);
+        erewrite <- twin_state_get_val_eq with (st2 := st2);
           try (apply HTWIN; fail).
         eapply ts_success.
         { reflexivity. }
         { reflexivity. }
         { destruct t; try thats_it.
-          destruct (Ir.Config.get_val st2 o) eqn:Hop1; try thats_it.
+          destruct (Ir.Config.get_val st1 o) eqn:Hop1; try thats_it.
           destruct v; try thats_it.
-          destruct (Ir.Config.get_val st2 o0) eqn:Hop2; try thats_it.
+          destruct (Ir.Config.get_val st1 o0) eqn:Hop2; try thats_it.
           destruct v; try thats_it.
           destruct p.
           { erewrite twin_state_gep_eq; try eassumption.
@@ -901,9 +898,9 @@ Proof.
       { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
         rewrite <- Heqoi1.
         reflexivity. }
-      { erewrite twin_state_get_val_eq with (st1 := st1);
+      { erewrite <- twin_state_get_val_eq with (st2 := st2);
           try (apply HTWIN; fail).
-        erewrite twin_state_get_val_eq with (st1 := st1);
+        erewrite <- twin_state_get_val_eq with (st2 := st2);
           try (apply HTWIN; fail).
         eapply ts_success.
       
