@@ -539,6 +539,175 @@ Proof.
   }
 Qed.
 
+Lemma twin_state_deref_eq:
+  forall st1 st2 blkid (HTWIN:twin_state st1 st2 blkid)
+         l ofs n,
+    LoadStore.Ir.deref (Ir.Config.m st1) (Ir.plog l ofs) n =
+    LoadStore.Ir.deref (Ir.Config.m st2) (Ir.plog l ofs) n.
+Proof.
+  intros.
+  unfold LoadStore.Ir.deref.
+  unfold LoadStore.Ir.get_deref.
+  destruct (l =? blkid) eqn:HBLKID.
+  { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+    subst l.
+    destruct HTWIN.
+    destruct H0.
+    destruct H1.
+    destruct H2.
+    assert (H3' := H3 blkid).
+    destruct H3'.
+    exploit H4.
+    reflexivity.
+    intros H4'.
+    destruct H4' as [mb1 [mb2 H4']].
+    destruct H4' as [HH0 HH1].
+    destruct HH1 as [HH1 HH2].
+    destruct HH2 as [HH2 HH3].
+    destruct HH3 as [HH3 HH4].
+    destruct HH4 as [HH4 HH5].
+    destruct HH5 as [HH5 HH6].
+    rewrite <- HH0.
+    rewrite <- HH1.
+    unfold Ir.MemBlock.alive.
+    unfold Ir.MemBlock.inbounds.
+    rewrite HH3.
+    rewrite HH4.
+    des_ifs.
+  }
+  { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+    destruct HTWIN.
+    destruct H0.
+    destruct H1.
+    destruct H2.
+    assert (H3' := H3 l).
+    destruct H3'.
+    apply H5 in HBLKID.
+    rewrite HBLKID. reflexivity.
+  }
+Qed. 
+
+Ltac decompose_HTWIN HTWIN blkid :=
+        destruct HTWIN as [HTWIN1 HTWIN2];
+        destruct HTWIN2 as [HTWIN2 HTWIN3];
+        destruct HTWIN3 as [HTWIN3 HTWIN4];
+        destruct HTWIN4 as [HTWIN4 HTWIN5];
+        assert (HTWIN5' := HTWIN5 blkid).
+
+Ltac decompose_mbs H4':=
+    destruct H4' as [mb1 [mb2 H4']];
+    destruct H4' as [HH0 HH1];
+    destruct HH1 as [HH1 HH2];
+    destruct HH2 as [HH2 HH3];
+    destruct HH3 as [HH3 HH4];
+    destruct HH4 as [HH4 HH5];
+    destruct HH5 as [HH5 HH6];
+    destruct HH6 as [HH6 HH7].
+
+
+Lemma twin_state_load_bytes_eq:
+  forall st1 st2 blkid (HTWIN:twin_state st1 st2 blkid) l ofs thety,
+    LoadStore.Ir.load_bytes (Ir.Config.m st1) (Ir.plog l ofs) thety =
+    LoadStore.Ir.load_bytes (Ir.Config.m st2) (Ir.plog l ofs) thety.
+Proof.
+  intros.
+  unfold LoadStore.Ir.load_bytes.
+    destruct (LoadStore.Ir.get_deref
+                (Ir.Config.m st1) (Ir.plog l ofs) thety)
+    eqn:HGD1;
+    destruct (LoadStore.Ir.get_deref
+                (Ir.Config.m st2) (Ir.plog l ofs) thety)
+             eqn:HGD2; try reflexivity.
+  { unfold LoadStore.Ir.get_deref in HGD1, HGD2.
+    destruct (l =? blkid) eqn:HBLKID.
+    { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+      subst l.
+      decompose_HTWIN HTWIN blkid.
+      destruct HTWIN5'.
+      exploit H. reflexivity. intro HH.
+      decompose_mbs HH. clear H.
+      rewrite <- HH0 in HGD1.
+      rewrite <- HH1 in HGD2.
+      unfold Ir.MemBlock.alive in *.
+      rewrite HH3 in HGD1.
+      unfold Ir.MemBlock.inbounds in *.
+      rewrite HH4 in HGD1.
+      des_ifs.
+    }
+    { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+      decompose_HTWIN HTWIN l.
+      destruct HTWIN5'.
+      exploit H0. assumption. intro HH.
+      rewrite HH in HGD1. rewrite HGD1 in HGD2. congruence.
+    }
+  }
+  { unfold LoadStore.Ir.get_deref in HGD1, HGD2.
+    destruct (l =? blkid) eqn:HBLKID.
+    { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+      subst l.
+      decompose_HTWIN HTWIN blkid.
+      destruct HTWIN5'.
+      exploit H. reflexivity. intro HH.
+      decompose_mbs HH. clear H.
+      rewrite <- HH0 in HGD1.
+      rewrite <- HH1 in HGD2.
+      unfold Ir.MemBlock.alive in *.
+      rewrite HH3 in HGD1.
+      unfold Ir.MemBlock.inbounds in *.
+      rewrite HH4 in HGD1.
+      des_ifs.
+    }
+    { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+      decompose_HTWIN HTWIN l.
+      destruct HTWIN5'.
+      exploit H0. assumption. intro HH.
+      rewrite HH in HGD1. rewrite HGD1 in HGD2. congruence.
+    }
+  }
+  { unfold LoadStore.Ir.get_deref in HGD1, HGD2.
+    destruct (l =? blkid) eqn:HBLKID.
+    { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+      subst l.
+      decompose_HTWIN HTWIN blkid.
+      destruct HTWIN5'.
+      exploit H. reflexivity. intro HH.
+      decompose_mbs HH.
+      unfold Ir.MemBlock.alive in HGD1, HGD2.
+      unfold Ir.MemBlock.inbounds in HGD1, HGD2.
+      rewrite <- HH0 in HGD1.
+      rewrite <- HH1 in HGD2.
+      rewrite HH3 in HGD1.
+      rewrite HH4 in HGD1.
+      des_ifs.
+      { unfold Ir.MemBlock.bytes in *.
+        rewrite HH6. reflexivity.
+      }
+    }
+    { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+      decompose_HTWIN HTWIN l.
+      destruct HTWIN5'.
+      exploit H0. assumption. intros HH.
+      rewrite HH in HGD1. rewrite HGD1 in HGD2.
+      inv HGD2. reflexivity.
+    }
+  }
+Qed.
+
+
+Lemma twin_state_load_val_eq:
+  forall st1 st2 blkid (HTWIN:twin_state st1 st2 blkid) l ofs thety,
+    LoadStore.Ir.load_val (Ir.Config.m st1) (Ir.plog l ofs) thety =
+    LoadStore.Ir.load_val (Ir.Config.m st2) (Ir.plog l ofs) thety.
+Proof.
+  intros.
+  unfold LoadStore.Ir.load_val.
+  destruct thety.
+  { erewrite twin_state_load_bytes_eq. reflexivity.
+    eassumption. }
+  { erewrite twin_state_load_bytes_eq. reflexivity.
+    eassumption. }
+Qed.
+
 
 (*******************************************************
                  Main Theorems 
@@ -785,9 +954,9 @@ Proof.
     remember (Ir.Config.cur_inst md st1) as oi1.
     destruct oi1 as [i1 | ].
     { erewrite twin_state_cur_inst_eq in Heqoi1; try (apply HTWIN; fail).
-      destruct i1; inv HNEXT; eexists.
+      destruct i1; inv HNEXT.
       { (* binop *)
-        split.
+        eexists. split.
         { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
           rewrite <- Heqoi1.
           reflexivity. }
@@ -802,7 +971,7 @@ Proof.
         }
       }
       { (* psub *)
-        split.
+        eexists. split.
         { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
           rewrite <- Heqoi1.
           reflexivity. }
@@ -869,7 +1038,7 @@ Proof.
       }
     }
     { (* gep *)
-      split.
+      eexists. split.
       { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
         rewrite <- Heqoi1.
         reflexivity. }
@@ -894,19 +1063,102 @@ Proof.
       }
     }
     { (* load *)
-      split.
-      { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-        rewrite <- Heqoi1.
-        reflexivity. }
-      { erewrite <- twin_state_get_val_eq with (st2 := st2);
-          try (apply HTWIN; fail).
-        erewrite <- twin_state_get_val_eq with (st2 := st2);
-          try (apply HTWIN; fail).
-        eapply ts_success.
+      destruct (Ir.Config.get_val st1 o) eqn:Hop11.
+      destruct v.
+      { dup Hop11.
+        erewrite twin_state_get_val_eq with (st2 := st2) in Hop0;
+          try apply HTWIN.
+        eexists. split.
+        { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+          rewrite <- Heqoi1.
+          rewrite Hop0.
+          reflexivity. }
+        { inv H0. eapply ts_success. reflexivity. reflexivity.
+          thats_it. }
+      }
+      destruct p eqn:HP.
+      { (* logical ptr: okay *)
+        destruct (LoadStore.Ir.deref (Ir.Config.m st1) (Ir.plog b n) (Ir.ty_bytesz t))
+                 eqn:HDEREF.
+        {
+          dup HDEREF.
+          erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+            try apply HTWIN.
+          rewrite twin_state_deref_eq with (st2 := st2) (blkid := blkid) in HDEREF0;
+            try assumption.
+          eexists. split.
+          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi1.
+            rewrite Hop11.
+            rewrite HDEREF0. reflexivity. }
+          { inv H0. eapply ts_success.
+            {reflexivity. } { reflexivity. }
+            { erewrite twin_state_load_val_eq. thats_it.
+              eassumption. }
+          }
+        }
+        { inv H0.
+          dup HDEREF.
+          erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+            try apply HTWIN.
+          rewrite twin_state_deref_eq with (st2 := st2) (blkid := blkid) in HDEREF0;
+            try assumption.
+          eexists.
+          split.
+          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi1.
+            rewrite Hop11.
+            rewrite HDEREF0. reflexivity. }
+          { eapply ts_goes_wrong; reflexivity. }
+        }
+      }
+      { (* physical ptr: no *)
+        assert (memaccess_from_possibly_guessedptr md st1).
+        { eapply gp_load.
+          symmetry in Hop11. eapply Hop11.
+          econstructor. reflexivity.
+          rewrite <- twin_state_cur_inst_eq with (st1 := st1)
+                                                 (blkid := blkid) in Heqoi1;
+            try assumption.
+          rewrite Heqoi1. reflexivity.
+        }
+        congruence.
+      }
+      { (* ty is problematic *)
+        inv H0.
+        erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+          try apply HTWIN.
+        eexists . split. 
+        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+          rewrite <- Heqoi1.
+          rewrite Hop11. reflexivity. }
+        { eapply ts_success; try reflexivity. thats_it. }
+      }
+      { inv H0.
+        erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+          try apply HTWIN.
+        eexists. split.
+        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+          rewrite <- Heqoi1.
+          rewrite Hop11. reflexivity. }
+        { eapply ts_success; try reflexivity. thats_it. }
+      }
+    }
+    { (* store *)
+      destruct (Ir.Config.get_val st1 o) eqn:Hop11;
+      destruct (Ir.Config.get_val st2 o) eqn:Hop21;
+      destruct (Ir.Config.get_val st1 o0) eqn:Hop12;
+      destruct (Ir.Config.get_val st2 o0) eqn:Hop22;
+      try(erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+            try apply HTWIN; congruence);
+      try(erewrite twin_state_get_val_eq with (st2 := st2) in Hop12;
+            try apply HTWIN; congruence).
+
       
+  
 Qed.
 
-Theorem twin_property:
+Theorem twin_exe:
   forall (md:Ir.IRModule.t) (blkid:Ir.blockid)
     (* If block blkid is never observed.. *)
     (HNEVER_OBSERVED: forall (st:Ir.Config.t), ~ observes_block md st blkid),
