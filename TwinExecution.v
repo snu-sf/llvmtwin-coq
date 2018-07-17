@@ -3151,6 +3151,55 @@ Proof.
     }
     assumption.
   }
+  { (* icmp, nondet *)
+    rewrite twin_state_icmp_eq_ptr_nondet_cond_eq
+      with (st2 := st2) (blkid := blkid) in HNONDET;
+      try assumption.
+    rewrite twin_state_get_val_eq
+      with (st2 := st2) (blkid := blkid) in HOP1;
+      try assumption.
+    rewrite twin_state_get_val_eq
+      with (st2 := st2) (blkid := blkid) in HOP2;
+      try assumption.
+    rewrite twin_state_cur_inst_eq
+      with (st2 := st2) (blkid := blkid) in HCUR;
+      try assumption.
+    eexists. split.
+    { eapply Ir.SmallStep.s_icmp_eq_nondet.
+      { rewrite HCUR. reflexivity. }
+      { reflexivity. }
+      { rewrite HOP1. reflexivity. }
+      { rewrite HOP2. reflexivity. }
+      { eassumption. }
+    }
+    { eapply ts_success; try reflexivity.
+      thats_it. }
+  }
+  { (* icmp, ule, nondet *)
+    rewrite twin_state_icmp_ule_ptr_nondet_cond_eq
+      with (st2 := st2) (blkid := blkid) in HNONDET;
+      try assumption.
+    rewrite twin_state_get_val_eq
+      with (st2 := st2) (blkid := blkid) in HOP1;
+      try assumption.
+    rewrite twin_state_get_val_eq
+      with (st2 := st2) (blkid := blkid) in HOP2;
+      try assumption.
+    rewrite twin_state_cur_inst_eq
+      with (st2 := st2) (blkid := blkid) in HCUR;
+      try assumption.
+    eexists. split.
+    { eapply Ir.SmallStep.s_icmp_ule_nondet.
+      { rewrite HCUR. reflexivity. }
+      { reflexivity. }
+      { rewrite HOP1. reflexivity. }
+      { rewrite HOP2. reflexivity. }
+      { eassumption. }
+    }
+    { eapply ts_success; try reflexivity.
+      thats_it. }
+  }
+Admitted.
 
 Theorem twin_exe:
   forall (md:Ir.IRModule.t) (blkid:Ir.blockid)

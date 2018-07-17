@@ -7,6 +7,7 @@ Require Import Sumbool.
 Require Import Basics.
 Require Import sflib.
 Require Import Omega.
+Require Import Sorting.Permutation.
 
 
 (* Some helpful lemmas regarding List *)
