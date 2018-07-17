@@ -2399,7 +2399,21 @@ Proof.
         { eapply ts_goes_wrong; reflexivity. }
       }
     }
-    { 
+    { (* bit cast *)
+      assert (Heqoi2 := Heqoi1).
+      rewrite <- twin_state_cur_inst_eq with (st1 := st1)
+                                             (blkid := blkid) in Heqoi1;
+        try assumption.
+      eexists. split.
+      { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+        rewrite <- Heqoi2. reflexivity. }
+      { assert (HOP:Ir.Config.get_val st1 o = Ir.Config.get_val st2 o).
+        { eapply twin_state_get_val_eq. eassumption. }
+        rewrite HOP.
+        eapply ts_success. reflexivity. reflexivity.
+        thats_it. }
+    }
+    { (* ptrtoint *)
 Qed.
 
 Theorem twin_exe:
