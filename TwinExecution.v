@@ -2916,6 +2916,70 @@ Proof.
       }
     }
   }
+  { inv HNEXT.
+    assert (Heqoi2 := Heqoi1).
+    rewrite twin_state_cur_inst_eq with (st2 := st2)
+                                           (blkid := blkid) in Heqoi2.
+    { eexists. split.
+      { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+        rewrite <- Heqoi2. reflexivity. }
+      { eapply ts_goes_wrong; try reflexivity. }
+    }
+    { eassumption. }
+  }
+}
+  { (* malloc null *)
+    rename HCUR into Heqoi1.
+    assert (Heqoi2 := Heqoi1).
+    rewrite twin_state_cur_inst_eq with (st2 := st2)
+                                           (blkid := blkid) in Heqoi2.
+    { eexists. split.
+      { eapply Ir.SmallStep.s_malloc_null. eassumption. reflexivity. }
+      { eapply ts_success; try reflexivity. thats_it. }
+    }
+    { eassumption. }
+  }
+  { (* malloc oom. *)
+    rename HCUR into Heqoi1.
+    assert (Heqoi2 := Heqoi1).
+    rewrite twin_state_cur_inst_eq with (st2 := st2)
+                                           (blkid := blkid) in Heqoi2.
+    { eexists. split.
+      { eapply Ir.SmallStep.s_malloc_oom.
+        { eassumption. }
+        { reflexivity. }
+        { erewrite twin_state_get_val_eq. eassumption.
+          eapply twin_state_sym. eassumption. }
+        { 
+
+Lemma twin_state_allocatable_eq:
+  forall st1 st2 blkid r (HTWIN:twin_state st1 st2 blkid),
+    Ir.Memory.allocatable (Ir.Config.m st1) r =
+    Ir.Memory.allocatable (Ir.Config.m st2) r.
+Proof.
+  intros.
+  unfold Ir.Memory.allocatable.
+  
+eassumption.
+      { eapply ts_success; try reflexivity. thats_it. }
+
+  { (* malloc succeed *)
+    rename HCUR into Heqoi1.
+    assert (Heqoi2 := Heqoi1).
+    rewrite twin_state_cur_inst_eq with (st2 := st2)
+                                           (blkid := blkid) in Heqoi2.
+    { eexists. split.
+      { eapply Ir.SmallStep.s_malloc.
+        { eassumption. }
+        { reflexivity. }
+        { erewrite twin_state_get_val_eq. eassumption.
+          eapply twin_state_sym. eassumption. }
+        { 
+          eassumption.
+      { eapply ts_success; try reflexivity. thats_it. }
+    }
+    { eassumption. }
+    
 Qed.
 
 Theorem twin_exe:
