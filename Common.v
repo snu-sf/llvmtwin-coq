@@ -338,6 +338,33 @@ Proof.
     + simpl in HFORALLB. simpl. rewrite <- HEQ. rewrite HGF. simpl. assumption.
 Qed.
 
+Lemma forallb_In {X:Type}:
+  forall (l:list X) (f:X -> bool) i
+         (HFORALLB:List.forallb f l = true)
+         (HIN:List.In i l),
+    f i = true.
+Proof.
+  intros.
+  rewrite List.forallb_forall in HFORALLB.
+  apply HFORALLB in HIN.
+  assumption.
+Qed.
+
+Lemma forallb_Permutation {X:Type}:
+  forall (l1 l2:list X) (HPERM:Permutation l1 l2) f,
+    List.forallb f l1 =  List.forallb f l2.
+Proof.
+  intros.
+  induction HPERM.
+  { reflexivity. }
+  { simpl. rewrite IHHPERM. reflexivity. }
+  { simpl.
+    rewrite andb_assoc.
+    rewrite andb_assoc.
+    rewrite andb_comm with (b1 := f y). reflexivity. }
+  { congruence. }
+Qed.
+
 Lemma forallb_implies:
   forall {X:Type} (l:list X) (f g:X -> bool)
          (HIMP:forall x, f x = true -> g x = true)
@@ -351,6 +378,23 @@ Proof.
     rewrite andb_true_iff in *.
     destruct HFORALLB.
     split. apply HIMP. assumption. apply IHl. assumption.
+Qed.
+
+Lemma concat_Permutation {X:Type}:
+  forall (l1 l2:list (list X))
+         (HFORALL:List.Forall2 (fun x y => Permutation x y) l1 l2),
+    Permutation (List.concat l1) (List.concat l2).
+Proof.
+  intros.
+  generalize dependent l2.
+  induction l1.
+  { intros. inv HFORALL. eauto. }
+  { simpl. intros.
+    destruct l2. inv HFORALL.
+    inv HFORALL. simpl.
+    apply Permutation_app. assumption.
+    apply IHl1. assumption.
+  }
 Qed.
 
 Lemma split_map_fst:
@@ -1701,6 +1745,37 @@ Proof.
   split.
   - rewrite HEQ; apply Gt.gt_not_le; apply Nat.lt_add_pos_r; auto.
   - rewrite <- HEQ; apply Gt.gt_not_le; apply Nat.lt_add_pos_r; auto.
+Qed.
+
+Lemma disjoint_range_symm:
+  forall r1 r2,
+    disjoint_range r1 r2 = disjoint_range r2 r1.
+Proof.
+  intros. unfold disjoint_range. destruct r1.
+  destruct r2. intuition.
+Qed.
+
+Lemma disjoint_ranges_Permutation:
+  forall l1 l2 (HPERM:Permutation l1 l2),
+    disjoint_ranges l1 = disjoint_ranges l2.
+Proof.
+  intros.
+  induction HPERM.
+  { reflexivity. }
+  { simpl. rewrite IHHPERM. erewrite forallb_Permutation.
+    reflexivity. assumption. }
+  { simpl. rewrite disjoint_range_symm.
+    rewrite andb_assoc.
+    rewrite andb_assoc.
+    rewrite <- andb_assoc with (b1 := disjoint_range x y)
+         (b2 := List.forallb (fun r2 : nat * nat => disjoint_range y r2) l)
+         (b3 := List.forallb (fun r2 : nat * nat => disjoint_range x r2) l).
+    rewrite andb_comm with
+        (b1 := List.forallb (fun r2 : nat * nat => disjoint_range y r2) l).
+    rewrite andb_assoc.
+    reflexivity.
+  }
+  { congruence. }
 Qed.
 
 (* Lemma: no_empty_range still holds for appended lists *)

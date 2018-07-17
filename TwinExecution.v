@@ -2073,6 +2073,92 @@ Proof.
   }
 Qed.
 
+
+Lemma twin_state_allocatable_eq:
+  forall st1 st2 blkid r (HTWIN:twin_state st1 st2 blkid),
+    Ir.Memory.allocatable (Ir.Config.m st1) r =
+    Ir.Memory.allocatable (Ir.Config.m st2) r.
+Proof.
+  intros.
+  unfold Ir.Memory.allocatable.
+  assert (HP:Permutation (r ++ Ir.Memory.alive_P_ranges (Ir.Config.m st1))
+                         (r ++ Ir.Memory.alive_P_ranges (Ir.Config.m st2))).
+  { apply Permutation_app.
+    { apply Permutation_refl. }
+    { admit. }
+  }
+  apply disjoint_ranges_Permutation.
+  assumption.
+Admitted.
+
+
+Lemma eq_wom_update_reg_and_incrpc:
+  forall st1 st2 md r v (HEQ:Ir.Config.eq_wom st1 st2),
+    Ir.Config.eq_wom
+      (Ir.SmallStep.update_reg_and_incrpc md st1 r v)
+      (Ir.SmallStep.update_reg_and_incrpc md st2 r v).
+Proof.
+  intros.
+  unfold Ir.SmallStep.update_reg_and_incrpc.
+  destruct st1.
+  destruct st2.
+  split.
+  { unfold Ir.Config.update_rval.
+    simpl.
+    destruct s; destruct s0.
+    { unfold Ir.SmallStep.incrpc. simpl. constructor. }
+    { inv HEQ. simpl in H. inv H. }
+    { inv HEQ. simpl in H. inv H. }
+    { inv HEQ. simpl in H. inv H. destruct H4.
+      destruct p. destruct p0. simpl in H.
+      inv H. destruct H1. simpl in H.
+      destruct p. destruct p0. inv H. simpl in H1. simpl in *. subst p.
+      unfold Ir.SmallStep.incrpc.
+      unfold Ir.Config.cur_fdef_pc. unfold Ir.Config.get_funid.
+      destruct H0. subst.
+      unfold Ir.Config.update_pc.
+      simpl. des_ifs; simpl.
+      { constructor. simpl.
+        split. reflexivity.
+        split. reflexivity.
+        apply Ir.Regfile.update_eq. assumption.
+        assumption.
+      }
+      { constructor. simpl.
+        split. reflexivity.
+        split. reflexivity.
+        apply Ir.Regfile.update_eq. assumption.
+        assumption.
+      }
+      { constructor. simpl.
+        split. reflexivity.
+        split. reflexivity.
+        apply Ir.Regfile.update_eq. assumption.
+        assumption.
+      }
+      { constructor. simpl.
+        split. reflexivity.
+        split. reflexivity.
+        apply Ir.Regfile.update_eq. assumption.
+        assumption.
+      }
+    }
+  }
+  split.
+  { unfold Ir.Config.update_rval.
+    unfold Ir.SmallStep.incrpc.
+    simpl.
+    inv HEQ. inv H0. simpl in H1. subst cid_to_f.
+    des_ifs.
+  }
+  { unfold Ir.Config.update_rval.
+    unfold Ir.SmallStep.incrpc.
+    simpl.
+    inv HEQ. inv H0. simpl in H2. subst cid_fresh.
+    des_ifs.
+  }
+Qed.
+
 Lemma twin_execution_unidir:
   forall (md:Ir.IRModule.t) (blkid:Ir.blockid)
          (st1 st2:Ir.Config.t) (sr1 sr2:Ir.SmallStep.step_res)
@@ -2943,7 +3029,8 @@ Proof.
     rename HCUR into Heqoi1.
     assert (Heqoi2 := Heqoi1).
     rewrite twin_state_cur_inst_eq with (st2 := st2)
-                                           (blkid := blkid) in Heqoi2.
+                                           (blkid := blkid) in Heqoi2;
+      try assumption.
     { eexists. split.
       { eapply Ir.SmallStep.s_malloc_oom.
         { eassumption. }
@@ -2951,18 +3038,17 @@ Proof.
         { erewrite twin_state_get_val_eq. eassumption.
           eapply twin_state_sym. eassumption. }
         { 
-
-Lemma twin_state_allocatable_eq:
-  forall st1 st2 blkid r (HTWIN:twin_state st1 st2 blkid),
-    Ir.Memory.allocatable (Ir.Config.m st1) r =
-    Ir.Memory.allocatable (Ir.Config.m st2) r.
-Proof.
-  intros.
-  unfold Ir.Memory.allocatable.
-  
-eassumption.
-      { eapply ts_success; try reflexivity. thats_it. }
-
+          intros HE.
+          apply HNOSPACE.
+          destruct HE.
+          rewrite twin_state_allocatable_eq with (st2 := st1) (blkid := blkid) in H.
+          exists x. assumption.
+          apply twin_state_sym. assumption.
+        }
+      }
+      { eapply ts_oom;try reflexivity. }
+    }
+  }
   { (* malloc succeed *)
     rename HCUR into Heqoi1.
     assert (Heqoi2 := Heqoi1).
@@ -2974,13 +3060,97 @@ eassumption.
         { reflexivity. }
         { erewrite twin_state_get_val_eq. eassumption.
           eapply twin_state_sym. eassumption. }
-        { 
-          eassumption.
-      { eapply ts_success; try reflexivity. thats_it. }
+        { eassumption. }
+        { reflexivity. }
+        { eassumption. }
+        { rewrite <- twin_state_allocatable_eq with (st1 := st1) (blkid := blkid);
+          assumption. }
+        { reflexivity. }
+      }
+      { eapply ts_success; try reflexivity.
+        unfold Ir.Memory.new in HNEW.
+        inv HNEW.
+        decompose_HTWIN HTWIN 0.
+        rewrite HTWIN2.
+        rewrite HTWIN3.
+        rewrite HTWIN4.
+        split.
+        { rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
+          rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
+          eapply eq_wom_update_m.
+
+          eapply eq_wom_update_reg_and_incrpc. assumption.
+        }
+        split.
+        { rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
+          rewrite Ir.Reordering.m_update_m.
+          rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
+          rewrite Ir.Reordering.m_update_m.
+          simpl. reflexivity. }
+        split.
+        { rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
+          rewrite Ir.Reordering.m_update_m.
+          rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
+          rewrite Ir.Reordering.m_update_m.
+          simpl. reflexivity. }
+        split.
+        { rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
+          rewrite Ir.Reordering.m_update_m.
+          rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
+          rewrite Ir.Reordering.m_update_m.
+          simpl. reflexivity. }
+        rewrite Ir.Reordering.m_update_reg_and_incrpc.
+        rewrite Ir.Reordering.m_update_reg_and_incrpc.
+        rewrite Ir.Reordering.m_update_m.
+        rewrite Ir.Reordering.m_update_m.
+        simpl.
+        split.
+        { intros HH. destruct (HTWIN5 bid').
+          exploit H. congruence. intros HH'.
+          decompose_mbs' HH'.
+          destruct (Ir.Memory.fresh_bid (Ir.Config.m st2) =? blkid) eqn:HBLKID.
+          { (* impossible *)
+            inv HWF2.
+            inv wf_m.
+            rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+            assert (blkid < Ir.Memory.fresh_bid (Ir.Config.m st2)).
+            { 
+              apply forallb_In with (i := blkid) in wf_newid.
+              rewrite PeanoNat.Nat.ltb_lt in wf_newid. assumption.
+              apply Ir.Memory.get_In with (blks := Ir.Memory.blocks (Ir.Config.m st2))
+                in HH1'.
+              apply list_keys_In in HH1'.
+              assumption.
+              reflexivity.
+            }
+            rewrite HBLKID in H1.
+            omega.
+          }
+          { unfold Ir.Memory.get.
+            simpl. rewrite HBLKID.
+            unfold Ir.Memory.get in HH0', HH1'.
+            eexists. eexists.
+            split. rewrite <- HH0'. reflexivity.
+            split. rewrite <- HH1'. reflexivity.
+            repeat (split; try congruence).
+          }
+        }
+        {
+          intros.
+          clear HTWIN5'.
+          assert (HTWIN5' := HTWIN5 bid').
+          destruct HTWIN5'. exploit H0. assumption. intros HH.
+          clear H0 H.
+          unfold Ir.Memory.get.
+          simpl.
+          destruct (Ir.Memory.fresh_bid (Ir.Config.m st2) =? bid').
+          { simpl. reflexivity. }
+          { unfold Ir.Memory.get in HH. assumption. }
+        }
+      }
     }
-    { eassumption. }
-    
-Qed.
+    assumption.
+  }
 
 Theorem twin_exe:
   forall (md:Ir.IRModule.t) (blkid:Ir.blockid)
