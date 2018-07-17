@@ -1435,6 +1435,276 @@ Proof.
   Unshelve. assumption. assumption.
 Qed.
 
+
+Lemma twin_state_free:
+  forall l ofs st1 st2 blkid md
+         (HWF1:Ir.Config.wf md st1)
+         (HWF2:Ir.Config.wf md st2)
+         (HTWIN:twin_state st1 st2 blkid),
+    (exists m1 m2,
+        Some m1 = (Ir.SmallStep.free (Ir.plog l ofs) (Ir.Config.m st1)) /\
+        Some m2 = (Ir.SmallStep.free (Ir.plog l ofs) (Ir.Config.m st2)) /\
+        twin_state (Ir.Config.update_m st1 m1)
+                   (Ir.Config.update_m st2 m2)
+                   blkid)
+      \/
+    None = Ir.SmallStep.free (Ir.plog l ofs) (Ir.Config.m st1) /\
+    None = Ir.SmallStep.free (Ir.plog l ofs) (Ir.Config.m st2).
+Proof.
+  intros.
+  unfold Ir.SmallStep.free.
+  destruct ofs; try (right; split; reflexivity).
+  unfold Ir.Memory.free.
+  destruct (l =? blkid) eqn:HBLKID.
+  { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+    decompose_HTWIN HTWIN blkid.
+    destruct HTWIN5'. clear H0.
+    exploit H. reflexivity. intros HH. clear H.
+    decompose_mbs HH.
+    subst l.
+    rewrite <- HH0, <- HH1.
+    unfold Ir.MemBlock.set_lifetime_end.
+    unfold Ir.MemBlock.alive.
+    rewrite HH2.
+    destruct (Ir.MemBlock.bt mb2) eqn:HBT2; try (right; split ;reflexivity).
+    rewrite HH3.
+    destruct (snd (Ir.MemBlock.r mb2)) eqn:HR; try (right; split; reflexivity).
+    rewrite <- HH3.
+    left.
+    eexists. eexists.
+    split. reflexivity.
+    split. reflexivity.
+    split.
+    { apply eq_wom_update_m. assumption. }
+    split.
+    { rewrite Ir.Reordering.m_update_m. unfold Ir.Memory.set.
+      simpl. congruence. }
+    split.
+    { rewrite Ir.Reordering.m_update_m. unfold Ir.Memory.set.
+      simpl. congruence. }
+    split.
+    { rewrite Ir.Reordering.m_update_m. unfold Ir.Memory.set.
+      simpl. congruence. }
+    split.
+    { inv HWF1.
+      intros. subst bid'.
+      rewrite Ir.Reordering.m_update_m.
+      eexists. eexists.
+      split.
+      { erewrite Ir.Memory.get_set_id_short.
+        { reflexivity. }
+        { eapply Ir.Memory.incr_time_wf.
+          eassumption. reflexivity.
+        }
+        { rewrite Ir.Memory.get_incr_time_id. rewrite HH0. reflexivity. }
+        { eapply Ir.Memory.free_wf with (m := Ir.Config.m st1).
+          eassumption.
+          unfold Ir.Memory.free.
+          rewrite <- HH0. rewrite HH2.
+          rewrite <- HH3 in HR.
+          unfold Ir.MemBlock.set_lifetime_end.
+          unfold Ir.MemBlock.alive. rewrite HR.
+          rewrite HH2. reflexivity.
+        }
+      }
+      split.
+      { rewrite Ir.Reordering.m_update_m.
+        erewrite Ir.Memory.get_set_id_short.
+        { reflexivity. }
+        { inv HWF2. eapply Ir.Memory.incr_time_wf. eassumption.
+          reflexivity. }
+        { rewrite HH1. reflexivity. }
+        { inv HWF2.
+          eapply Ir.Memory.free_wf with (m := Ir.Config.m st2).
+          eassumption.
+          unfold Ir.Memory.free.
+          rewrite <- HH1. rewrite <- HH2.
+          unfold Ir.MemBlock.set_lifetime_end.
+          unfold Ir.MemBlock.alive. rewrite HR.
+          rewrite HH3, HH2, HBT2.
+          reflexivity.
+        }
+      }
+      repeat (split; simpl; try congruence).
+    }
+    { (*bid' is not blkid. *)
+      intros HDIFF.
+      dup HDIFF.
+      assert (HTWIN5' := HTWIN5 bid').
+      destruct HTWIN5'. apply H0 in HDIFF. clear H H0.
+      rewrite Ir.Reordering.m_update_m.
+      rewrite Ir.Reordering.m_update_m.
+      rewrite Ir.Memory.get_set_diff_short.
+      rewrite Ir.Memory.get_set_diff_short.
+      { unfold Ir.Memory.get.
+        unfold Ir.Memory.get in HDIFF.
+        unfold Ir.Memory.incr_time.
+        simpl. assumption. }
+      { inv HWF2.
+        eapply Ir.Memory.incr_time_wf.
+        eapply wf_m. reflexivity. }
+      { inv HWF2.
+        eapply Ir.Memory.free_wf with (m := Ir.Config.m st2).
+        eassumption.
+        unfold Ir.Memory.free.
+        rewrite <- HH1. rewrite <- HH2.
+        unfold Ir.MemBlock.set_lifetime_end.
+        unfold Ir.MemBlock.alive. rewrite HR.
+        rewrite HH3, HH2, HBT2.
+        reflexivity.
+      }
+      { assumption. }
+      { inv HWF1.
+        eapply Ir.Memory.incr_time_wf.
+        eassumption. reflexivity.
+      }
+      { inv HWF1.
+        eapply Ir.Memory.free_wf with (m := Ir.Config.m st1).
+        eassumption.
+        unfold Ir.Memory.free.
+        rewrite <- HH0. rewrite HH2.
+        rewrite <- HH3 in HR.
+        unfold Ir.MemBlock.set_lifetime_end.
+        unfold Ir.MemBlock.alive. rewrite HR.
+        rewrite HH2. reflexivity.
+      }
+      { assumption. }
+    }
+  }
+  { (* freed block l is not twin block blkid. *)
+    rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+    decompose_HTWIN HTWIN l.
+    destruct HTWIN5'. clear H.
+    exploit H0. congruence. intros HH. clear H0.
+    rewrite HH.
+    destruct (Ir.Memory.get (Ir.Config.m st1) l) eqn:HGET1;
+      try (right; rewrite <- HH; split; reflexivity).
+    rewrite <- HH.
+    destruct (Ir.MemBlock.bt t) eqn:HBT;
+      try (right; split; reflexivity).
+    destruct (Ir.MemBlock.alive t) eqn:HALIVE;
+      try (right; split; reflexivity).
+    unfold Ir.MemBlock.set_lifetime_end.
+    rewrite HALIVE.
+    left. eexists. eexists.
+    split. reflexivity.
+    split. reflexivity.
+    split.
+    { eassumption. }
+    split. rewrite Ir.Reordering.m_update_m. simpl. congruence.
+    split. rewrite Ir.Reordering.m_update_m. simpl. congruence.
+    split. rewrite Ir.Reordering.m_update_m. simpl. congruence.
+    split.
+    { intros HDIFF2.
+      subst bid'.
+      rewrite Ir.Reordering.m_update_m.
+      rewrite Ir.Reordering.m_update_m.
+      (* okay,, exploit HTWIN5 again *)
+      assert (HTWIN5' := HTWIN5 blkid).
+      destruct HTWIN5'. clear H0. exploit H.
+      reflexivity. intros HH2. clear H.
+      decompose_mbs HH2.
+      rewrite HBT.
+      exists mb1. exists mb2.
+      split.
+      { erewrite Ir.Memory.get_set_diff_short; try eassumption.
+        { inv HWF1.
+          eapply Ir.Memory.incr_time_wf. eassumption.
+          reflexivity. }
+        { inv HWF1.
+          eapply Ir.Memory.free_wf. eapply wf_m.
+          unfold Ir.Memory.free. rewrite HGET1.
+          rewrite HBT. unfold Ir.MemBlock.set_lifetime_end.
+          rewrite HALIVE. congruence. }
+        { congruence. }
+      }
+      split.
+      { erewrite Ir.Memory.get_set_diff_short; try eassumption.
+        { inv HWF2.
+          eapply Ir.Memory.incr_time_wf. eassumption.
+          reflexivity. }
+        { inv HWF2.
+          eapply Ir.Memory.free_wf. eapply wf_m.
+          unfold Ir.Memory.free. rewrite <- HH.
+          rewrite HBT. unfold Ir.MemBlock.set_lifetime_end.
+          rewrite HALIVE. congruence. }
+        { congruence. }
+      }
+      repeat (split; try congruence).
+    }
+    { intros HDIFF2.
+      rewrite Ir.Reordering.m_update_m.
+      rewrite Ir.Reordering.m_update_m.
+      destruct (l =? bid') eqn:HBID'.
+      { rewrite PeanoNat.Nat.eqb_eq in HBID'.
+        subst l.
+        erewrite Ir.Memory.get_set_id_short.
+        erewrite Ir.Memory.get_set_id_short.
+        { rewrite HTWIN2. reflexivity. }
+        { inv HWF2.
+          eapply Ir.Memory.incr_time_wf.
+          eassumption. reflexivity. }
+        { rewrite Ir.Memory.get_incr_time_id. rewrite HH. reflexivity. }
+        { inv HWF2.
+          eapply Ir.Memory.free_wf.
+          { eassumption. }
+          { unfold Ir.Memory.free. rewrite <- HH.
+            unfold Ir.MemBlock.set_lifetime_end.
+            rewrite HBT, HALIVE.
+            congruence.
+          }
+        }
+        { inv HWF1.
+          eapply Ir.Memory.incr_time_wf.
+          eassumption. reflexivity. }
+        { rewrite Ir.Memory.get_incr_time_id. rewrite HGET1. reflexivity. }
+        { inv HWF1.
+          eapply Ir.Memory.free_wf.
+          { eassumption. }
+          { unfold Ir.Memory.free. rewrite HGET1.
+            unfold Ir.MemBlock.set_lifetime_end.
+            rewrite HBT, HALIVE.
+            congruence.
+          }
+        }
+      }
+      { (* freeing block isn't bid. *)
+        rewrite PeanoNat.Nat.eqb_neq in HBID'.
+        assert (HTWIN5' := HTWIN5 bid').
+        destruct HTWIN5'. exploit H0. assumption.
+        intros HH0. clear H0 H.
+        rewrite Ir.Memory.get_set_diff_short.
+        rewrite Ir.Memory.get_set_diff_short.
+        rewrite Ir.Memory.get_incr_time_id.
+        rewrite Ir.Memory.get_incr_time_id.
+        congruence.
+        { inv HWF2.
+          eapply Ir.Memory.incr_time_wf; eauto. }
+        { inv HWF2.
+          eapply Ir.Memory.free_wf; eauto.
+          unfold Ir.Memory.free.
+          rewrite <- HH.
+          rewrite HBT.
+          unfold Ir.MemBlock.set_lifetime_end.
+          rewrite HALIVE.
+          congruence. }
+        { congruence. }
+        { inv HWF1.
+          eapply Ir.Memory.incr_time_wf; eauto. }
+        { inv HWF1.
+          eapply Ir.Memory.free_wf; eauto.
+          unfold Ir.Memory.free.
+          rewrite HGET1.
+          rewrite HBT.
+          unfold Ir.MemBlock.set_lifetime_end.
+          rewrite HALIVE.
+          congruence. }
+        { congruence. }
+      }
+    }
+  }
+Qed.
+
 (*******************************************************
                  Main Theorems 
  *******************************************************)
@@ -1658,6 +1928,13 @@ Qed.
 
 Ltac thats_it := apply twin_state_update_reg_and_incrpc;
             assumption.
+
+Ltac coalesce_op Hop1 Hop2 st2 HTWIN :=
+  assert (Htmp := Hop1);
+  assert (Htmp2 := Hop2);
+  erewrite twin_state_get_val_eq with (st2 := st2) in Htmp;
+  try apply HTWIN;
+  rewrite Htmp in Htmp2; inv Htmp2; clear Htmp.
 
 Lemma lt_gt:
   forall n1 n2, n1 < n2 -> n2 > n1.
@@ -2042,8 +2319,87 @@ Proof.
           apply twin_state_incrpc. assumption. }
       }
     }
-    { (* free *)    
+    { (* free *)
+      (* instruction Heqoi1 *)
+      assert (Heqoi2 := Heqoi1).
+      rewrite <- twin_state_cur_inst_eq with (st1 := st1)
+                                             (blkid := blkid) in Heqoi1;
+        try assumption.
 
+
+      destruct (Ir.Config.get_val st1 o) eqn:Hop1.
+      { remember (Ir.Config.get_val st2 o) as op2 eqn:Hop2.
+        coalesce_op Hop1 Hop2 st2 HTWIN.
+        destruct v.
+        { (* free (int) -_-; *)
+          inv H0.
+          eexists . split.
+          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi2.
+            rewrite H. reflexivity. }
+          { eapply ts_goes_wrong; reflexivity. }
+        }
+        { (* free (ptr) *)
+          destruct p.
+          { (* free(log) *)
+            assert (HBIG:(exists m1 m2,
+        Some m1 = (Ir.SmallStep.free (Ir.plog b n) (Ir.Config.m st1)) /\
+        Some m2 = (Ir.SmallStep.free (Ir.plog b n) (Ir.Config.m st2)) /\
+        twin_state (Ir.Config.update_m st1 m1)
+                   (Ir.Config.update_m st2 m2)
+                   blkid) \/
+        (None = Ir.SmallStep.free (Ir.plog b n) (Ir.Config.m st1) /\
+         None = Ir.SmallStep.free (Ir.plog b n) (Ir.Config.m st2))).
+            { eapply twin_state_free; eassumption. }
+            destruct HBIG.
+            { destruct H1 as [m1 [m2 [H1 [H2 H3]]]].
+              rewrite <- H1 in H0. inv H0.
+              eexists.
+              split.
+              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                rewrite <- Heqoi2. rewrite H.
+                rewrite <- H2. reflexivity. }
+              { eapply ts_success. reflexivity. reflexivity.
+                eapply twin_state_incrpc. eassumption. }
+            }
+            { destruct H1. rewrite <- H1 in H0.
+              inv H0.
+              eexists. split.
+              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                rewrite <- Heqoi2. rewrite H. rewrite <- H2. reflexivity. }
+              { eapply ts_goes_wrong; reflexivity. }
+            }
+          }
+          { (* free(phy) *)
+            assert (memaccess_from_possibly_guessedptr md st1).
+            { eapply gp_free. symmetry in Hop1. eassumption.
+              econstructor. reflexivity.
+              eassumption.
+            }
+            congruence.
+          }
+        }
+        { (* free (int) -_-; *)
+          inv H0.
+          eexists . split.
+          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi2.
+            rewrite H. reflexivity. }
+          { eapply ts_goes_wrong; reflexivity. }
+        }
+      }
+      { (* goes wrong *)
+        inv H0.
+        eexists. split.
+        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+          rewrite <- Heqoi2.
+          remember (Ir.Config.get_val st2 o) as op2 eqn:Hop2.
+          coalesce_op Hop1 Hop2 st2 HTWIN.
+          reflexivity. }
+        { eapply ts_goes_wrong; reflexivity. }
+      }
+    }
+    { 
 Qed.
 
 Theorem twin_exe:
