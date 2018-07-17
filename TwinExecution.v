@@ -2472,6 +2472,46 @@ Proof.
         thats_it. }
     }
     { (* ievent *)
+      assert (Heqoi2 := Heqoi1).
+      rewrite <- twin_state_cur_inst_eq with (st1 := st1)
+                                             (blkid := blkid) in Heqoi1;
+        try assumption.
+      assert (HOP:Ir.Config.get_val st1 o = Ir.Config.get_val st2 o).
+      { eapply twin_state_get_val_eq. eassumption. }
+      destruct (Ir.Config.get_val st1 o) eqn:HOP1.
+      { destruct v.
+        { inv H0.
+          eexists. split.
+          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi2. rewrite <- HOP.
+            reflexivity. }
+          { eapply ts_success; try reflexivity.
+            eapply twin_state_incrpc. assumption. }
+        }
+        { inv H0.
+          eexists. split.
+          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi2. rewrite <- HOP.
+            reflexivity. }
+          { eapply ts_goes_wrong; try reflexivity. }
+        }
+        { inv H0.
+          eexists. split.
+          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi2. rewrite <- HOP.
+            reflexivity. }
+          { eapply ts_goes_wrong; try reflexivity. }
+        }
+      }
+      { inv H0.
+        eexists. split.
+        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+          rewrite <- Heqoi2. rewrite <- HOP.
+          reflexivity. }
+        { eapply ts_goes_wrong; try reflexivity. }
+      }
+    }
+    { (* icmp eq *)
 Qed.
 
 Theorem twin_exe:
