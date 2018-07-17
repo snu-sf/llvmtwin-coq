@@ -647,37 +647,6 @@ Proof.
   - inversion H.
 Qed.
 
-
-Lemma skipn_length {X:Type}:
-  forall n (l:list X),
-    List.length (List.skipn n l) = (List.length l) - n.
-Proof.
-  intro.
-  induction n.
-  { simpl. intros. omega. }
-  { intros.
-    destruct l.
-    simpl. omega.
-    simpl. rewrite IHn. reflexivity.
-  }
-Qed.    
-
-Lemma get_set_diff_inv:
-  forall m bid mb' mb bid'
-         (HWF:Ir.Memory.wf m)
-         (HGET:Ir.Memory.get (Ir.Memory.set m bid' mb') bid = Some mb)
-         (HDIFF:bid <> bid'),
-    Ir.Memory.get m bid = Some mb.
-Proof.
-  intros.
-  unfold Ir.Memory.get.
-  symmetry in HGET.
-  unfold Ir.Memory.set in HGET.
-  unfold Ir.Memory.get in HGET.
-  simpl in *.
-  rewrite list_find_key_set_diffkey in HGET; congruence.
-Qed.
-
 Lemma alive_P_ranges_set_bytes:
   forall m bid mb ofs bs
          (HGET:Some mb = Ir.Memory.get m bid),

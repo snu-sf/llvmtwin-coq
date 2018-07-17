@@ -1064,6 +1064,33 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma get_set_id_none:
+  forall m bid mb' m'
+         (HWF:Ir.Memory.wf m)
+         (HWF':Ir.Memory.wf m')
+         (HGET:Ir.Memory.get m bid = None)
+         (HSET:m' = Ir.Memory.set m bid mb'),
+    Ir.Memory.get m' bid = None.
+Proof.
+  intros.
+  unfold Ir.Memory.get in *.
+  unfold Ir.Memory.set in *.
+  rewrite HSET. simpl. rewrite list_find_key_set_none. reflexivity.
+  des_ifs.
+Qed.
+
+Lemma get_set_id_short:
+  forall m bid mb' mb0
+         (HWF:Ir.Memory.wf m)
+         (HGET:Ir.Memory.get m bid = Some mb0)
+         (HWF':Ir.Memory.wf (Ir.Memory.set m bid mb')),
+    Ir.Memory.get (Ir.Memory.set m bid mb') bid = Some mb'.
+Proof.
+  intros.
+  erewrite Ir.Memory.get_set_id with (mb := mb0).
+  reflexivity. eapply HWF. assumption. assumption. reflexivity.
+Qed.
+
 Lemma get_set_diff:
   forall m bid mb' m' mb bid'
          (HWF:Ir.Memory.wf m)
@@ -1081,6 +1108,38 @@ Proof.
   simpl. rewrite list_find_key_set_diffkey.
   unfold Ir.Memory.get in HGET. congruence.
   congruence.
+Qed.
+
+Lemma get_set_diff_short:
+  forall m bid mb' bid'
+         (HWF:Ir.Memory.wf m)
+         (HWF':Ir.Memory.wf (Ir.Memory.set m bid' mb'))
+         (HDIFF:bid <> bid'),
+    Ir.Memory.get (Ir.Memory.set m bid' mb') bid =
+    Ir.Memory.get m bid.
+Proof.
+  intros.
+  unfold Ir.Memory.get.
+  unfold Ir.Memory.set.
+  simpl. rewrite list_find_key_set_diffkey.
+  congruence.
+  congruence.
+Qed.
+
+Lemma get_set_diff_inv:
+  forall m bid mb' mb bid'
+         (HWF:Ir.Memory.wf m)
+         (HGET:Ir.Memory.get (Ir.Memory.set m bid' mb') bid = Some mb)
+         (HDIFF:bid <> bid'),
+    Ir.Memory.get m bid = Some mb.
+Proof.
+  intros.
+  unfold Ir.Memory.get.
+  symmetry in HGET.
+  unfold Ir.Memory.set in HGET.
+  unfold Ir.Memory.get in HGET.
+  simpl in *.
+  rewrite list_find_key_set_diffkey in HGET; congruence.
 Qed.
 
 Lemma set_get_id:

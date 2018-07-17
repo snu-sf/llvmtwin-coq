@@ -63,6 +63,20 @@ Proof.
       congruence. reflexivity.
 Qed.
 
+Lemma skipn_length {X:Type}:
+  forall n (l:list X),
+    List.length (List.skipn n l) = (List.length l) - n.
+Proof.
+  intro.
+  induction n.
+  { simpl. intros. omega. }
+  { intros.
+    destruct l.
+    simpl. omega.
+    simpl. rewrite IHn. reflexivity.
+  }
+Qed.    
+
 Lemma skipn_app_decompose {X:Type}:
   forall (l l1 l2:list X) n
          (HL:l = l1 ++ l2)
@@ -1317,6 +1331,23 @@ Proof.
       rewrite PeanoNat.Nat.eqb_neq in *. omega. }
     { simpl in *. rewrite PeanoNat.Nat.eqb_eq in *.
       rewrite PeanoNat.Nat.eqb_neq in *. omega. }
+  }
+Qed.
+
+Lemma list_find_key_set_none {X:Type}:
+  forall (m:list (nat * X)) k v
+         (HNO:list_find_key m k = nil),
+    list_find_key (list_set m k v) k = nil.
+Proof.
+  intros.
+  unfold list_find_key in *.
+  unfold list_set in *.
+  induction m.
+  { reflexivity. }
+  { simpl in HNO.
+    destruct (fst a =? k) eqn:HK; des_ifs.
+    apply IHm in HNO.
+    simpl. rewrite HK. rewrite HK. assumption.
   }
 Qed.
 

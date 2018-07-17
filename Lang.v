@@ -15,7 +15,11 @@ Inductive ty :=
 
 Definition ty_bitsz (t:ty):nat :=
   match t with
-  | ity bitsz => bitsz
+  | ity bitsz =>
+    match bitsz with
+    | 0 => 1 (* no 'zero-bit' sized integer, thanks to type checking *)
+    | _ => bitsz
+    end
   | ptrty _ => Ir.PTRSZ
   end.
 
@@ -68,7 +72,7 @@ Inductive t :=
 | igep: reg -> ty -> op -> op -> bool -> t (* lhs, retty, ptr, idx, inbounds *)
                                            (* For simplicity, retty equals first operand ty *)
 | iload: reg -> ty -> op -> t (* retty, ptr *)
-| istore: ty -> op -> op -> t (* valty, val, ptr *)
+| istore: ty -> op -> op -> t (* valty, ptr, val *)
 | imalloc: reg -> ty -> op -> t (* block size ty, block size *)
 | ifree: op -> t (* pointer *)
 | ibitcast: reg -> op -> ty -> t (* lhs, val, ty, retty *)
