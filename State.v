@@ -315,6 +315,20 @@ Definition cur_inst (c:t): option (Ir.Inst.t) :=
   | None => None
   end.
 
+(* Returns the instruction pc is pointing to. *)
+Definition cur_phi (c:t): option (Ir.PhiNode.t) :=
+  match cur_fdef_pc c with
+  | Some (fdef, pc0) => Ir.IRFunction.get_phi pc0 fdef
+  | None => None
+  end.
+
+(* Returns the terminator pc is pointing to. *)
+Definition cur_terminator (c:t): option (Ir.Terminator.t) :=
+  match (cur_fdef_pc c) with
+  | Some (fdef, pc0)=> Ir.IRFunction.get_terminator pc0 fdef
+  | _ => None
+  end.
+
 (* Returns true if the call stack has more than one entry, false otherwise. *)
 Definition has_nestedcall (c:t): bool :=
   Nat.ltb 1 (List.length (s c)).

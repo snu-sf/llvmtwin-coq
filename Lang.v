@@ -338,6 +338,22 @@ Definition next_trivial_pc (p:pc) (f:t): option pc :=
     end
   end.
 
+(* Returns phi pc is pointing to.
+   If there's no such instruction, returns None. *)
+Definition get_phi (p:pc) (f:t): option PhiNode.t :=
+  match p with
+  | pc_inst bbid iidx =>
+    match (getbb bbid f) with
+    | None => None
+    | Some bb =>
+      if Nat.ltb iidx (List.length bb.(BasicBlock.phis)) then
+        Some (List.nth iidx bb.(BasicBlock.phis) (0, Ir.ity 0, nil))
+      else (* unreachable *)
+        None
+    end
+  | _ => None
+  end.
+
 (* Returns the instruction pc is pointing to.
    If there's no such instruction, returns None. *)
 Definition get_inst (p:pc) (f:t): option Inst.t :=
@@ -348,6 +364,22 @@ Definition get_inst (p:pc) (f:t): option Inst.t :=
     | Some bb =>
       if Nat.ltb iidx (List.length bb.(BasicBlock.insts)) then
         Some (List.nth iidx bb.(BasicBlock.insts) (Ir.Inst.ievent (Ir.opreg 0)))
+      else (* unreachable *)
+        None
+    end
+  | _ => None
+  end.
+
+(* Returns the terminator pc is pointing to.
+   If there's no such terminator, returns None. *)
+Definition get_terminator (p:pc) (f:t): option Terminator.t :=
+  match p with
+  | pc_inst bbid iidx =>
+    match (getbb bbid f) with
+    | None => None
+    | Some bb =>
+      if Nat.eqb iidx (List.length bb.(BasicBlock.insts)) then
+        Some (BasicBlock.term bb)
       else (* unreachable *)
         None
     end

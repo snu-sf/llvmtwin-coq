@@ -518,53 +518,99 @@ Definition br (c:Ir.Config.t) (bbid:nat): step_res :=
   | None => sr_goes_wrong
   end.
 
-Definition t_step (c:Ir.Config.t) (t:Ir.Terminator.t): step_res :=
-  match t with
-  | Ir.Terminator.tbr bbid =>
-    (* Unconditional branch. *)
-    br c bbid
+Definition t_step (c:Ir.Config.t) : step_res :=
+  match (Ir.Config.cur_terminator md c) with
+  | Some t =>
+    match t with
+    | Ir.Terminator.tbr bbid =>
+      (* Unconditional branch. *)
+      br c bbid
+         
+    | Ir.Terminator.tbr_cond condop bbid_t bbid_f =>
+      (* Conditional branch. *)
+      let tgt :=
+          match (Ir.Config.get_val c condop) with
+          | Some (Ir.num cond) =>
+            if N.eqb cond 0%N then Some bbid_f
+            else Some bbid_t
+          | _ => None (* note that 'br poison' is UB. *)
+          end in
+      match tgt with
+      | None => sr_goes_wrong
+      | Some bbid => br c bbid
+      end
 
-  | Ir.Terminator.tbr_cond condop bbid_t bbid_f =>
-    (* Conditional branch. *)
-    let tgt :=
-        match (Ir.Config.get_val c condop) with
-        | Some (Ir.num cond) =>
-          if N.eqb cond 0%N then Some bbid_f
-          else Some bbid_t
-        | _ => None (* note that 'br poison' is UB. *)
-        end in
-    match tgt with
-    | None => sr_goes_wrong
-    | Some bbid => br c bbid
-    end
-
-  | Ir.Terminator.tret retop =>
-    match (Ir.Config.get_val c retop) with
-    | Some v =>
-      if Ir.Config.has_nestedcall c then
-        (* TODO: Will be revisited later, after 'call' instruction is added. *)
-        sr_goes_wrong
-      else
-        sr_prog_finish v
+    | Ir.Terminator.tret retop =>
+      match (Ir.Config.get_val c retop) with
+      | Some v =>
+        if Ir.Config.has_nestedcall c then
+          (* TODO: Will be revisited later, after 'call' instruction is added. *)
+          sr_goes_wrong
+        else
+          sr_prog_finish v
       (* is there only one activation record in a call stack? *)
-    | None => sr_goes_wrong
+      | None => sr_goes_wrong
+      end
     end
-
+  | _ => sr_goes_wrong
   end.
 
 (****************************************************
              Semantics of phi node.
  ****************************************************)
-Definition phi_step (bef_bbid:nat) (c:Ir.Config.t) (p:Ir.PhiNode.t): option Ir.Config.t :=
-  match list_find_key p.(snd) bef_bbid with
-  | (_, op0)::_ =>
-    match Ir.Config.get_val c op0 with
-    | Some v => Some (Ir.Config.update_rval c p.(fst).(fst) v)
-    | None => None
+Definition phi_step (bef_bbid:nat) (c:Ir.Config.t)
+: option Ir.Config.t :=
+  match (Ir.Config.cur_phi md c) with
+  | Some p =>
+    match list_find_key p.(snd) bef_bbid with
+    | (_, op0)::_ =>
+      match Ir.Config.get_val c op0 with
+      | Some v => Some (update_reg_and_incrpc c p.(fst).(fst) v)
+      | None => None
+      end
+    | nil => None
     end
-  | nil => None
+  | _ => None
   end.
 
+Inductive phi_bigstep: nat -> Ir.Config.t -> Ir.Config.t -> Prop :=
+| pbs_one:
+    forall c c' bef_bbid (HSTEP:phi_step bef_bbid c = Some c'),
+    phi_bigstep bef_bbid c c'
+| pbs_succ:
+    forall c c' c'' bef_bbid
+           (HNSTEP:phi_bigstep bef_bbid c c')
+           (HSTEP:phi_step bef_bbid c' = Some c''),
+    phi_bigstep bef_bbid c c''.
+
+
+(****************************************************
+        Semantics of a general small step.
+ ****************************************************)
+
+Definition is_pc_phi (pc0:Ir.IRFunction.pc): bool :=
+  match pc0 with
+  | Ir.IRFunction.pc_phi _ _ => true
+  | _ => false
+  end.
+
+Inductive sstep: Ir.Config.t -> step_res -> Prop :=
+| ss_inst:
+    forall st sr (HISTEP:inst_step st sr),
+      sstep st sr
+| ss_br_goes_wrong:
+    forall st (HTSTEP:t_step st = sr_goes_wrong),
+      sstep st sr_goes_wrong
+| ss_br_success:
+    (* It is assumed that phi is executed continuously
+       after br is executed. This follows Vellvm's style. *)
+    forall st0 fdef0 pc0 st' st'' fdef'' pc''
+           (HTSTEP:t_step st0 = sr_success Ir.e_none st')
+           (HCURPC:Some (fdef0, pc0) = Ir.Config.cur_fdef_pc md st0)
+           (HPSTEP:phi_bigstep (pc_bbid pc0) st' st'')
+           (HCURPC':Some (fdef'', pc'') = Ir.Config.cur_fdef_pc md st'')
+           (HNOT_PHI_ANYMORE:is_pc_phi pc'' = false),
+      sstep st0 (sr_success Ir.e_none st'').
 
 
 (****************************************************
