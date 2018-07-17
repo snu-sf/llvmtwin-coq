@@ -2414,6 +2414,64 @@ Proof.
         thats_it. }
     }
     { (* ptrtoint *)
+      assert (Heqoi2 := Heqoi1).
+      rewrite <- twin_state_cur_inst_eq with (st1 := st1)
+                                             (blkid := blkid) in Heqoi1;
+        try assumption.
+      eexists. split.
+      { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+        rewrite <- Heqoi2. reflexivity. }
+      { assert (HOP:Ir.Config.get_val st1 o = Ir.Config.get_val st2 o).
+        { eapply twin_state_get_val_eq. eassumption. }
+        rewrite HOP.
+        destruct t; try (eapply ts_success; try reflexivity; thats_it).
+        destruct (Ir.Config.get_val st2 o) eqn:HOPVAL;
+          try (eapply ts_success; try reflexivity; thats_it).
+        { destruct v; try (eapply ts_success; try reflexivity; thats_it).
+          destruct p.
+          { (* p shouldn't be log (blkid, ..) *)
+            destruct (b =? blkid) eqn:HBLKID.
+            { rewrite PeanoNat.Nat.eqb_eq in HBLKID.
+              assert (observes_block md st1 blkid).
+              { eapply ob_by_ptrtoint.
+                eassumption. rewrite HOP. subst. reflexivity. }
+              congruence.
+            }
+            { rewrite PeanoNat.Nat.eqb_neq in HBLKID.
+              dup HTWIN.
+              decompose_HTWIN HTWIN b.
+              destruct HTWIN5'. exploit H0. assumption.
+              intros HH. clear H H0.
+              unfold Ir.SmallStep.p2N.
+              unfold Ir.log_to_phy.
+              rewrite HH.
+              eapply ts_success; try reflexivity.
+              eapply twin_state_update_reg_and_incrpc.
+              eassumption.
+            }
+          }
+          { (* p is phy is okay. *)
+            unfold Ir.SmallStep.p2N.
+            eapply ts_success; try reflexivity. thats_it.
+          }
+        }
+      }
+    }
+    { (* inttoptr *)
+      assert (Heqoi2 := Heqoi1).
+      rewrite <- twin_state_cur_inst_eq with (st1 := st1)
+                                             (blkid := blkid) in Heqoi1;
+        try assumption.
+      eexists. split.
+      { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+        rewrite <- Heqoi2. reflexivity. }
+      { assert (HOP:Ir.Config.get_val st1 o = Ir.Config.get_val st2 o).
+        { eapply twin_state_get_val_eq. eassumption. }
+        rewrite HOP.
+        eapply ts_success. reflexivity. reflexivity.
+        thats_it. }
+    }
+    { (* ievent *)
 Qed.
 
 Theorem twin_exe:
