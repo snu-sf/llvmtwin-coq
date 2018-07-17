@@ -605,6 +605,21 @@ Ltac decompose_mbs H4':=
     destruct HH5 as [HH5 HH6];
     destruct HH6 as [HH6 HH7].
 
+Ltac decompose_HTWIN' HTWIN blkid :=
+  destruct HTWIN as [HTWIN1' HTWIN2']; destruct HTWIN2' as [HTWIN2' HTWIN3'];
+   destruct HTWIN3' as [HTWIN3' HTWIN4']; destruct HTWIN4' as [HTWIN4' HTWIN5'];
+   pose proof (HTWIN5' blkid) as HTWIN5'.
+
+Ltac decompose_mbs' H4':=
+    destruct H4' as [mb1' [mb2' H4'']];
+    destruct H4'' as [HH0' HH1'];
+    destruct HH1' as [HH1' HH2'];
+    destruct HH2' as [HH2' HH3'];
+    destruct HH3' as [HH3' HH4'];
+    destruct HH4' as [HH4' HH5'];
+    destruct HH5' as [HH5' HH6'];
+    destruct HH6' as [HH6' HH7'].
+
 
 Lemma twin_state_load_bytes_eq:
   forall st1 st2 blkid (HTWIN:twin_state st1 st2 blkid) l ofs thety,
@@ -1705,6 +1720,136 @@ Proof.
   }
 Qed.
 
+
+Lemma twin_state_icmp_eq_ptr_nondet_cond_eq:
+  forall st1 st2 blkid (HTWIN:twin_state st1 st2 blkid) p1 p2,
+    Ir.SmallStep.icmp_eq_ptr_nondet_cond p1 p2 (Ir.Config.m st1) = 
+    Ir.SmallStep.icmp_eq_ptr_nondet_cond p1 p2 (Ir.Config.m st2).
+Proof.
+  intros.
+  unfold Ir.SmallStep.icmp_eq_ptr_nondet_cond.
+  destruct p1.
+  { (* block id is b. *)
+    dup HTWIN.
+    decompose_HTWIN HTWIN b.
+    destruct (b =? blkid) eqn:HB1.
+    { (* okay, b is the twin. *)
+      rewrite PeanoNat.Nat.eqb_eq in HB1. dup HB1.
+      destruct HTWIN5'. apply H in HB1. clear H0 H.
+      decompose_mbs HB1. subst b. rewrite <- HH0. rewrite <- HH1.
+
+      (* next. *)
+      destruct p2 as [b2 o2 | ]; try reflexivity.
+      (* block id is log b2 again. *)
+
+      decompose_HTWIN' HTWIN0 b2.
+      destruct (b2 =? blkid) eqn:HB2.
+      { (* oh, op2 is also twin. *)
+        rewrite PeanoNat.Nat.eqb_eq in HB2. dup HB2.
+        destruct HTWIN5'. exploit H. assumption. intros HH.
+        clear H H0. decompose_mbs' HH.
+        subst b2.
+        rewrite <- HH0'. rewrite <- HH1'.
+        rewrite HH3, HH4, HH3', HH4'. reflexivity.
+      }
+      { (* op2 is not twin. *)
+        rewrite PeanoNat.Nat.eqb_neq in HB2. dup HB2.
+        destruct HTWIN5'. exploit H0. congruence. intros HH.
+          clear H H0. rewrite HH.
+          rewrite HH3, HH4. reflexivity.
+      }
+    }
+    { (* b is not a twin. *)
+      rewrite PeanoNat.Nat.eqb_neq in HB1. dup HB1.
+      destruct HTWIN5'. exploit H0. congruence. intros HH.
+      clear H H0. rewrite HH.
+
+      (* next. *)
+      destruct p2 as [b2 o2 | ]; try reflexivity.
+      decompose_HTWIN' HTWIN0 b2.
+      destruct (b2 =? blkid) eqn:HB2.
+      { (* oh, op2 is also twin. *)
+        rewrite PeanoNat.Nat.eqb_eq in HB2. dup HB2.
+        destruct HTWIN5'. exploit H. assumption. intros HH'.
+        clear H H0. decompose_mbs' HH'.
+        subst b2.
+        rewrite <- HH0'. rewrite <- HH1'.
+        rewrite HH3', HH4'. reflexivity.
+      }
+      { (* op2 is not twin. *)
+        rewrite PeanoNat.Nat.eqb_neq in HB2. dup HB2.
+        destruct HTWIN5'. exploit H0. congruence. intros HH'.
+          clear H H0. rewrite HH'. reflexivity.
+      }
+    }
+  } reflexivity.
+Qed.
+
+Lemma twin_state_icmp_ule_ptr_nondet_cond_eq:
+  forall st1 st2 blkid (HTWIN:twin_state st1 st2 blkid) p1 p2,
+    Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m st1) = 
+    Ir.SmallStep.icmp_ule_ptr_nondet_cond p1 p2 (Ir.Config.m st2).
+Proof.
+  intros.
+  unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond.
+  destruct p1.
+  { (* block id is b. *)
+    dup HTWIN.
+    decompose_HTWIN HTWIN b.
+    destruct (b =? blkid) eqn:HB1.
+    { (* okay, b is the twin. *)
+      rewrite PeanoNat.Nat.eqb_eq in HB1. dup HB1.
+      destruct HTWIN5'. apply H in HB1. clear H0 H.
+      decompose_mbs HB1. subst b. rewrite <- HH0. rewrite <- HH1.
+
+      (* next. *)
+      destruct p2 as [b2 o2 | ]; try reflexivity.
+      (* block id is log b2 again. *)
+
+      decompose_HTWIN' HTWIN0 b2.
+      destruct (b2 =? blkid) eqn:HB2.
+      { (* oh, op2 is also twin. *)
+        rewrite PeanoNat.Nat.eqb_eq in HB2. dup HB2.
+        destruct HTWIN5'. exploit H. assumption. intros HH.
+        clear H H0. decompose_mbs' HH.
+        subst b2.
+        rewrite <- HH0'. rewrite <- HH1'.
+        rewrite HH3, HH4, HH3', HH4'. reflexivity.
+      }
+      { (* op2 is not twin. *)
+        rewrite PeanoNat.Nat.eqb_neq in HB2. dup HB2.
+        destruct HTWIN5'. exploit H0. congruence. intros HH.
+          clear H H0. rewrite HH.
+          rewrite HH3, HH4. reflexivity.
+      }
+    }
+    { (* b is not a twin. *)
+      rewrite PeanoNat.Nat.eqb_neq in HB1. dup HB1.
+      destruct HTWIN5'. exploit H0. congruence. intros HH.
+      clear H H0. rewrite HH.
+
+      (* next. *)
+      destruct p2 as [b2 o2 | ]; try reflexivity.
+      decompose_HTWIN' HTWIN0 b2.
+      destruct (b2 =? blkid) eqn:HB2.
+      { (* oh, op2 is also twin. *)
+        rewrite PeanoNat.Nat.eqb_eq in HB2. dup HB2.
+        destruct HTWIN5'. exploit H. assumption. intros HH'.
+        clear H H0. decompose_mbs' HH'.
+        subst b2.
+        rewrite <- HH0'. rewrite <- HH1'.
+        rewrite HH3', HH4'. reflexivity.
+      }
+      { (* op2 is not twin. *)
+        rewrite PeanoNat.Nat.eqb_neq in HB2. dup HB2.
+        destruct HTWIN5'. exploit H0. congruence. intros HH'.
+          clear H H0. rewrite HH'. reflexivity.
+      }
+    }
+  } reflexivity.
+Qed.
+
+
 (*******************************************************
                  Main Theorems 
  *******************************************************)
@@ -2512,6 +2657,140 @@ Proof.
       }
     }
     { (* icmp eq *)
+      assert (Heqoi2 := Heqoi1).
+      rewrite <- twin_state_cur_inst_eq with (st1 := st1)
+                                             (blkid := blkid) in Heqoi1;
+        try assumption.
+      assert (HOPEQ1:Ir.Config.get_val st1 o = Ir.Config.get_val st2 o).
+      { eapply twin_state_get_val_eq. eassumption. }
+      assert (HOPEQ2:Ir.Config.get_val st1 o0 = Ir.Config.get_val st2 o0).
+      { eapply twin_state_get_val_eq. eassumption. }
+      destruct (Ir.Config.get_val st1 o) eqn:Hop11.
+      { destruct v.
+        { destruct (Ir.Config.get_val st1 o0) eqn:Hop12.
+          { destruct v; inv H0.
+            { eexists. split.
+              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
+              { eapply ts_success; try reflexivity. thats_it. }
+            }
+            { eexists. split.
+              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
+              { eapply ts_success; try reflexivity. thats_it. }
+            }
+            { eexists. split.
+              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
+              { eapply ts_success; try reflexivity. thats_it. }
+            }
+          }
+          { inv H0.
+            eexists. split.
+            { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+              rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
+            { eapply ts_success; try reflexivity. thats_it. }
+          }
+        }
+        { destruct (Ir.Config.get_val st1 o0) eqn:Hop12.
+          { destruct v.
+            { inv H0. eexists. split.
+              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
+              { eapply ts_success; try reflexivity. thats_it. }
+            }
+            { (* okay, the important case. *)
+              unfold Ir.SmallStep.icmp_eq_ptr in H0.
+              erewrite twin_state_icmp_eq_ptr_nondet_cond_eq in H0; try eassumption.
+              destruct p; destruct p0.
+              { (* log, log *)
+                destruct (b =? b0) eqn:HBB0.
+                { inv H0.
+                  eexists. split.
+                  { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                    rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                    unfold Ir.SmallStep.icmp_eq_ptr. rewrite HBB0. reflexivity. }
+                  { eapply ts_success; try reflexivity. thats_it. }
+                }
+                { des_ifs.
+                  eexists. split.
+                  { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                    rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                    unfold Ir.SmallStep.icmp_eq_ptr. rewrite HBB0.
+                    rewrite Heq0. reflexivity. }
+                  { eapply ts_success; try reflexivity. thats_it. }
+                }
+              }
+              { (* log, phy *)
+                assert (b <> blkid).
+                { intros HH. assert (observes_block md st1 blkid).
+                  { eapply ob_by_iicmpeq_l. rewrite Heqoi1. reflexivity.
+                    rewrite Hop11. subst. reflexivity.
+                    rewrite Hop12. reflexivity. }
+                  congruence. }
+                erewrite twin_state_p2N_eq in H0; try eassumption.
+                inv H0.
+                eexists. split.
+                { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                  rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                  unfold Ir.SmallStep.icmp_eq_ptr. reflexivity. }
+                { eapply ts_success; try reflexivity. thats_it. }
+              }
+              { (* phy. log *)
+                assert (b <> blkid).
+                { intros HH. assert (observes_block md st1 blkid).
+                  { eapply ob_by_iicmpeq_r. rewrite Heqoi1. reflexivity.
+                    rewrite Hop12. subst. reflexivity.
+                    rewrite Hop11. reflexivity. }
+                  congruence. }
+                erewrite twin_state_p2N_eq in H0; try eassumption.
+                inv H0.
+                eexists. split.
+                { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                  rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                  unfold Ir.SmallStep.icmp_eq_ptr. reflexivity. }
+                { eapply ts_success; try reflexivity. thats_it. }
+              }
+              { (* phy phy *)
+                inv H0.
+                eexists. split.
+                { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                  rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                  unfold Ir.SmallStep.icmp_eq_ptr. reflexivity. }
+                { eapply ts_success; try reflexivity. thats_it. }
+              }
+            }
+            { inv H0.
+              eexists. split.
+              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
+              { eapply ts_success; try reflexivity. thats_it. }
+            }
+          }
+          { inv H0.
+            eexists. split.
+            { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+              rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
+            { eapply ts_success; try reflexivity. thats_it. }
+          }
+        }
+        { inv H0.
+          eexists. split.
+          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi2. rewrite <- HOPEQ1. reflexivity. }
+          { eapply ts_success; try reflexivity. thats_it. }
+        }
+      }
+      { inv H0.
+        eexists. split.
+        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+          rewrite <- Heqoi2. rewrite <- HOPEQ1. reflexivity. }
+        { eapply ts_success; try reflexivity. thats_it. }
+      }
+    }
+    { (* icmp ule *)
+    }
+      
 Qed.
 
 Theorem twin_exe:
