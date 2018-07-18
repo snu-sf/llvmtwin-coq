@@ -1295,6 +1295,77 @@ Proof.
     simpl. right. eapply IHl. eassumption.
 Qed.
 
+Lemma list_keys_app {X:Type}:
+  forall (l1 l2:list (nat*X)),
+    list_keys (l1++l2) = (list_keys l1) ++ list_keys l2.
+Proof.
+  intros.
+  induction l1.
+  { reflexivity. }
+  { simpl. congruence. }
+Qed.
+
+Lemma list_keys_NoDup {X:Type}:
+  forall (l:list (nat * X)) (HNODUP:List.NoDup (list_keys l)),
+    List.NoDup l.
+Proof.
+  intros.
+  induction l.
+  { constructor. }
+  { simpl in HNODUP. destruct a. inv HNODUP.
+    apply IHl in H2. constructor.
+    intros H0. apply H1. eapply list_keys_In. eassumption.
+    assumption. }
+Qed.
+
+Lemma list_find_key_In_none {X:Type}:
+  forall (l:list (nat * X)) blkid x
+    (HEMPTY: list_find_key l blkid = [])
+    (HIN:List.In x l),
+    x.(fst) <> blkid.
+Proof.
+  intros.
+  induction l.
+  { inv HIN. }
+  { inv HIN.
+    { simpl in HEMPTY.
+      destruct (fst x =? blkid) eqn:HE.
+      { inv HEMPTY. }
+      { rewrite PeanoNat.Nat.eqb_neq in HE. congruence. }
+    }
+    { simpl in HEMPTY.
+      destruct (fst a =? blkid) eqn:HA; try congruence.
+      apply IHl in HEMPTY. assumption. assumption. }
+  }
+Qed.
+
+Lemma list_find_key_NoDup_In2 {X:Type}:
+  forall (l:list (nat * X)) key v1 v2
+         (HIN:List.In (key, v1) l)
+         (HIN:List.In (key, v2) l)
+         (HNODUP:List.NoDup (list_keys l)),
+    v1 = v2.
+Proof.
+  intros.
+  induction l.
+  { inv HIN. }
+  { destruct a.
+    inv HIN.
+    { inv HIN0.
+      { congruence. }
+      { inv H. inv HNODUP.
+        exfalso. apply H2. eapply list_keys_In. eassumption. }
+    }
+    { inv HIN0.
+      { inv H0. inv HNODUP.
+        exfalso. apply H2. eapply list_keys_In. eassumption. }
+      { inv HNODUP.
+        eapply IHl; try eassumption.
+      }
+    }
+  }
+Qed.
+
 Lemma decompose_by_key {X:Type}:
   forall (l:list (nat * X)) key
          (HNODUP:NoDup (list_keys l))
@@ -1754,6 +1825,95 @@ Lemma disjoint_range_symm:
 Proof.
   intros. unfold disjoint_range. destruct r1.
   destruct r2. intuition.
+Qed.
+
+Lemma filter_Permutation {X:Type}:
+  forall (l1 l2:list X)
+         (HP:Permutation l1 l2) f,
+    Permutation (List.filter f l1) (List.filter f l2).
+Proof.
+  intros.
+  induction HP.
+  { constructor. }
+  { simpl. destruct (f x).
+    constructor. assumption.
+    assumption. }
+  { simpl. destruct (f y); destruct (f x); try constructor; try apply Permutation_refl. }
+  { eapply Permutation_trans; eassumption. }
+Qed.
+
+Lemma map_Permutation {X Y:Type}:
+  forall (l1 l2:list X)
+         (HP:Permutation l1 l2) (f:X -> Y),
+    Permutation (List.map f l1) (List.map f l2).
+Proof.
+  intros.
+  induction HP.
+  { constructor. }
+  { simpl. constructor. assumption. }
+  { simpl. constructor. }
+  { eapply Permutation_trans; eassumption. }
+Qed.
+
+Lemma Permutation_app2 {X:Type}:
+  forall (l1 l2:list X),
+    Permutation (l1 ++ l2) (l2 ++ l1).
+Proof.
+  intros.
+  induction l1.
+  { simpl. rewrite List.app_nil_r. apply Permutation_refl. }
+  { simpl. apply Permutation_cons_app. assumption. }
+Qed.
+
+Lemma map_Permutation2 {X Y:Type}:
+  forall (l1 l2:list X) (y:Y)
+         (HPERM:Permutation l1 l2),
+    Permutation (List.map (fun x => (x, y)) l1)
+                (List.map (fun x => (x, y)) l2).
+Proof.
+  intros.
+  induction HPERM.
+  { simpl. constructor. }
+  { simpl. constructor. assumption. }
+  { simpl. constructor. }
+  { eapply Permutation_trans; eassumption. }
+Qed.
+
+Lemma concat_map_Permutation {X Y:Type}:
+  forall (l1 l2:list X)
+         (HP:Permutation l1 l2) (f:X -> list Y),
+    Permutation (List.concat (List.map f l1))
+                (List.concat (List.map f l2)).
+Proof.
+  intros.
+  induction HP.
+  { constructor. }
+  { simpl. eapply Permutation_app.
+    apply Permutation_refl. assumption. }
+  { simpl.
+    rewrite List.app_assoc.
+    rewrite List.app_assoc.
+    apply Permutation_app_tail with (tl := List.concat (List.map f l)).
+    apply Permutation_app2.
+  }
+  { eapply Permutation_trans; eassumption. }
+Qed.
+
+Lemma concat_Permutation2 {X:Type}:
+  forall (l1 l2:list (list X))
+         (HPERM:Permutation l1 l2),
+    Permutation (List.concat l1) (List.concat l2).
+Proof.
+  intros.
+  induction HPERM.
+  { eauto. }
+  { simpl. eapply Permutation_app_head. assumption. }
+  { simpl.
+    rewrite List.app_assoc.
+    rewrite List.app_assoc.
+    eapply Permutation_app_tail with (tl := List.concat l).
+    eapply Permutation_app2. }
+  { eapply Permutation_trans; eauto. }
 Qed.
 
 Lemma disjoint_ranges_Permutation:
@@ -2588,5 +2748,84 @@ Proof.
   rewrite andb_true_r in HIN.
   rewrite andb_true_iff in HIN.
   assumption.
+Qed.
+
+
+
+
+(*******************************************
+             to_front function
+ *******************************************)
+
+Fixpoint to_front {X:Type} (l:list (nat * X)) (key:nat) :=
+  match l with
+  | [] => []
+  | h::t => if h.(fst) =? key then h::t else
+    match to_front t key with
+    | h'::t' => h'::h::t'
+    | nil => h::t
+    end
+  end.
+
+Lemma to_front_spec {X:Type}:
+  forall (l l1 l2:list (nat * X)) key v
+         (HNODUP:List.NoDup (list_keys l))
+         (HSPLIT:l = l1 ++ (key, v) :: l2),
+    to_front l key = (key, v)::l1 ++ l2.
+Proof.
+  intros.
+  generalize dependent HNODUP.
+  generalize dependent l.
+  induction l1.
+  { intros. simpl in HSPLIT. simpl. rewrite HSPLIT.
+    unfold to_front. simpl. rewrite PeanoNat.Nat.eqb_refl.
+    reflexivity. }
+  { intros. simpl in HSPLIT.
+    destruct l; try congruence.
+    inversion HSPLIT.
+    subst p.
+    simpl in HNODUP. inversion HNODUP.
+    subst x. subst l0. apply IHl1 in H1.
+    { simpl. destruct (fst a =? key) eqn:HKEY.
+      { rewrite PeanoNat.Nat.eqb_eq in HKEY.
+        destruct a. simpl in HKEY. subst n.
+        simpl in HNODUP.
+        inv HSPLIT.
+        rewrite list_keys_app in HNODUP.
+        simpl in HNODUP.
+        inv HNODUP.
+        exfalso.
+        apply H4.
+        apply List.in_or_app.
+        right. constructor.
+        reflexivity.
+      }
+      { rewrite PeanoNat.Nat.eqb_neq in HKEY.
+        des_ifs.
+      }
+    }
+    { assumption. }
+  }
+Qed.
+
+Lemma to_front_Permutation {X:Type} :
+  forall (l:list (nat * X)) key,
+    Permutation l (to_front l key).
+Proof.
+  intros.
+  induction l.
+  { constructor. }
+  { simpl. destruct (fst a =? key) eqn:HKEY.
+    { apply Permutation_refl. }
+    { destruct (to_front l key) eqn:HFL.
+      { inv IHl; apply Permutation_refl. }
+      { assert (HH:Permutation (a::l) (a::p::l0)).
+        { apply perm_skip. assumption. }
+        assert (HH2:Permutation (a::p::l0) (p::a::l0)).
+        { apply perm_swap. }
+        eapply perm_trans. eassumption. assumption.
+      }
+    }
+  }
 Qed.
 

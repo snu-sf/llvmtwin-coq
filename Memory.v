@@ -995,17 +995,23 @@ Proof.
     apply lsubseq_filter.
 Qed.
 
-Lemma list_keys_In {X:Type}:
-  forall (l:list (nat * X)) key v
-         (HIN:List.In (key, v) l),
-    List.In key (list_keys l).
+Lemma get_not_In:
+  forall (m:Ir.Memory.t) bid blk blks
+         (HGET:None = Ir.Memory.get m bid)
+         (HBLK:blks = Ir.Memory.blocks m),
+    ~ List.In (bid, blk) blks.
 Proof.
   intros.
-  induction l.
-  - inversion HIN.
-  - simpl in HIN. simpl.
-    destruct HIN. left. rewrite H. reflexivity.
-    right. apply IHl. assumption.
+  unfold Ir.Memory.get in HGET.
+  rewrite <- HBLK in *.
+  remember (list_find_key blks bid) as f.
+  destruct f.
+  - intros HH.
+    symmetry in Heqf.
+    eapply list_find_key_In_none with (x := (bid, blk)) in Heqf.
+    simpl in Heqf. congruence.
+    assumption.
+  - congruence.
 Qed.
 
 Lemma get_In_key:

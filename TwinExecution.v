@@ -226,6 +226,376 @@ Proof.
   }
 Qed.
 
+
+Lemma twin_state_allocatable_eq:
+  forall st1 st2 blkid r md
+         (HTWIN:twin_state st1 st2 blkid)
+         (HWF1:Ir.Config.wf md st1)
+         (HWF2:Ir.Config.wf md st2),
+    Ir.Memory.allocatable (Ir.Config.m st1) r =
+    Ir.Memory.allocatable (Ir.Config.m st2) r.
+Proof.
+  intros.
+  unfold Ir.Memory.allocatable.
+  assert (HP:Permutation (r ++ Ir.Memory.alive_P_ranges (Ir.Config.m st1))
+                         (r ++ Ir.Memory.alive_P_ranges (Ir.Config.m st2))).
+  { apply Permutation_app.
+    { apply Permutation_refl. }
+    { unfold Ir.Memory.alive_P_ranges.
+      unfold Ir.Memory.alive_blocks.
+      remember (Ir.Memory.blocks (Ir.Config.m st1)) as mbs1.
+      remember (Ir.Memory.blocks (Ir.Config.m st2)) as mbs2.
+      assert (HNODUP1:List.NoDup mbs1).
+      { inv HWF1. inv wf_m.
+        apply list_keys_NoDup.
+        apply wf_uniqueid. }
+      assert (HNODUPK1:List.NoDup (list_keys mbs1)).
+      { inv HWF1. inv wf_m. assumption. }
+      assert (HNODUP2:List.NoDup mbs2).
+      { inv HWF2. inv wf_m.
+        apply list_keys_NoDup.
+        apply wf_uniqueid. }
+      assert (HNODUPK2:List.NoDup (list_keys mbs2)).
+      { inv HWF2. inv wf_m. assumption. }
+      destruct (list_find_key mbs1 blkid) eqn:HAS_BLKID;
+      destruct (list_find_key mbs2 blkid) eqn:HAS_BLKID2.
+      { (* okay, Permutation mbs1 mbs2 should hold. *)
+        assert (Permutation mbs1 mbs2).
+        { apply NoDup_Permutation;try eauto.
+          { intros.
+            inv HTWIN.
+            destruct H0. destruct H1. destruct H2.
+            assert (H3' := H3 (fst x)). clear H3.
+            destruct H3'. clear H3.
+            split.
+            { intros HH.
+              assert (HNOX: fst x <> blkid).
+              { eapply list_find_key_In_none.
+                eapply HAS_BLKID. assumption. }
+              apply H4 in HNOX. clear H4.
+              destruct (Ir.Memory.get (Ir.Config.m st1) (fst x)) eqn:HGET1.
+              { symmetry in HGET1.
+                apply Ir.Memory.get_In with (blks := Ir.Memory.blocks (Ir.Config.m st1)) in HGET1;
+                  try reflexivity.
+                apply Ir.Memory.get_In with (blks := Ir.Memory.blocks (Ir.Config.m st2)) in HNOX;
+                  try reflexivity.
+                destruct x.
+                simpl in *.
+                assert (t = t0).
+                { eapply list_find_key_NoDup_In2.
+                  eapply HGET1. eapply HH. assumption. }
+                subst t. assumption.
+              }
+              { assert (~ List.In x (Ir.Memory.blocks (Ir.Config.m st1))).
+                { destruct x. eapply get_not_In.
+                  symmetry in HGET1. eapply HGET1. reflexivity. }
+                congruence.
+              }
+            }
+            { intros HH.
+              assert (HNOX: fst x <> blkid).
+              { eapply list_find_key_In_none.
+                eapply HAS_BLKID2. assumption. }
+              apply H4 in HNOX. clear H4.
+              destruct (Ir.Memory.get (Ir.Config.m st2) (fst x)) eqn:HGET2.
+              { symmetry in HGET2.
+                apply Ir.Memory.get_In with (blks := Ir.Memory.blocks (Ir.Config.m st2)) in HGET2;
+                  try reflexivity.
+                symmetry in HNOX.
+                apply Ir.Memory.get_In with (blks := Ir.Memory.blocks (Ir.Config.m st1)) in HNOX;
+                  try reflexivity.
+                destruct x.
+                simpl in *.
+                assert (t = t0).
+                { eapply list_find_key_NoDup_In2.
+                  eapply HGET2. eapply HH. assumption. }
+                subst t. assumption.
+              }
+              { assert (~ List.In x (Ir.Memory.blocks (Ir.Config.m st2))).
+                { destruct x. eapply get_not_In.
+                  symmetry in HGET2. eapply HGET2. reflexivity. }
+                congruence.
+              }
+            }
+          }
+        }
+        eapply concat_map_Permutation.
+        eapply filter_Permutation.
+        assumption.
+      }
+      { (* cannot happen *)
+        inv HTWIN.
+        destruct H0. destruct H1. destruct H2.
+        assert (H3' := H3 blkid). clear H3.
+        destruct H3'. clear H4. exploit H3.
+        reflexivity. intros HH. clear H3.
+        destruct HH. destruct H3. destruct H3. destruct H4.
+        unfold Ir.Memory.get in H3, H4.
+        rewrite HAS_BLKID in H3. congruence.
+      }
+      { (* cannot happen *)
+        inv HTWIN.
+        destruct H0. destruct H1. destruct H2.
+        assert (H3' := H3 blkid). clear H3.
+        destruct H3'. clear H4. exploit H3.
+        reflexivity. intros HH. clear H3.
+        destruct HH. destruct H3. destruct H3. destruct H4.
+        unfold Ir.Memory.get in H3, H4.
+        rewrite HAS_BLKID2 in H4. congruence.
+      }
+      { inv HTWIN.
+        destruct H0. destruct H1. destruct H2.
+        assert (H3' := H3 blkid).
+        destruct H3'. clear H5. exploit H4.
+        reflexivity. intros HH. clear H4.
+        destruct HH. destruct H4. destruct H4. destruct H5.
+        dup H4. dup H5.
+
+        remember (Ir.Memory.blocks (Ir.Config.m st1)) as mbs1.
+        remember (Ir.Memory.blocks (Ir.Config.m st2)) as mbs2.
+        eapply Ir.Memory.get_In with (blks := mbs1) in H7.
+        eapply Ir.Memory.get_In with (blks := mbs2) in H8.
+        apply List.In_split in H7.
+        apply List.In_split in H8.
+        destruct H7 as [mbs11 [mbs12 HMBS1]].
+        destruct H8 as [mbs21 [mbs22 HMBS2]].
+        (* show that to_front has (blkd, _) at the front *)
+        assert (HFRONT1: to_front mbs1 blkid = (blkid, x)::mbs11 ++ mbs12).
+        { eapply to_front_spec. assumption. assumption. }
+        assert (HFRONT2: to_front mbs2 blkid = (blkid, x0)::mbs21 ++ mbs22).
+        { eapply to_front_spec. assumption. assumption. }
+
+        (* Let's show that mbs11+mbs12 is permutation of mbs21++mbs22. *)
+        (* to show this, we have to show that mbs11, mbs12, mbs21, ms22 does not
+           have blkid. *)
+        assert (HNOTIN1:~List.In blkid (list_keys (mbs11++mbs12))).
+        { rewrite HMBS1 in HNODUPK1.
+          rewrite list_keys_app in HNODUPK1.
+          simpl in HNODUPK1.
+          rewrite list_keys_app.
+          apply List.NoDup_remove_2 in HNODUPK1.
+          assumption. }
+        assert (HNOTIN2:~List.In blkid (list_keys (mbs21++mbs22))).
+        { rewrite HMBS2 in HNODUPK2.
+          rewrite list_keys_app in HNODUPK2.
+          simpl in HNODUPK2.
+          rewrite list_keys_app.
+          apply List.NoDup_remove_2 in HNODUPK2.
+          assumption. }
+        remember (mbs11++mbs12) as mbs1'.
+        remember (mbs21++mbs22) as mbs2'.
+        assert (HNODUP1':List.NoDup mbs1').
+        { rewrite Heqmbs1'.
+          eapply List.NoDup_remove_1.
+          rewrite HMBS1 in HNODUP1. eassumption. }
+        assert (HNODUP2':List.NoDup mbs2').
+        { rewrite Heqmbs2'.
+          eapply List.NoDup_remove_1.
+          rewrite HMBS2 in HNODUP2. eassumption. }
+        assert (HLSS1:lsubseq mbs1 mbs1').
+        { rewrite Heqmbs1'. rewrite HMBS1.
+          apply lsubseq_append. apply lsubseq_refl.
+          constructor. apply lsubseq_refl.
+        }
+        assert (HLSS2:lsubseq mbs2 mbs2').
+        { rewrite Heqmbs2'. rewrite HMBS2.
+          apply lsubseq_append. apply lsubseq_refl.
+          constructor. apply lsubseq_refl.
+        }
+
+        (* okay, Permutation mbs1' mbs2' should hold. *)
+        assert (HPERM:Permutation mbs1' mbs2').
+        { apply NoDup_Permutation; try eauto.
+          { intros.
+            assert (H3' := H3 (fst x1)). clear H3.
+            destruct H3'. clear H3.
+            split.
+            { (* if x1 is in mbs1', it's in mbs2'. *)
+              intros HH.
+              (* x1's key can never be blkid. *)
+              assert (HNOX: fst x1 <> blkid).
+              { intros HH2. subst blkid. destruct x1.
+                apply list_keys_In in HH. simpl in *. apply HNOTIN1. assumption. }
+              dup HNOX.
+              apply H7 in HNOX. clear H7.
+              destruct (Ir.Memory.get (Ir.Config.m st1) (fst x1)) eqn:HGET1.
+              { symmetry in HGET1.
+                apply Ir.Memory.get_In with
+                    (blks := Ir.Memory.blocks (Ir.Config.m st1)) in HGET1;
+                  try reflexivity.
+                apply Ir.Memory.get_In with
+                    (blks := Ir.Memory.blocks (Ir.Config.m st2)) in HNOX;
+                  try reflexivity.
+                destruct x1.
+                simpl in *.
+                assert (t = t0).
+                { eapply list_find_key_NoDup_In2.
+                  eapply HGET1.
+                  eapply lsubseq_In.
+                  eapply HH. rewrite Heqmbs1 in HLSS1. assumption.
+                  rewrite Heqmbs1 in HNODUPK1. assumption. }
+                subst t.
+                rewrite Heqmbs2'.
+                apply List.in_or_app.
+                rewrite <- Heqmbs2 in HNOX.
+                rewrite HMBS2 in HNOX.
+                apply List.in_app_or in HNOX.
+                destruct HNOX.
+                { eauto. }
+                { inv H3. { congruence. } { eauto. } }
+              }
+              { (* Memory.get (fst x1) is None..! *)
+                assert (~ List.In x1 (Ir.Memory.blocks (Ir.Config.m st1))).
+                { destruct x1. eapply get_not_In.
+                  symmetry in HGET1. eapply HGET1. reflexivity. }
+                apply lsubseq_NotIn with (l' := mbs1') in H3.
+                { congruence. }
+                { congruence. }
+              }
+            }
+            { intros HH.
+              assert (HNOX: fst x1 <> blkid).
+              { intros HH2. subst blkid. destruct x1.
+                apply list_keys_In in HH. simpl in *. apply HNOTIN2. assumption. }
+              dup HNOX. apply H7 in HNOX. clear H7.
+              destruct (Ir.Memory.get (Ir.Config.m st2) (fst x1)) eqn:HGET2.
+              { symmetry in HGET2.
+                apply Ir.Memory.get_In with
+                    (blks := Ir.Memory.blocks (Ir.Config.m st2)) in HGET2;
+                  try reflexivity.
+                symmetry in HNOX.
+                apply Ir.Memory.get_In with
+                    (blks := Ir.Memory.blocks (Ir.Config.m st1)) in HNOX;
+                  try reflexivity.
+                destruct x1.
+                simpl in *.
+                assert (t = t0).
+                { eapply list_find_key_NoDup_In2.
+                  eapply HGET2. eapply lsubseq_In.
+                  eapply HH. rewrite <- Heqmbs2. assumption.
+                  congruence. }
+                subst t.
+                rewrite Heqmbs1'.
+                apply List.in_or_app.
+                rewrite <- Heqmbs1 in HNOX.
+                rewrite HMBS1 in HNOX.
+                apply List.in_app_or in HNOX.
+                destruct HNOX.
+                { eauto. }
+                { inv H3. { congruence. } { eauto. } }
+              }
+              { assert (~ List.In x1 (Ir.Memory.blocks (Ir.Config.m st2))).
+                { destruct x1. eapply get_not_In.
+                  symmetry in HGET2. eapply HGET2. reflexivity. }
+                apply lsubseq_NotIn with (l' := mbs2') in H3.
+                { congruence. }
+                { congruence. }
+              }
+            }
+          }
+        }
+        (* Okay, and now, for permutation of P of the twin block: *)
+        assert (HPERM2': Permutation (Ir.MemBlock.P_ranges x) (Ir.MemBlock.P_ranges x0)).
+        { destruct H6. destruct H7. destruct H8. destruct H9.
+          unfold Ir.MemBlock.P_ranges. rewrite H8.
+          eapply map_Permutation2.
+          destruct H10. destruct H11. assumption. }
+
+        (* yes, it's almost done!!*)
+        (* now: show that filter mbs1' and filter mbs2' are pmerutation. *)
+        remember (List.filter (fun xb => Ir.MemBlock.alive (snd xb)) mbs1') as mbs1f'.
+        remember (List.filter (fun xb => Ir.MemBlock.alive (snd xb)) mbs2') as mbs2f'.
+        assert (HPERM3:Permutation mbs1f' mbs2f').
+        { rewrite Heqmbs1f', Heqmbs2f'. eapply filter_Permutation. assumption. }
+        (* and, Permutation (map mbs1f') (map mbs2f'): *)
+        remember (List.map (fun b => Ir.MemBlock.P_ranges (snd b)) mbs1f') as mbs1m'.
+        remember (List.map (fun b => Ir.MemBlock.P_ranges (snd b)) mbs2f') as mbs2m'.
+        assert (HPERM4:Permutation mbs1m' mbs2m').
+        { rewrite Heqmbs1m', Heqmbs2m'. eapply map_Permutation. eassumption. }
+        (* and, Permutation (concat ..) (concat ..): *)
+        remember (List.concat mbs1m') as mbs1c'.
+        remember (List.concat mbs2m') as mbs2c'.
+        assert (HPERM5:Permutation mbs1c' mbs2c').
+        { rewrite Heqmbs1c', Heqmbs2c'.
+
+          eapply concat_Permutation2. assumption. }
+        (* okay, now start with.. to_fronts. *)
+        assert (HPERM6: Permutation
+             (List.concat
+                (List.map (fun b => Ir.MemBlock.P_ranges (snd b))
+                       (List.filter (fun xb => Ir.MemBlock.alive (snd xb))
+                                    (to_front mbs1 blkid))))
+             (List.concat
+                (List.map (fun b => Ir.MemBlock.P_ranges (snd b))
+                       (List.filter (fun xb => Ir.MemBlock.alive (snd xb))
+                                    (to_front mbs2 blkid))))).
+        { rewrite HFRONT1. rewrite HFRONT2.
+          simpl.
+          assert (HALIVE: Ir.MemBlock.alive x = Ir.MemBlock.alive x0).
+          { destruct H6. destruct H7.
+            unfold Ir.MemBlock.alive. rewrite H7. congruence. }
+          rewrite HALIVE in *.
+          des_if.
+          { simpl. eapply Permutation_app. assumption.
+            { rewrite Heqmbs1c', Heqmbs2c' in HPERM5.
+              rewrite Heqmbs1m', Heqmbs2m' in HPERM5.
+              rewrite Heqmbs1f', Heqmbs2f' in HPERM5.
+              assumption. }
+          }
+          { rewrite Heqmbs1c', Heqmbs2c' in HPERM5.
+            rewrite Heqmbs1m', Heqmbs2m' in HPERM5.
+            rewrite Heqmbs1f', Heqmbs2f' in HPERM5.
+            assumption. }
+        }
+        assert (HPERM7:
+                  Permutation
+             (List.concat
+                (List.map (fun b => Ir.MemBlock.P_ranges (snd b))
+                   (List.filter
+                      (fun xb => Ir.MemBlock.alive (snd xb))
+                      mbs1)))
+             (List.concat
+                (List.map (fun b => Ir.MemBlock.P_ranges (snd b))
+                   (List.filter
+                      (fun xb => Ir.MemBlock.alive (snd xb))
+                      (to_front mbs1 blkid))))).
+        { apply concat_Permutation2. apply map_Permutation.
+          apply filter_Permutation. apply to_front_Permutation. }
+        assert (HPERM8:
+                  Permutation
+             (List.concat
+                (List.map (fun b => Ir.MemBlock.P_ranges (snd b))
+                   (List.filter
+                      (fun xb => Ir.MemBlock.alive (snd xb))
+                      (to_front mbs2 blkid))))
+             (List.concat
+                (List.map (fun b => Ir.MemBlock.P_ranges (snd b))
+                   (List.filter
+                      (fun xb => Ir.MemBlock.alive (snd xb))
+                      mbs2)))).
+        { apply concat_Permutation2. apply map_Permutation.
+          apply filter_Permutation.
+          apply Permutation_sym. apply to_front_Permutation. }
+        (* Now, a bunch of transitivity! *)
+        eapply Permutation_trans.
+        eapply HPERM7.
+        eapply Permutation_trans.
+        eapply HPERM6.
+        eapply Permutation_trans.
+        eapply HPERM8.
+        (* and.. finally!*)
+        eapply Permutation_refl.
+        (* just a bunch of .. *)
+        eassumption. eassumption.
+      }
+    }
+  }
+  apply disjoint_ranges_Permutation.
+  assumption.
+Qed.
+
+
+
 Lemma twin_state_get_funid_eq:
   forall (st1 st2:Ir.Config.t) c blkid
          (HTWIN:twin_state st1 st2 blkid),
@@ -2112,23 +2482,6 @@ Proof.
 Qed.
 
 
-Lemma twin_state_allocatable_eq:
-  forall st1 st2 blkid r (HTWIN:twin_state st1 st2 blkid),
-    Ir.Memory.allocatable (Ir.Config.m st1) r =
-    Ir.Memory.allocatable (Ir.Config.m st2) r.
-Proof.
-  intros.
-  unfold Ir.Memory.allocatable.
-  assert (HP:Permutation (r ++ Ir.Memory.alive_P_ranges (Ir.Config.m st1))
-                         (r ++ Ir.Memory.alive_P_ranges (Ir.Config.m st2))).
-  { apply Permutation_app.
-    { apply Permutation_refl. }
-    { admit. }
-  }
-  apply disjoint_ranges_Permutation.
-  assumption.
-Admitted.
-
 
 Lemma eq_wom_update_reg_and_incrpc:
   forall st1 st2 md r v (HEQ:Ir.Config.eq_wom st1 st2),
@@ -3091,9 +3444,11 @@ Proof.
           intros HE.
           apply HNOSPACE.
           destruct HE.
-          rewrite twin_state_allocatable_eq with (st2 := st1) (blkid := blkid) in H.
+          rewrite twin_state_allocatable_eq with (st2 := st1) (blkid := blkid)
+            (md := md) in H.
           exists x. assumption.
           apply twin_state_sym. assumption.
+          assumption. assumption.
         }
       }
       { eapply ts_oom;try reflexivity. }
@@ -3113,7 +3468,8 @@ Proof.
         { eassumption. }
         { reflexivity. }
         { eassumption. }
-        { rewrite <- twin_state_allocatable_eq with (st1 := st1) (blkid := blkid);
+        { rewrite <- twin_state_allocatable_eq with (st1 := st1) (blkid := blkid)
+          (md := md);
           assumption. }
         { reflexivity. }
       }
@@ -3249,7 +3605,7 @@ Proof.
     { eapply ts_success; try reflexivity.
       thats_it. }
   }
-Admitted.
+Qed.
 
 
 (* Lemma same as twin_execution_inst_unidir, but
