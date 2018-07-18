@@ -748,6 +748,135 @@ Proof.
   eapply H. reflexivity.
 Qed.
 
+Lemma t_step_wf:
+  forall c c' e
+         (HWF:Ir.Config.wf md c)
+         (HSTEP:t_step c = sr_success e c'),
+    Ir.Config.wf md c'.
+Proof.
+  intros.
+  inv HWF.
+  unfold t_step in HSTEP.
+  des_ifs.
+  { unfold br in HSTEP.
+    des_ifs.
+    split; try (unfold Ir.Config.update_pc; des_ifs; done).
+    { unfold Ir.Config.update_pc.
+      simpl in wf_stack. simpl.
+      intros.
+      destruct (Ir.Config.s c) eqn:HS.
+      { rewrite HS in HIN. inv HIN. }
+      destruct p1. destruct p1. simpl in *.
+      destruct HIN.
+      { inv H.
+        unfold Ir.Config.cur_fdef_pc in Heq0.
+        rewrite HS in Heq0.
+        unfold Ir.Config.get_funid in Heq0.
+        des_ifs.
+        apply list_find_key_In in HIN2.
+        rewrite Heq0 in HIN2.
+        assert (List.length (p::l) < 2).
+        { eapply list_find_key_NoDup.
+          eapply wf_cid_to_f.
+          rewrite Heq0. reflexivity. }
+        destruct l.
+        { inv HIN2; try inv H0.
+          simpl in Heq3. rewrite Heq3 in HF. inv HF.
+          eapply Ir.IRFunction.get_begin_pc_bb_valid.
+          eassumption.
+        }
+        { simpl in H. omega. }
+      }
+      { eapply wf_stack.
+        { right. eassumption. }
+        { eassumption. }
+        { eassumption. }
+      }
+    }
+    { simpl. intros.
+      rewrite Ir.Config.m_update_pc. rewrite Ir.Config.get_val_update_pc in HGETVAL.
+      eapply wf_no_bogus_ptr. eassumption. }
+  }
+  { unfold br in HSTEP.
+    des_ifs.
+    split; try (unfold Ir.Config.update_pc; des_ifs; done).
+    { unfold Ir.Config.update_pc.
+      simpl in wf_stack. simpl.
+      intros.
+      destruct (Ir.Config.s c) eqn:HS.
+      { rewrite HS in HIN. inv HIN. }
+      destruct p1. destruct p1. simpl in *.
+      destruct HIN.
+      { inv H.
+        unfold Ir.Config.cur_fdef_pc in Heq0.
+        rewrite HS in Heq0.
+        unfold Ir.Config.get_funid in Heq0.
+        des_ifs.
+        apply list_find_key_In in HIN2.
+        rewrite Heq0 in HIN2.
+        assert (List.length (p::l) < 2).
+        { eapply list_find_key_NoDup.
+          eapply wf_cid_to_f.
+          rewrite Heq0. reflexivity. }
+        destruct l.
+        { inv HIN2; try inv H0.
+          simpl in Heq5. rewrite Heq5 in HF. inv HF.
+          eapply Ir.IRFunction.get_begin_pc_bb_valid.
+          eassumption.
+        }
+        { simpl in H. omega. }
+      }
+      { eapply wf_stack.
+        { right. eassumption. }
+        { eassumption. }
+        { eassumption. }
+      }
+    }
+    { simpl. intros.
+      rewrite Ir.Config.m_update_pc. rewrite Ir.Config.get_val_update_pc in HGETVAL.
+      eapply wf_no_bogus_ptr. eassumption. }
+  }
+  { unfold br in HSTEP.
+    des_ifs.
+    split; try (unfold Ir.Config.update_pc; des_ifs; done).
+    { unfold Ir.Config.update_pc.
+      simpl in wf_stack. simpl.
+      intros.
+      destruct (Ir.Config.s c) eqn:HS.
+      { rewrite HS in HIN. inv HIN. }
+      destruct p1. destruct p1. simpl in *.
+      destruct HIN.
+      { inv H.
+        unfold Ir.Config.cur_fdef_pc in Heq0.
+        rewrite HS in Heq0.
+        unfold Ir.Config.get_funid in Heq0.
+        des_ifs.
+        apply list_find_key_In in HIN2.
+        rewrite Heq0 in HIN2.
+        assert (List.length (p::l) < 2).
+        { eapply list_find_key_NoDup.
+          eapply wf_cid_to_f.
+          rewrite Heq0. reflexivity. }
+        destruct l.
+        { inv HIN2; try inv H0.
+          simpl in Heq5. rewrite Heq5 in HF. inv HF.
+          eapply Ir.IRFunction.get_begin_pc_bb_valid.
+          eassumption.
+        }
+        { simpl in H. omega. }
+      }
+      { eapply wf_stack.
+        { right. eassumption. }
+        { eassumption. }
+        { eassumption. }
+      }
+    }
+    { simpl. intros.
+      rewrite Ir.Config.m_update_pc. rewrite Ir.Config.get_val_update_pc in HGETVAL.
+      eapply wf_no_bogus_ptr. eassumption. }
+  }
+Qed.
+
 Lemma fresh_bid_store_val:
   forall m p v t,
     Ir.Memory.fresh_bid (Ir.store_val m p v t) =

@@ -10,6 +10,7 @@ Require Import Value.
 Require Import Behaviors.
 Require Import Memory.
 Require Import State.
+Require Import WellTyped.
 Require Import LoadStore.
 Require Import SmallStep.
 Require Import Reordering.
@@ -421,7 +422,7 @@ Proof.
     assert (H4' := H4 bid'). clear H4.
     split.
     { intros HH. simpl. subst bid'.
-      destruct H4'. assert (HDUMMY: blkid = blkid) by reflexivity.
+      destruct H4'. assert (HDUMMY: blkid = blkid). reflexivity.
       apply H4 in HDUMMY. clear H4.
       destruct HDUMMY as [mb1 HDUMMY].
       destruct HDUMMY as [mb2 HDUMMY].
@@ -3587,8 +3588,10 @@ Proof.
     dup H0.
     inv H1; try congruence.
     inv HSR1.
-    assert (HWF0:Ir.Config.wf md st0). admit.
-    assert (HWF3:Ir.Config.wf md st3). admit.
+    assert (HWF0:Ir.Config.wf md st0).
+    { eapply Ir.SmallStep.t_step_wf. eapply HWF1. eassumption. }
+    assert (HWF3:Ir.Config.wf md st3).
+    { eapply Ir.SmallStep.t_step_wf. eapply HWF2. eassumption. }
     assert (exists st',
        Ir.SmallStep.phi_bigstep md (Ir.SmallStep.pc_bbid pc0) st3 st' /\
        twin_state st'' st' blkid).
@@ -3606,11 +3609,11 @@ Proof.
     apply twin_state_sym in H1. eassumption. eassumption.
     eapply ts_success; try reflexivity. assumption.
   }
-Admitted.
+Qed.
 
 
-(* Generalized version. *)
-Lemma twin_execution:
+(* General version. *)
+Theorem twin_execution:
   forall (md:Ir.IRModule.t) (blkid:Ir.blockid)
          (st1 st2:Ir.Config.t) (sr1 sr2:Ir.SmallStep.step_res)
          (HWF1:Ir.Config.wf md st1)
@@ -3722,6 +3725,94 @@ Proof.
   }
 Qed.
 
-Definition
+
+Definition inst_derefs md (st:Ir.Config.t) (blkid:Ir.blockid): bool :=
+  match (Ir.Config.cur_inst md st) with
+  | Some i =>
+    match i with
+    | Ir.Inst.iload _ retty opp =>
+      match Ir.Config.get_val st opp with
+      | Some (Ir.ptr opp) =>
+        List.existsb (fun itm => blkid =? itm.(fst).(fst))
+                          (Ir.get_deref (Ir.Config.m st) opp (Ir.ty_bytesz retty))
+      | _ => false
+      end
+    | Ir.Inst.istore valty opp _ =>
+      match Ir.Config.get_val st opp with
+      | Some (Ir.ptr opp) =>
+        List.existsb (fun itm => blkid =? itm.(fst).(fst))
+                          (Ir.get_deref (Ir.Config.m st) opp (Ir.ty_bytesz valty))
+      | _ => false
+      end
+    | Ir.Inst.ifree opp =>
+      match Ir.Config.get_val st opp with
+      | Some (Ir.ptr opp) =>
+        List.existsb (fun itm =>blkid =? itm.(fst).(fst))
+                (Ir.get_deref (Ir.Config.m st) opp 1)
+      | _ => false
+      end
+    | _ => false
+    end
+  | None => false
+  end.
+ 
+
+(* Show that memory access from guessed pointer succeeds in
+   one of twin state, it fails in the other state. *)
+Theorem access_from_guessed_pointer_fails:
+  forall (md:Ir.IRModule.t) (blkid:Ir.blockid)
+         (st1 st2:Ir.Config.t) (sr1 sr2:Ir.SmallStep.step_res)
+         (HWF1:Ir.Config.wf md st1)
+         (HWF2:Ir.Config.wf md st2)
+         (* Input state st1 and st2 are twin-state. *)
+         (HTWIN:twin_state st1 st2 blkid)
+         (* Current instruction is a type-checked instruction. *)
+         (HTYCHECK: Ir.inst_typechecked md st1)
+         (* Current instruction accesses memory
+            from a guessed pointer. *)
+         (HGUESSEDACCESS: memaccess_from_possibly_guessedptr md st1)
+         (* It dereferences the twin block! *)
+         (HDEREF: inst_derefs md st1 blkid = true),
+    (* If step succeeds in st1, it fails in st2. *)
+    forall e1' st1'
+      (HSTEP1:Ir.SmallStep.sstep md st1 (Ir.SmallStep.sr_success e1' st1')),
+          Ir.SmallStep.sstep md st2 Ir.SmallStep.sr_goes_wrong.
+Proof.
+  intros.
+  unfold inst_derefs in HDEREF.
+  inv HGUESSEDACCESS.
+  { inv HSTEP1.
+    { inv HISTEP; try congruence.
+      rewrite <- HINST in HDEREF.
+      dup HINST.
+      unfold Ir.SmallStep.inst_det_step in HNEXT.
+      rewrite <- HINST in HNEXT.
+      apply Ir.SmallStep.ss_inst.
+      apply Ir.SmallStep.s_det.
+      rewrite twin_state_cur_inst_eq with (st2 := st2) (blkid := blkid) in HINST;
+        try assumption.
+      des_ifs; try (inv HTYCHECK; congruence).
+      { unfold Ir.SmallStep.inst_det_step.
+        rewrite <- HINST.
+        rewrite twin_state_get_val_eq with (st2 := st2) (blkid := blkid) in Heq;
+          try assumption.
+        rewrite Heq.
+        rewrite twin_state_get_val_eq with (st2 := st2) (blkid := blkid) in Heq0;
+          try assumption.
+        rewrite Heq0.
+        inv HGUESSED.
+        inv HPHY.
+        unfold Ir.deref in Heq1.
+        des_ifs.
+        dup Heq3.
+        apply Ir.get_deref_singleton in Heq4.
+        { destruct Heq4; try congruence.
+          destruct H. destruct H. inv H.
+          inv HDEREF. rewrite orb_false_r in H1. rewrite PeanoNat.Nat.eqb_eq in H1.
+          subst blkid.
+          
+        
+        rewrite 
+      
 
 End Ir.

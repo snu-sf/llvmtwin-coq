@@ -475,6 +475,20 @@ Proof.
       rewrite Nat.leb_le in *. omega.
 Qed.
 
+Theorem get_begin_pc_bb_valid:
+  forall bb pc0 fdef
+         (HPC:Ir.IRFunction.get_begin_pc_bb bb fdef = Some pc0),
+    Ir.IRFunction.valid_pc pc0 fdef.
+Proof.
+  intros.
+  unfold Ir.IRFunction.get_begin_pc_bb in HPC.
+  unfold Ir.IRFunction.valid_pc.
+  des_ifs.
+  rewrite Heq1. simpl. reflexivity.
+Qed.
+
+
+
 End IRFunction.
 
 

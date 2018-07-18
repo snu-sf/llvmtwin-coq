@@ -703,6 +703,27 @@ Proof.
   simpl. reflexivity.
 Qed.
 
+Lemma get_val_update_pc:
+  forall r pc0 st,
+    get_val (update_pc st pc0) r =
+    get_val st r.
+Proof.
+  unfold update_pc. unfold get_val.
+  unfold get_rval. intros. des_ifs.
+  congruence. simpl in Heq. inv Heq. reflexivity.
+Qed.
+
+Lemma m_update_pc:
+  forall pc0 st,
+    m (update_pc st pc0) =
+    m st.
+Proof.
+  unfold update_pc. intros.
+  des_ifs.
+Qed.
+
+
+
 End CONFIG.
 
 End Config.
