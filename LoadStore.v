@@ -684,7 +684,6 @@ Proof.
     rewrite map_app.
     rewrite concat_app.
     rewrite concat_app.
-    SearchAbout (_ ++ _ = _ ++_).
     simpl.
     assert (HALIVE:Ir.MemBlock.alive
                      (Ir.MemBlock.set_bytes v0 ofs bs) = Ir.MemBlock.alive v0).
@@ -758,7 +757,8 @@ Proof.
     erewrite list_set_keys_eq; eauto.
   }
   { inv HWF.
-    rewrite alive_P_ranges_set_bytes; assumption.
+    rewrite alive_P_ranges_set_bytes; try assumption.
+    split; assumption.
   }
   { inv HWF.
     simpl.
