@@ -287,7 +287,7 @@ Proof.
                 subst t. assumption.
               }
               { assert (~ List.In x (Ir.Memory.blocks (Ir.Config.m st1))).
-                { destruct x. eapply get_not_In.
+                { destruct x. eapply Ir.Memory.get_not_In.
                   symmetry in HGET1. eapply HGET1. reflexivity. }
                 congruence.
               }
@@ -312,7 +312,7 @@ Proof.
                 subst t. assumption.
               }
               { assert (~ List.In x (Ir.Memory.blocks (Ir.Config.m st2))).
-                { destruct x. eapply get_not_In.
+                { destruct x. eapply Ir.Memory.get_not_In.
                   symmetry in HGET2. eapply HGET2. reflexivity. }
                 congruence.
               }
@@ -446,7 +446,7 @@ Proof.
               }
               { (* Memory.get (fst x1) is None..! *)
                 assert (~ List.In x1 (Ir.Memory.blocks (Ir.Config.m st1))).
-                { destruct x1. eapply get_not_In.
+                { destruct x1. eapply Ir.Memory.get_not_In.
                   symmetry in HGET1. eapply HGET1. reflexivity. }
                 apply lsubseq_NotIn with (l' := mbs1') in H3.
                 { congruence. }
@@ -485,7 +485,7 @@ Proof.
                 { inv H3. { congruence. } { eauto. } }
               }
               { assert (~ List.In x1 (Ir.Memory.blocks (Ir.Config.m st2))).
-                { destruct x1. eapply get_not_In.
+                { destruct x1. eapply Ir.Memory.get_not_In.
                   symmetry in HGET2. eapply HGET2. reflexivity. }
                 apply lsubseq_NotIn with (l' := mbs2') in H3.
                 { congruence. }

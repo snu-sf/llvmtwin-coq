@@ -649,17 +649,62 @@ Qed.
 
 Lemma alive_P_ranges_set_bytes:
   forall m bid mb ofs bs
+         (HWF:Ir.Memory.wf m)
          (HGET:Some mb = Ir.Memory.get m bid),
     Ir.Memory.alive_P_ranges (Ir.Memory.set m bid (Ir.MemBlock.set_bytes mb ofs bs)) =
     Ir.Memory.alive_P_ranges m.
 Proof.
   intros.
-  unfold Ir.Memory.set.
-  unfold Ir.Memory.alive_P_ranges.
-  simpl.
-  destruct m.
-  simpl.
-Admitted.
+  remember (Ir.Memory.set m bid (Ir.MemBlock.set_bytes mb ofs bs)) as m'.
+  assert (HDECOMP: exists l1 l2 v0,
+      Ir.Memory.blocks m = l1 ++ (bid, v0)::l2 /\
+      Ir.Memory.blocks m' = l1 ++ (bid, Ir.MemBlock.set_bytes mb ofs bs)::l2 /\
+      ~List.In bid (list_keys l1) /\
+      ~List.In bid (list_keys l2)).
+  { apply list_set_decompose.
+    { inv HWF. assumption. }
+    { eapply Ir.Memory.get_In with (blks := Ir.Memory.blocks m) in HGET.
+      apply list_keys_In in HGET. assumption. reflexivity. }
+    { unfold Ir.Memory.set in Heqm'.
+      destruct m'. simpl in *.
+      congruence. }
+  }
+  destruct HDECOMP as [l1 [l2 [v0 [HDECOMP1 [HDECOMP2 [HDECOMP3 HDECOMP4]]]]]].
+  assert (HIN: List.In (bid, v0) (Ir.Memory.blocks m)).
+  { rewrite HDECOMP1. apply List.in_or_app.
+    right. constructor. reflexivity. }
+  apply Ir.Memory.blocks_get with (m := m) in HIN.
+  { simpl in HIN. rewrite HIN in HGET. inv HGET.
+    unfold Ir.Memory.alive_P_ranges.
+    unfold Ir.Memory.alive_blocks.
+    rewrite HDECOMP1, HDECOMP2.
+    rewrite filter_app.
+    rewrite filter_app.
+    rewrite map_app.
+    rewrite map_app.
+    rewrite concat_app.
+    rewrite concat_app.
+    SearchAbout (_ ++ _ = _ ++_).
+    simpl.
+    assert (HALIVE:Ir.MemBlock.alive
+                     (Ir.MemBlock.set_bytes v0 ofs bs) = Ir.MemBlock.alive v0).
+    { unfold Ir.MemBlock.alive. unfold Ir.MemBlock.set_bytes.
+      simpl. reflexivity. }
+    rewrite HALIVE.
+    des_if.
+    { simpl.
+      assert (HPR:Ir.MemBlock.P_ranges (Ir.MemBlock.set_bytes v0 ofs bs) =
+                  Ir.MemBlock.P_ranges v0).
+      { unfold Ir.MemBlock.P_ranges.
+        unfold Ir.MemBlock.set_bytes.
+        simpl. reflexivity. }
+      rewrite HPR.
+      reflexivity. }
+    { reflexivity. }
+  }
+  assumption.
+  reflexivity.
+Qed.
 
 Lemma set_bytes_wf:
   forall m bid mb ofs bs thety
