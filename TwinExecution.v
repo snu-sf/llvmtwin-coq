@@ -2719,7 +2719,7 @@ Proof.
                 subst b.
                 assert (Heqoi2 := Heqoi1).
                 rewrite twin_state_cur_inst_eq with (st2 := st1) (blkid := blkid)
-                  in Heqoi2 by (apply twin_state_sym in HTWIN; assumption).
+                  in Heqoi2; try (apply twin_state_sym in HTWIN; assumption).
                 assert (observes_block md st1 blkid).
                 { eapply ob_by_psub_r.
                   { rewrite Heqoi2. reflexivity. }
