@@ -842,7 +842,7 @@ Proof.
   intros HH.
   rewrite <- List.length_zero_iff_nil in HH.
   rewrite List.map_length in HH.
-  unfold Ir.TWINCNT in wf_twin.
+  unfold Ir.TWINCNT in wf_twin0.
   congruence.
 Qed.
 
@@ -879,7 +879,7 @@ Proof.
   unfold Ir.TWINCNT in *.
   unfold Ir.MemBlock.addr.
   destruct (Ir.MemBlock.P mb).
-  { inv wf_twin. }
+  { inv wf_twin0. }
   { reflexivity. }
 Qed.
 
@@ -1290,23 +1290,23 @@ Proof.
   { eapply In_split2. congruence.
     assumption. assumption. }
   destruct H1 as [l1 [l2 [l3 H1]]].
-  unfold alive_P_ranges in wf_disjoint.
+  unfold alive_P_ranges in wf_disjoint0.
 
   destruct H1.
   { (* .. ++ (bid1 mb1) ++ l2 ++ (bid2, mb) ++ .. *)
-    rewrite H1 in wf_disjoint.
-    rewrite List.map_app in wf_disjoint.
-    simpl in wf_disjoint.
-    rewrite List.map_app in wf_disjoint.
-    simpl in wf_disjoint.
-    rewrite List.concat_app in wf_disjoint.
-    rewrite List.concat_cons in wf_disjoint.
-    rewrite List.concat_app in wf_disjoint.
-    rewrite List.concat_cons in wf_disjoint.
+    rewrite H1 in wf_disjoint0.
+    rewrite List.map_app in wf_disjoint0.
+    simpl in wf_disjoint0.
+    rewrite List.map_app in wf_disjoint0.
+    simpl in wf_disjoint0.
+    rewrite List.concat_app in wf_disjoint0.
+    rewrite List.concat_cons in wf_disjoint0.
+    rewrite List.concat_app in wf_disjoint0.
+    rewrite List.concat_cons in wf_disjoint0.
     assert (disjoint_ranges (MemBlock.P_ranges mb1 ++ MemBlock.P_ranges mb2)
            = true).
     { eapply disjoint_lsubseq_disjoint.
-      { eapply wf_disjoint. }
+      { eapply wf_disjoint0. }
       { rewrite List.app_assoc.
         eapply lsubseq_append with (l5 := MemBlock.P_ranges mb1)
                                    (l7 := MemBlock.P_ranges mb2).
@@ -1322,30 +1322,30 @@ Proof.
       { eapply H2. }
       { eapply lsubseq_append.
         { simpl. apply MemBlock.P_P0_range_lsubseq.
-          eapply wf_blocks. eassumption. }
+          eapply wf_blocks0. eassumption. }
         { simpl. apply MemBlock.P_P0_range_lsubseq.
-          eapply wf_blocks. eassumption. }
+          eapply wf_blocks0. eassumption. }
       }
     }
     intros HEQ. rewrite HEQ in H3.
     rewrite disjoint_ranges_app_false in H3. congruence.
     { congruence. }
-    { apply P0_range_no_empty_range. eapply wf_blocks. eassumption. }
+    { apply Ir.MemBlock.P0_range_no_empty_range. eapply wf_blocks0. eassumption. }
   }
   { (* .. ++ (bid2 mb2) ++ l2 ++ (bid1, m1) ++ .. *)
-    rewrite H1 in wf_disjoint.
-    rewrite List.map_app in wf_disjoint.
-    simpl in wf_disjoint.
-    rewrite List.map_app in wf_disjoint.
-    simpl in wf_disjoint.
-    rewrite List.concat_app in wf_disjoint.
-    rewrite List.concat_cons in wf_disjoint.
-    rewrite List.concat_app in wf_disjoint.
-    rewrite List.concat_cons in wf_disjoint.
+    rewrite H1 in wf_disjoint0.
+    rewrite List.map_app in wf_disjoint0.
+    simpl in wf_disjoint0.
+    rewrite List.map_app in wf_disjoint0.
+    simpl in wf_disjoint0.
+    rewrite List.concat_app in wf_disjoint0.
+    rewrite List.concat_cons in wf_disjoint0.
+    rewrite List.concat_app in wf_disjoint0.
+    rewrite List.concat_cons in wf_disjoint0.
     assert (disjoint_ranges (MemBlock.P_ranges mb2 ++ MemBlock.P_ranges mb1)
            = true).
     { eapply disjoint_lsubseq_disjoint.
-      { eapply wf_disjoint. }
+      { eapply wf_disjoint0. }
       { rewrite List.app_assoc.
         eapply lsubseq_append with (l5 := MemBlock.P_ranges mb2)
                                    (l7 := MemBlock.P_ranges mb1).
@@ -1361,15 +1361,15 @@ Proof.
       { eapply H2. }
       { eapply lsubseq_append.
         { simpl. apply MemBlock.P_P0_range_lsubseq.
-          eapply wf_blocks. eassumption. }
+          eapply wf_blocks0. eassumption. }
         { simpl. apply MemBlock.P_P0_range_lsubseq.
-          eapply wf_blocks. eassumption. }
+          eapply wf_blocks0. eassumption. }
       }
     }
     intros HEQ. rewrite HEQ in H3.
     rewrite disjoint_ranges_app_false in H3. congruence.
     { congruence. }
-    { apply P0_range_no_empty_range. eapply wf_blocks. eassumption. }
+    { apply Ir.MemBlock.P0_range_no_empty_range. eapply wf_blocks0. eassumption. }
   }
 Qed.  
 
@@ -1388,36 +1388,6 @@ Proof.
     split. eapply Ir.Memory.get_In.  eassumption.
     reflexivity. simpl. assumption. }
   eapply map_In. eassumption. reflexivity.
-Qed.
-
-Lemma disjoint_range_P0_range:
-  forall m bid1 bid2 mb1 mb2
-         (HWF:Ir.Memory.wf m)
-         (HGET1:Some mb1 = Ir.Memory.get m bid1)
-         (HALIVE1:Ir.MemBlock.alive mb1)
-         (HGET2:Some mb2 = Ir.Memory.get m bid2)
-         (HALIVE2:Ir.MemBlock.alive mb2)
-         (HDIFF:bid1 <> bid2),
-    disjoint_range (Ir.MemBlock.P0_range mb1)
-                   (Ir.MemBlock.P0_range mb2).
-Proof.
-  intros. dup HWF.
-  inv HWF.
-  assert (disjoint_ranges (Ir.Memory.alive_P0_ranges m) = true).
-  { eapply disjoint_lsubseq_disjoint.
-    eapply wf_disjoint.
-    eapply Ir.Memory.alive_P_P0_ranges_lsubseq.
-    assumption. }
-  assert (Ir.MemBlock.P0_range mb1 <> Ir.MemBlock.P0_range mb2).
-  { eapply get_P0_range_diff; try eassumption. }
-  assert (List.In (Ir.MemBlock.P0_range mb1) (Ir.Memory.alive_P0_ranges m)).
-  { eapply alive_P0_ranges_P0_range_In; try eassumption. }
-  assert (List.In (Ir.MemBlock.P0_range mb2) (Ir.Memory.alive_P0_ranges m)).
-  { eapply alive_P0_ranges_P0_range_In; try eassumption. }
-  eapply disjoint_ranges_In; try assumption.
-  eapply H.
-  assumption.
-  assumption.
 Qed.
 
 Lemma blocks_get:
@@ -1857,25 +1827,6 @@ Proof.
   apply lsubseq_filter.
 Qed.
 
-
-Lemma alive_blocks_In:
-  forall (m:t) bid blk blks
-    (HBLK:Some blk = get m bid)
-    (HALIVE:MemBlock.alive blk = true)
-    (HALIVES:blks = alive_blocks m),
-    List.In (bid, blk) blks.
-Proof.
-  intros.
-  unfold alive_blocks in HALIVES.
-  rewrite HALIVES.
-  rewrite filter_In.
-  split.
-  - apply get_In with (m := m).
-    assumption.
-    reflexivity.
-  - assumption.
-Qed.
-
 Lemma alive_P_P0_ranges_lsubseq:
   forall (m:t) (HWF:wf m),
     lsubseq (alive_P_ranges m) (alive_P0_ranges m).
@@ -1915,6 +1866,54 @@ Proof.
     + eapply IHblocks0.
       eapply wf_newblk_inv.
       apply HWF. reflexivity.
+Qed.
+
+Lemma disjoint_range_P0_range:
+  forall m bid1 bid2 mb1 mb2
+         (HWF:Ir.Memory.wf m)
+         (HGET1:Some mb1 = Ir.Memory.get m bid1)
+         (HALIVE1:Ir.MemBlock.alive mb1)
+         (HGET2:Some mb2 = Ir.Memory.get m bid2)
+         (HALIVE2:Ir.MemBlock.alive mb2)
+         (HDIFF:bid1 <> bid2),
+    disjoint_range (Ir.MemBlock.P0_range mb1)
+                   (Ir.MemBlock.P0_range mb2).
+Proof.
+  intros. dup HWF.
+  inv HWF.
+  assert (disjoint_ranges (Ir.Memory.alive_P0_ranges m) = true).
+  { eapply disjoint_lsubseq_disjoint.
+    eapply wf_disjoint0.
+    eapply Ir.Memory.alive_P_P0_ranges_lsubseq.
+    assumption. }
+  assert (Ir.MemBlock.P0_range mb1 <> Ir.MemBlock.P0_range mb2).
+  { eapply get_P0_range_diff; try eassumption. }
+  assert (List.In (Ir.MemBlock.P0_range mb1) (Ir.Memory.alive_P0_ranges m)).
+  { eapply alive_P0_ranges_P0_range_In; try eassumption. }
+  assert (List.In (Ir.MemBlock.P0_range mb2) (Ir.Memory.alive_P0_ranges m)).
+  { eapply alive_P0_ranges_P0_range_In; try eassumption. }
+  eapply disjoint_ranges_In; try assumption.
+  eapply H.
+  assumption.
+  assumption.
+Qed.
+
+Lemma alive_blocks_In:
+  forall (m:t) bid blk blks
+    (HBLK:Some blk = get m bid)
+    (HALIVE:MemBlock.alive blk = true)
+    (HALIVES:blks = alive_blocks m),
+    List.In (bid, blk) blks.
+Proof.
+  intros.
+  unfold alive_blocks in HALIVES.
+  rewrite HALIVES.
+  rewrite filter_In.
+  split.
+  - apply get_In with (m := m).
+    assumption.
+    reflexivity.
+  - assumption.
 Qed.
 
 

@@ -2697,7 +2697,7 @@ Proof.
                 subst b.
                 assert (Heqoi2 := Heqoi1).
                 rewrite twin_state_cur_inst_eq with (st2 := st1) (blkid := blkid)
-                  in Heqoi2 by (apply twin_state_sym in HTWIN; assumption).
+                  in Heqoi2; try (apply twin_state_sym in HTWIN; assumption).
                 assert (observes_block md st1 blkid).
                 { eapply ob_by_psub_l.
                   { rewrite Heqoi2. reflexivity. }
@@ -4327,9 +4327,9 @@ Proof.
     { inv HWF1.
       clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_no_bogus_ptr_mem.
       clear wf_no_bogus_ptr.
-      rewrite P_ranges_hd_P0_range.
-      rewrite P_ranges_hd_P0_range.
-      eapply disjoint_range_P0_range with (m := Ir.Config.m st1); try eassumption.
+      rewrite Ir.MemBlock.P_ranges_hd_P0_range.
+      rewrite Ir.MemBlock.P_ranges_hd_P0_range.
+      eapply Ir.Memory.disjoint_range_P0_range with (m := Ir.Config.m st1); try eassumption.
       { rewrite PeanoNat.Nat.eqb_neq in HEQ. congruence. }
       { inv wf_m. eapply wf_blocks. eapply Ir.Memory.get_In in H. eassumption.
         reflexivity. }
@@ -4488,7 +4488,7 @@ Proof.
       { eassumption. }
       { eassumption. }
       { eassumption. }
-      { apply get_deref_phy_singleton in HDEREF0.
+      { apply Ir.get_deref_phy_singleton in HDEREF0.
         destruct HDEREF0.
         { destruct H5. destruct H5. inv H5. simpl in H6.
           destruct H6. rewrite PeanoNat.Nat.add_comm with (m := n) in H5.
@@ -4583,17 +4583,113 @@ Proof.
       { eapply ty_bytesz_pos. }
     }
     { (* store is not terminator *)
-      unfold Ir.SmallStep.t_step in HTSTEP. 
-        destruct x. destruct p. simpl in H1. subst b. simpl in H0.
-        dup Heq4.
-        apply Ir.get_deref_inv in Heq4.
-        (* now, deal with deref st2. *)
-        unfold Ir.deref in Heq2.
-        (* 
-        subst blkid
-          
-        
-        rewrite 
-      
+      apply Ir.Config.cur_inst_not_cur_terminator in HINST.
+      unfold Ir.SmallStep.t_step in HTSTEP.
+      rewrite <- HINST in HTSTEP. congruence.
+    }
+  }
+  { (* load. *)
+    inv HSTEP1.
+    { (* it was inst_step *)
+      inv HISTEP; try congruence.
+      rewrite <- HINST in HDEREF.
+      dup HINST.
+      unfold Ir.SmallStep.inst_det_step in HNEXT.
+      rewrite <- HINST in HNEXT.
+      apply Ir.SmallStep.ss_inst.
+      apply Ir.SmallStep.s_det.
+      rewrite twin_state_cur_inst_eq with (st2 := st2) (blkid := blkid) in HINST;
+        try assumption.
+      des_ifs; try (inv HTYCHECK; congruence).
+      unfold Ir.SmallStep.inst_det_step.
+      rewrite <- HINST.
+      rewrite twin_state_get_val_eq with (st2 := st2) (blkid := blkid) in Heq;
+        try assumption.
+      rewrite Heq.
+      inv HGUESSED.
+      inv HPHY. (* look at HDEREF: get_deref with phy suceeded. *)
+      unfold Ir.deref in Heq0.
+      (* now, high-level proof :deref from st2 should fail. *)
+      des_ifs.
+      dup Heq2. (* Let's make get_Deref st1 singleton. *)
+      apply Ir.get_deref_phy_singleton in Heq2.
+      { destruct Heq2; try congruence.
+        destruct H. destruct H. inv H. destruct H0.
+        destruct x. destruct p. simpl in H.  simpl in H0.
+        (* Okay, now Heq3 says that deref succeeds. *)
+        inv HDEREF. rewrite orb_false_r in H2. rewrite PeanoNat.Nat.eqb_eq in H2.
+        subst b. (* and the deref in st1 is blkid. *)
+
+        (* Now show that deref in st2 fails. *)
+        apply twin_state_get_deref with (md := md) (st2 := st2) in Heq3;
+          try eassumption; try congruence.
+        unfold Ir.deref in Heq1. rewrite Heq3 in Heq1.
+        (* false = true! *)
+        congruence.
+        eapply ty_bytesz_pos.
+      }
+      { inv HWF1. assumption. }
+      { eapply ty_bytesz_pos. }
+    }
+    { (* load is not terminator *)
+      apply Ir.Config.cur_inst_not_cur_terminator in HINST.
+      unfold Ir.SmallStep.t_step in HTSTEP.
+      rewrite <- HINST in HTSTEP. congruence.
+    }
+  }
+  { (* free. *)
+    inv HSTEP1.
+    { (* it was inst_step *)
+      inv HISTEP; try congruence.
+      rewrite <- HINST in HDEREF.
+      dup HINST.
+      unfold Ir.SmallStep.inst_det_step in HNEXT.
+      rewrite <- HINST in HNEXT.
+      apply Ir.SmallStep.ss_inst.
+      apply Ir.SmallStep.s_det.
+      rewrite twin_state_cur_inst_eq with (st2 := st2) (blkid := blkid) in HINST;
+        try assumption.
+      des_ifs; try (inv HTYCHECK; congruence).
+      unfold Ir.SmallStep.inst_det_step.
+      rewrite <- HINST.
+      rewrite twin_state_get_val_eq with (st2 := st2) (blkid := blkid) in Heq;
+        try assumption.
+      rewrite Heq.
+      inv HGUESSED.
+      inv HPHY. (* look at HDEREF: get_deref with phy suceeded. *)
+      des_ifs.
+      unfold Ir.SmallStep.free in Heq0.
+      unfold Ir.SmallStep.free in Heq1.
+      des_ifs.
+      unfold Ir.deref in Heq5.
+      (* now, high-level proof :deref from st2 should fail. *)
+      des_ifs.
+      dup Heq6. (* Let's make get_Deref st1 singleton. *)
+      apply Ir.get_deref_phy_singleton in Heq6.
+      { destruct Heq6; try congruence.
+        destruct H. destruct H. inv H. destruct H0.
+        destruct x. destruct p. simpl in H.  simpl in H0.
+        (* Okay, now Heq7 says that deref succeeds. *)
+        inv HDEREF. rewrite orb_false_r in H2. rewrite PeanoNat.Nat.eqb_eq in H2.
+        subst b1. (* and the deref in st1 is blkid. *)
+
+        (* Now show that deref in st2 fails. *)
+        apply twin_state_get_deref with (md := md) (st2 := st2) in Heq7;
+          try eassumption; try congruence.
+        unfold Ir.deref in Heq3. rewrite Heq7 in Heq3.
+        (* false = true! *)
+        congruence.
+        omega.
+      }
+      { inv HWF1. assumption. }
+      { omega. }
+    }
+    { (* free is not terminator *)
+      apply Ir.Config.cur_inst_not_cur_terminator in HINST.
+      unfold Ir.SmallStep.t_step in HTSTEP.
+      rewrite <- HINST in HTSTEP. congruence.
+    }
+  }
+Qed.      
 
 End Ir.

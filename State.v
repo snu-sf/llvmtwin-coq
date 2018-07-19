@@ -2,6 +2,7 @@ Require Import BinPos.
 Require Import List.
 Require Import Omega.
 Require Import sflib.
+Require Import Bool.
 
 Require Import Common.
 Require Import Lang.
@@ -720,6 +721,47 @@ Lemma m_update_pc:
 Proof.
   unfold update_pc. intros.
   des_ifs.
+Qed.
+
+Theorem cur_inst_not_cur_terminator:
+  forall i st
+         (HCUR:Some i = cur_inst st),
+    None = cur_terminator st.
+Proof.
+  intros.
+  unfold cur_inst in HCUR.
+  unfold cur_terminator.
+  des_ifs.
+  unfold Ir.IRFunction.get_inst in HCUR.
+  unfold Ir.IRFunction.get_terminator.
+  des_ifs.
+  rewrite andb_true_iff in Heq2.
+  destruct Heq2.
+  rewrite PeanoNat.Nat.leb_le in H.
+  rewrite PeanoNat.Nat.ltb_lt in H0.
+  rewrite PeanoNat.Nat.eqb_eq in Heq1.
+  rewrite Heq1 in H0.
+  omega.
+Qed.
+
+Theorem cur_inst_not_cur_phi:
+  forall i st
+         (HCUR:Some i = cur_inst st),
+    None = cur_phi st.
+Proof.
+  intros.
+  unfold cur_inst in HCUR.
+  unfold cur_phi.
+  des_ifs.
+  unfold Ir.IRFunction.get_inst in HCUR.
+  unfold Ir.IRFunction.get_phi.
+  des_ifs.
+  rewrite andb_true_iff in Heq2.
+  destruct Heq2.
+  rewrite PeanoNat.Nat.ltb_lt in H0.
+  rewrite PeanoNat.Nat.ltb_lt in Heq1.
+  rewrite PeanoNat.Nat.leb_le in H.
+  omega.
 Qed.
 
 

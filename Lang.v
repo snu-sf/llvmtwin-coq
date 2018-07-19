@@ -1,6 +1,7 @@
 Require Import List.
 Require Import BinPos.
 Require Import sflib.
+Require Import Bool.
 
 Require Import Common.
 Require Import Memory.
@@ -362,7 +363,7 @@ Definition get_inst (p:pc) (f:t): option Inst.t :=
     match (getbb bbid f) with
     | None => None
     | Some bb =>
-      if Nat.leb (List.length bb.(BasicBlock.phis) iidx) &&
+      if Nat.leb (List.length bb.(BasicBlock.phis)) iidx &&
                  Nat.ltb iidx (List.length bb.(BasicBlock.phis) +
                                List.length bb.(BasicBlock.insts)) then
         Some (List.nth iidx bb.(BasicBlock.insts) (Ir.Inst.ievent (Ir.opreg 0)))
@@ -380,7 +381,8 @@ Definition get_terminator (p:pc) (f:t): option Terminator.t :=
     match (getbb bbid f) with
     | None => None
     | Some bb =>
-      if Nat.eqb iidx (List.length bb.(BasicBlock.insts)) then
+      if Nat.eqb iidx (List.length bb.(BasicBlock.insts) +
+                       List.length bb.(BasicBlock.phis)) then
         Some (BasicBlock.term bb)
       else (* unreachable *)
         None
@@ -487,40 +489,6 @@ Proof.
   unfold Ir.IRFunction.valid_pc.
   des_ifs.
   rewrite Heq1. simpl. reflexivity.
-Qed.
-
-Theorem cur_inst_not_cur_terminator:
-  forall i md st
-         (HCUR:Some i = Ir.Config.cur_inst md st),
-    None = Ir.Config.cur_terminator md st.
-Proof.
-  intros.
-  unfold Ir.Config.cur_inst in HCUR.
-  unfold Ir.Config.cur_terminator.
-  des_ifs.
-  unfold Ir.IRFunction.get_inst in HCUR.
-  unfold Ir.IRFunction.get_terminator.
-  des_ifs.
-  rewrite PeanoNat.Nat.ltb_lt in Heq2.
-  rewrite PeanoNat.Nat.eqb_eq in Heq1.
-  omega.
-Qed.
-
-Theorem cur_inst_not_cur_phi:
-  forall i md st
-         (HCUR:Some i = Ir.Config.cur_inst md st),
-    None = Ir.Config.cur_phi md st.
-Proof.
-  intros.
-  unfold Ir.Config.cur_inst in HCUR.
-  unfold Ir.Config.cur_phi.
-  des_ifs.
-  unfold Ir.IRFunction.get_inst in HCUR.
-  unfold Ir.IRFunction.get_phi.
-  des_ifs.
-  rewrite PeanoNat.Nat.ltb_lt in Heq2.
-  rewrite PeanoNat.Nat.eqb_eq in Heq1.
-  omega.
 Qed.
 
 

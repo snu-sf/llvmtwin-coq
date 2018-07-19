@@ -3,6 +3,7 @@ Require Import List.
 Require Import Omega.
 Require Import BinNatDef.
 Require Import sflib.
+Require Import Sorting.Permutation.
 
 Require Import Common.
 Require Import Lang.
@@ -511,55 +512,6 @@ Proof.
   }
 Qed.
   
-Lemma get_deref_phy_same:
-  forall m1 m2 bid mb bwid o cid ofs I
-         (HGET:Some mb = Ir.Memory.get m1 bid)
-         (HWF1:Ir.Memory.wf m1)
-         (HWF2:Ir.Memory.wf m2)
-         (HSAME:Ir.Memory.get m1 bid = Ir.Memory.get m2 bid)
-         (HSZ:bwid > 0)
-         (HDEREF:Ir.get_deref m1 (Ir.pphy o I cid) bwid = (bid, mb, ofs)::nil)
-         (HCALLTIME:Ir.Memory.calltimes m1 = Ir.Memory.calltimes m2),
-    Ir.get_deref m1 (Ir.pphy o I cid) bwid =
-    Ir.get_deref m2 (Ir.pphy o I cid) bwid.
-Proof.
-  intros.
-  induction I.
-  { eapply get_deref_phy_nil_same; try eassumption. }
-  { remember (Ir.get_deref m1 (Ir.pphy o I cid) bwid) as bb.
-    symmetry in Heqbb.
-    dup Heqbb.
-    apply Ir.get_deref_singleton in Heqbb.
-    destruct Heqbb.
-    { (* get m1 (fst (fst bo)) is [x]. *)
-      destruct H. destruct H.
-      destruct bb. inv H.
-      destruct bb.
-      { inv H.
-        destruct x. destruct p. simpl in H0.
-        apply get_deref_phy_I_cons with (i := a) in Heqbb0; try congruence.
-        destruct Heqbb0.
-        destruct (in_range a (Ir.MemBlock.P0_range t)) eqn:HINR.
-        { exploit H. reflexivity. intros HH.
-          dup HDEREF. rewrite HH in HDEREF0. inv HDEREF0.
-          rewrite HDEREF.
-          exploit IHI. reflexivity. intros HH'. symmetry in HH'.
-          apply get_deref_phy_I_cons with (i := a) in HH'; try congruence.
-          destruct HH'. rewrite H2. reflexivity. congruence.
-        }
-        { exploit H1. reflexivity. intros HH.
-          dup HDEREF. rewrite HH in HDEREF0. inv HDEREF0. }
-      }
-      { inv H. }
-    }
-    { rewrite H in Heqbb0.
-      eapply get_deref_phy_I_cons2 with (i := a) in Heqbb0; try eassumption.
-      congruence.
-    }
-    { eassumption. }
-    { omega. }
-  }
-Qed.
 
 Lemma get_deref_blks_phyptr_inbounds_blocks2:
   forall b t m o Is cid sz
@@ -659,6 +611,55 @@ Proof.
     right. rewrite H in HDEREF. simpl in HDEREF. congruence.
 Qed.
 
+Lemma get_deref_phy_same:
+  forall m1 m2 bid mb bwid o cid ofs I
+         (HGET:Some mb = Ir.Memory.get m1 bid)
+         (HWF1:Ir.Memory.wf m1)
+         (HWF2:Ir.Memory.wf m2)
+         (HSAME:Ir.Memory.get m1 bid = Ir.Memory.get m2 bid)
+         (HSZ:bwid > 0)
+         (HDEREF:Ir.get_deref m1 (Ir.pphy o I cid) bwid = (bid, mb, ofs)::nil)
+         (HCALLTIME:Ir.Memory.calltimes m1 = Ir.Memory.calltimes m2),
+    Ir.get_deref m1 (Ir.pphy o I cid) bwid =
+    Ir.get_deref m2 (Ir.pphy o I cid) bwid.
+Proof.
+  intros.
+  induction I.
+  { eapply get_deref_phy_nil_same; try eassumption. }
+  { remember (Ir.get_deref m1 (Ir.pphy o I cid) bwid) as bb.
+    symmetry in Heqbb.
+    dup Heqbb.
+    apply get_deref_singleton in Heqbb.
+    destruct Heqbb.
+    { (* get m1 (fst (fst bo)) is [x]. *)
+      destruct H. destruct H.
+      destruct bb. inv H.
+      destruct bb.
+      { inv H.
+        destruct x. destruct p. simpl in H0.
+        apply get_deref_phy_I_cons with (i := a) in Heqbb0; try congruence.
+        destruct Heqbb0.
+        destruct (in_range a (Ir.MemBlock.P0_range t)) eqn:HINR.
+        { exploit H. reflexivity. intros HH.
+          dup HDEREF. rewrite HH in HDEREF0. inv HDEREF0.
+          rewrite HDEREF.
+          exploit IHI. reflexivity. intros HH'. symmetry in HH'.
+          apply get_deref_phy_I_cons with (i := a) in HH'; try congruence.
+          destruct HH'. rewrite H2. reflexivity. congruence.
+        }
+        { exploit H1. reflexivity. intros HH.
+          dup HDEREF. rewrite HH in HDEREF0. inv HDEREF0. }
+      }
+      { inv H. }
+    }
+    { rewrite H in Heqbb0.
+      eapply get_deref_phy_I_cons2 with (i := a) in Heqbb0; try eassumption.
+      congruence.
+    }
+    { eassumption. }
+    { omega. }
+  }
+Qed.
 
 Theorem get_deref_ofs_lt_MEMSZ:
   forall (m:Ir.Memory.t) (m_wf:Ir.Memory.wf m) p sz bid mb ofs
