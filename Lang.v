@@ -362,7 +362,9 @@ Definition get_inst (p:pc) (f:t): option Inst.t :=
     match (getbb bbid f) with
     | None => None
     | Some bb =>
-      if Nat.ltb iidx (List.length bb.(BasicBlock.insts)) then
+      if Nat.leb (List.length bb.(BasicBlock.phis) iidx) &&
+                 Nat.ltb iidx (List.length bb.(BasicBlock.phis) +
+                               List.length bb.(BasicBlock.insts)) then
         Some (List.nth iidx bb.(BasicBlock.insts) (Ir.Inst.ievent (Ir.opreg 0)))
       else (* unreachable *)
         None
@@ -487,6 +489,39 @@ Proof.
   rewrite Heq1. simpl. reflexivity.
 Qed.
 
+Theorem cur_inst_not_cur_terminator:
+  forall i md st
+         (HCUR:Some i = Ir.Config.cur_inst md st),
+    None = Ir.Config.cur_terminator md st.
+Proof.
+  intros.
+  unfold Ir.Config.cur_inst in HCUR.
+  unfold Ir.Config.cur_terminator.
+  des_ifs.
+  unfold Ir.IRFunction.get_inst in HCUR.
+  unfold Ir.IRFunction.get_terminator.
+  des_ifs.
+  rewrite PeanoNat.Nat.ltb_lt in Heq2.
+  rewrite PeanoNat.Nat.eqb_eq in Heq1.
+  omega.
+Qed.
+
+Theorem cur_inst_not_cur_phi:
+  forall i md st
+         (HCUR:Some i = Ir.Config.cur_inst md st),
+    None = Ir.Config.cur_phi md st.
+Proof.
+  intros.
+  unfold Ir.Config.cur_inst in HCUR.
+  unfold Ir.Config.cur_phi.
+  des_ifs.
+  unfold Ir.IRFunction.get_inst in HCUR.
+  unfold Ir.IRFunction.get_phi.
+  des_ifs.
+  rewrite PeanoNat.Nat.ltb_lt in Heq2.
+  rewrite PeanoNat.Nat.eqb_eq in Heq1.
+  omega.
+Qed.
 
 
 End IRFunction.

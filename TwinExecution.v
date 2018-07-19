@@ -2225,6 +2225,89 @@ Proof.
 Qed.
 
 
+Lemma twin_state_cur_terminator_eq:
+  forall (md:Ir.IRModule.t) (st1 st2:Ir.Config.t) blkid
+         (HTWIN:twin_state st1 st2 blkid),
+    Ir.Config.cur_terminator md st1 = Ir.Config.cur_terminator md st2.
+Proof.
+  intros.
+  inv HTWIN.
+  unfold Ir.Config.cur_terminator.
+  inv H.
+  unfold Ir.Config.cur_fdef_pc.
+  unfold Ir.Stack.eq in H1.
+  destruct (Ir.Config.s st1);
+    destruct (Ir.Config.s st2).
+  { reflexivity. }
+  { inv H1. }
+  { inv H1. }
+  { inv H1. inv H5. inv H1.
+    destruct p. destruct p0. simpl in H. subst c.
+    simpl in H3.
+    destruct p. destruct p0.
+    simpl in H3. subst p.
+    simpl in H4.
+    unfold Ir.Config.get_funid.
+    inv H2.
+    rewrite H.
+    des_ifs.
+  }
+Qed.
+
+Lemma twin_state_br_eq:
+  forall md st1 st2 blkid n
+         (HTWIN:twin_state st1 st2 blkid),
+    twin_sresult (Ir.SmallStep.br md st1 n) (Ir.SmallStep.br md st2 n) blkid.
+Proof.
+  intros.
+  unfold Ir.SmallStep.br.
+  des_ifs; try
+    ( eapply ts_goes_wrong; reflexivity).
+  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
+      try assumption.
+    rewrite Heq in Heq1. inv Heq1.
+    rewrite Heq0 in Heq2. inv Heq2.
+    eapply ts_success; try reflexivity.
+    eapply twin_state_update_pc. assumption.
+  }
+  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
+      try assumption.
+    rewrite Heq in Heq1. inv Heq1.
+    rewrite Heq0 in Heq2. inv Heq2.
+  }
+  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
+      try assumption.
+    rewrite Heq in Heq1. inv Heq1.
+  }
+  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
+      try assumption.
+    rewrite Heq in Heq1. inv Heq1.
+    rewrite Heq0 in Heq2. inv Heq2.
+  }
+  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
+      try assumption.
+    rewrite Heq in Heq0. inv Heq0.
+  }
+Qed.
+
+
+Lemma twin_state_has_nestedcall_eq:
+  forall st1 st2 blkid (HTWIN:twin_state st1 st2 blkid),
+    Ir.Config.has_nestedcall st1 = Ir.Config.has_nestedcall st2.
+Proof.
+  intros.
+  unfold Ir.Config.has_nestedcall.
+  destruct st1. destruct st2.
+  simpl in *.
+  inv HTWIN.
+  inv H.
+  simpl in *.
+  unfold Ir.Stack.eq in H1.
+  destruct s; destruct s0; simpl; try (inv H1; fail); try reflexivity.
+  inv H1.
+  destruct s0; destruct s; simpl; try (inv H7; fail); try reflexivity.
+Qed.
+
 (*******************************************************
                  Main Theorems 
  *******************************************************)
@@ -2268,14 +2351,6 @@ Proof.
     - simpl in Heq. inv Heq. apply regfile_get_update.
   }
 Qed.  
-
-Lemma disjoint_range_sym:
-  forall r1 r2, disjoint_range r1 r2 = disjoint_range r2 r1.
-Proof.
-  intros. unfold disjoint_range.
-  destruct r1. destruct r2.
-  intuition.
-Qed.
 
 (* If malloc succeeds, it always creates twin-state. *)
 Theorem malloc_creates_twin_state:
@@ -3667,89 +3742,6 @@ Proof.
 Qed.
 
 
-Lemma twin_state_cur_terminator_eq:
-  forall (md:Ir.IRModule.t) (st1 st2:Ir.Config.t) blkid
-         (HTWIN:twin_state st1 st2 blkid),
-    Ir.Config.cur_terminator md st1 = Ir.Config.cur_terminator md st2.
-Proof.
-  intros.
-  inv HTWIN.
-  unfold Ir.Config.cur_terminator.
-  inv H.
-  unfold Ir.Config.cur_fdef_pc.
-  unfold Ir.Stack.eq in H1.
-  destruct (Ir.Config.s st1);
-    destruct (Ir.Config.s st2).
-  { reflexivity. }
-  { inv H1. }
-  { inv H1. }
-  { inv H1. inv H5. inv H1.
-    destruct p. destruct p0. simpl in H. subst c.
-    simpl in H3.
-    destruct p. destruct p0.
-    simpl in H3. subst p.
-    simpl in H4.
-    unfold Ir.Config.get_funid.
-    inv H2.
-    rewrite H.
-    des_ifs.
-  }
-Qed.
-
-Lemma twin_state_br_eq:
-  forall md st1 st2 blkid n
-         (HTWIN:twin_state st1 st2 blkid),
-    twin_sresult (Ir.SmallStep.br md st1 n) (Ir.SmallStep.br md st2 n) blkid.
-Proof.
-  intros.
-  unfold Ir.SmallStep.br.
-  des_ifs; try
-    ( eapply ts_goes_wrong; reflexivity).
-  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
-      try assumption.
-    rewrite Heq in Heq1. inv Heq1.
-    rewrite Heq0 in Heq2. inv Heq2.
-    eapply ts_success; try reflexivity.
-    eapply twin_state_update_pc. assumption.
-  }
-  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
-      try assumption.
-    rewrite Heq in Heq1. inv Heq1.
-    rewrite Heq0 in Heq2. inv Heq2.
-  }
-  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
-      try assumption.
-    rewrite Heq in Heq1. inv Heq1.
-  }
-  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
-      try assumption.
-    rewrite Heq in Heq1. inv Heq1.
-    rewrite Heq0 in Heq2. inv Heq2.
-  }
-  { rewrite twin_state_cur_fdef_pc_eq with (st2:= st2) (blkid := blkid) in Heq;
-      try assumption.
-    rewrite Heq in Heq0. inv Heq0.
-  }
-Qed.
-
-
-Lemma twin_state_has_nestedcall_eq:
-  forall st1 st2 blkid (HTWIN:twin_state st1 st2 blkid),
-    Ir.Config.has_nestedcall st1 = Ir.Config.has_nestedcall st2.
-Proof.
-  intros.
-  unfold Ir.Config.has_nestedcall.
-  destruct st1. destruct st2.
-  simpl in *.
-  inv HTWIN.
-  inv H.
-  simpl in *.
-  unfold Ir.Stack.eq in H1.
-  destruct s; destruct s0; simpl; try (inv H1; fail); try reflexivity.
-  inv H1.
-  destruct s0; destruct s; simpl; try (inv H7; fail); try reflexivity.
-Qed.
-
 (* Lemma same as twin_execution_inst_unidir, but
    with terminators this time .*)
 Lemma twin_execution_terminator_unidir:
@@ -3887,6 +3879,9 @@ Proof.
 Qed.
 
 
+(* twin_execution_inst_unidir +
+   twin_execution_phi_unidir +
+   twin_execution_terminator_unidir *)
 Lemma twin_execution_unidir:
   forall (md:Ir.IRModule.t) (blkid:Ir.blockid)
          (st1 st2:Ir.Config.t) (sr1 sr2:Ir.SmallStep.step_res)
@@ -3967,7 +3962,7 @@ Proof.
 Qed.
 
 
-(* General version. *)
+(* The main theorem *)
 Theorem twin_execution:
   forall (md:Ir.IRModule.t) (blkid:Ir.blockid)
          (st1 st2:Ir.Config.t) (sr1 sr2:Ir.SmallStep.step_res)
@@ -4083,8 +4078,6 @@ Qed.
 
 
 
-
-
 Definition inst_derefs md (st:Ir.Config.t) (blkid:Ir.blockid): bool :=
   match (Ir.Config.cur_inst md st) with
   | Some i =>
@@ -4130,8 +4123,8 @@ Lemma twin_state_inrange_false:
          (HINRANGE:in_range (i+sz)
                             (List.hd (0, 0) (Ir.MemBlock.P_ranges mb1)) = true /\
                    in_range i (List.hd (0, 0) (Ir.MemBlock.P_ranges mb1)) = true),
-  ~ (in_range i (List.hd (0, 0) (Ir.MemBlock.P_ranges mb2)) = true /\
-     in_range (i+sz) (List.hd (0, 0) (Ir.MemBlock.P_ranges mb2)) = true).
+  ~ (in_range (i+sz) (List.hd (0, 0) (Ir.MemBlock.P_ranges mb2)) = true /\
+     in_range i (List.hd (0, 0) (Ir.MemBlock.P_ranges mb2)) = true).
 Proof.
   intros.
   inv HTWIN.
@@ -4234,6 +4227,127 @@ Proof.
   }
 Qed.
 
+
+Lemma inbounds_abs_canonicalize:
+  forall m mb1 bid o sz
+         (HGET:Some mb1 = Ir.Memory.get m bid)
+         (HWF:Ir.Memory.wf m),
+    (Ir.MemBlock.inbounds_abs o mb1 &&
+     Ir.MemBlock.inbounds_abs (o + sz) mb1 = true)
+    <->
+    ((in_range (o+sz) (List.hd (0, 0) (Ir.MemBlock.P_ranges mb1)) = true /\
+      in_range o (List.hd (0, 0) (Ir.MemBlock.P_ranges mb1)) = true)).
+Proof.
+  intros.
+  split.
+  { intros HINB.
+    unfold Ir.MemBlock.inbounds_abs in HINB.
+    unfold Ir.MemBlock.P0_range in HINB.
+    unfold Ir.MemBlock.addr in HINB.
+    unfold Ir.MemBlock.P_ranges.
+    inv HWF.
+    apply Ir.Memory.get_In with (blks := Ir.Memory.blocks m)
+      in HGET.
+    apply wf_blocks in HGET.
+    inv HGET. unfold Ir.TWINCNT in wf_twin.
+    destruct (Ir.MemBlock.P mb1).
+    simpl in wf_twin. inv wf_twin.
+    simpl in HINB. simpl.
+    rewrite andb_true_iff in HINB.
+    intuition.
+    reflexivity.
+  }
+  { intros.
+    unfold Ir.MemBlock.inbounds_abs.
+    unfold Ir.MemBlock.P0_range.
+    unfold Ir.MemBlock.addr.
+    unfold Ir.MemBlock.P_ranges in H.
+    inv HWF.
+    apply Ir.Memory.get_In with (blks := Ir.Memory.blocks m)
+        in HGET.
+    apply wf_blocks in HGET.
+    inv HGET. unfold Ir.TWINCNT in wf_twin.
+    destruct (Ir.MemBlock.P mb1).
+    simpl in wf_twin. inv wf_twin.
+    simpl in H. simpl.
+    rewrite andb_true_iff.
+    intuition.
+    reflexivity.
+  }
+Qed.
+
+Lemma twin_state_inbounds_abs_reserved:
+  forall st1 st2 blkid mb1 o sz md
+         (HTWIN:twin_state st1 st2 blkid)
+         (HWF1:Ir.Config.wf md st1)
+         (HWF2:Ir.Config.wf md st2)
+         (HSZ:sz > 0)
+         (HALIVE:Ir.MemBlock.alive mb1 = true)
+         (HGET1:Some mb1 = Ir.Memory.get (Ir.Config.m st1) blkid)
+         (HINB:Ir.MemBlock.inbounds_abs o mb1 &&
+               Ir.MemBlock.inbounds_abs (o + sz) mb1 = true),
+    ~ exists bid2 mb2,
+        (Ir.Memory.get (Ir.Config.m st2) bid2 = Some mb2 /\
+         Ir.MemBlock.alive mb2 = true /\
+         Ir.MemBlock.inbounds_abs o mb2 &&
+         Ir.MemBlock.inbounds_abs (o + sz) mb2 = true).
+Proof.
+  intros.
+  intros HCONTRA.
+  destruct HCONTRA as [bid2 [mb2 [HGET2 [HALIVE2 HINB2]]]].
+  destruct (blkid =? bid2) eqn:HEQ.
+  { rewrite PeanoNat.Nat.eqb_eq in HEQ.
+
+    dup HWF1. dup HWF2.
+    inv HWF1. inv HWF2.
+    symmetry in HGET2.
+    rewrite inbounds_abs_canonicalize in HINB; try eassumption.
+    eapply twin_state_inrange_false with (md := md) (st1 := st1) (st2 := st2)
+      (mb2 := mb2) in HINB;
+      try assumption.
+    rewrite inbounds_abs_canonicalize in HINB2; try eassumption.
+    congruence.
+    { eassumption. }
+    { eassumption. }
+    { eassumption. }
+  }
+  { symmetry in HGET2.
+    assert (Some mb2 = Ir.Memory.get (Ir.Config.m st1) bid2).
+    { decompose_HTWIN HTWIN bid2.
+      destruct HTWIN5'. exploit H0. rewrite PeanoNat.Nat.eqb_neq in HEQ.
+      congruence. intros HH. clear H H0.
+      congruence. }
+    rewrite inbounds_abs_canonicalize in HINB; try eassumption.
+    rewrite inbounds_abs_canonicalize in HINB2; try eassumption.
+    remember ((List.hd (0, 0) (Ir.MemBlock.P_ranges mb1))) as P1.
+    remember ((List.hd (0, 0) (Ir.MemBlock.P_ranges mb2))) as P2.
+    destruct HINB.
+    destruct HINB2.
+    assert (disjoint_range P1 P2 = true).
+    { inv HWF1.
+      clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_no_bogus_ptr_mem.
+      clear wf_no_bogus_ptr.
+      rewrite P_ranges_hd_P0_range.
+      rewrite P_ranges_hd_P0_range.
+      eapply disjoint_range_P0_range with (m := Ir.Config.m st1); try eassumption.
+      { rewrite PeanoNat.Nat.eqb_neq in HEQ. congruence. }
+      { inv wf_m. eapply wf_blocks. eapply Ir.Memory.get_In in H. eassumption.
+        reflexivity. }
+      { inv wf_m. eapply wf_blocks. eapply Ir.Memory.get_In in HGET1. eassumption.
+        reflexivity. }
+    }
+    unfold disjoint_range in H4.
+    destruct P1. destruct P2.
+    unfold in_range in *.
+    simpl in *.
+    rewrite andb_true_iff in *.
+    rewrite orb_true_iff in H4.
+    repeat (rewrite PeanoNat.Nat.leb_le in *).
+    destruct H4. omega. omega.
+    inv HWF1. assumption. inv HWF1. assumption.
+  }
+Qed.
+
 (* This lemma states that if (i, i+sz) is in mb1.P0 in state 1,
    (i, i+sz) is in P' s.t. P' \in mb1.P /\ P' != mb1.P0, in state 2. *)
 Lemma twin_state_inrange_nonP0:
@@ -4320,214 +4434,6 @@ Proof.
   assumption.
 Qed.
 
-
-Lemma get_deref_phy_nil_same:
-  forall m1 m2 bid mb bwid o cid ofs
-         (HGET:Some mb = Ir.Memory.get m1 bid)
-         (HWF1:Ir.Memory.wf m1)
-         (HWF2:Ir.Memory.wf m2)
-         (HSAME:Ir.Memory.get m1 bid = Ir.Memory.get m2 bid)
-         (HSZ:bwid > 0)
-         (HDEREF:Ir.get_deref m1 (Ir.pphy o nil cid) bwid = (bid, mb, ofs)::nil)
-         (HCALLTIME:Ir.Memory.calltimes m1 = Ir.Memory.calltimes m2),
-    Ir.get_deref m1 (Ir.pphy o nil cid) bwid =
-    Ir.get_deref m2 (Ir.pphy o nil cid) bwid.
-Proof.
-  intros.
-  unfold Ir.get_deref.
-  unfold Ir.get_deref_blks_phyptr.
-  assert (Ir.Memory.inbounds_blocks2 m1 [o; o + bwid] =
-            Ir.Memory.inbounds_blocks2 m2 [o; o + bwid]).
-  { eapply inbounds_blocks2_same; try eassumption.
-    remember (Ir.Memory.inbounds_blocks2 m1 [o; o + bwid]) as l.
-    symmetry in Heql.
-    dup Heql.
-    apply Ir.Memory.inbounds_blocks2_singleton in Heql0.
-    unfold Ir.get_deref in HDEREF.
-    unfold Ir.get_deref_blks_phyptr in HDEREF.
-    rewrite Heql in HDEREF.
-    destruct l.
-    { inv HDEREF. }
-    { destruct l.
-      { des_ifs. simpl in HDEREF. des_ifs. simpl in HDEREF. inv HDEREF.
-        destruct p. reflexivity.
-        simpl in HDEREF. inv HDEREF. destruct p. reflexivity.
-        simpl in HDEREF. inv HDEREF. destruct p. reflexivity.
-      }
-      { simpl in Heql0. omega. }
-    }
-    assumption. omega.
-  }
-  rewrite H.
-  destruct (Ir.Memory.inbounds_blocks2 m2 [o; o + bwid]); try reflexivity.
-  destruct cid; try reflexivity.
-  unfold Ir.Memory.calltime. rewrite HCALLTIME.
-  des_ifs.
-Qed.
-
-Lemma get_deref_phy_I_cons:
-  forall m bid mb bwid o cid ofs I i
-         (HGET:Some mb = Ir.Memory.get m bid)
-         (HWF1:Ir.Memory.wf m)
-         (HSZ:bwid > 0)
-         (HDEREF:Ir.get_deref m (Ir.pphy o I cid) bwid = (bid, mb, ofs)::nil),
-    (in_range i (Ir.MemBlock.P0_range mb) = true ->
-     Ir.get_deref m (Ir.pphy o (i::I) cid) bwid = (bid, mb, ofs)::nil) /\
-    (in_range i (Ir.MemBlock.P0_range mb) = false ->
-     Ir.get_deref m (Ir.pphy o (i::I) cid) bwid = nil).
-Proof.
-  intros.
-  unfold Ir.get_deref in *.
-  unfold Ir.get_deref_blks_phyptr in *.
-  remember (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: I)) as inbs1.
-  remember (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: i :: I)) as inbs2.
-  assert (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: i :: I) =
-          Ir.Memory.inbounds_blocks2 m (i :: o :: o + bwid :: I)).
-  { eapply inbounds_blocks2_Permutation with (I := i::o::(o+bwid)::I).
-    apply perm_trans with (l' := o::i::o+bwid::I).
-    constructor. apply perm_skip. constructor.
-    reflexivity. }
-  rewrite H in *. clear H.
-  dup Heqinbs1. (* make sigleton *)
-  symmetry in Heqinbs0.
-  apply Ir.Memory.inbounds_blocks2_singleton2 in Heqinbs0.
-  destruct inbs1. inv HDEREF.
-  destruct inbs1; try (simpl in Heqinbs0; omega).
-  (* okay, it is singleton. *)
-  dup Heqinbs1.
-  symmetry in Heqinbs1.
-  destruct p.
-  apply inbounds_blocks2_cons with (i := i) in Heqinbs1.
-  destruct Heqinbs1.
-  (* okay, let's destruct cid now. *)
-  destruct cid.
-  { destruct (Ir.Memory.calltime m c) eqn:HCT.
-    { simpl in HDEREF.
-      destruct (Ir.MemBlock.alive_before t0 t) eqn:HALIVE.
-      { (* okay, ready. *)
-        simpl in HDEREF. inv HDEREF.
-        split.
-        { (* inbounds *)
-          intros HINB. apply H in HINB. rewrite HINB.
-          simpl. rewrite HALIVE. simpl. reflexivity. }
-        { (* ot inbounds *)
-          intros HNOTINB. apply H0 in HNOTINB. rewrite HNOTINB.
-          reflexivity. }
-      }
-      { (* okay, ready. *)
-        simpl in HDEREF. inv HDEREF. }
-    }
-    {
-      simpl in HDEREF. inv HDEREF.
-      split.
-      { (* inbounds *)
-        intros HINB. apply H in HINB. rewrite HINB.
-        simpl. reflexivity. }
-      { (* ot inbounds *)
-        intros HNOTINB. apply H0 in HNOTINB. rewrite HNOTINB.
-        reflexivity. }
-    }
-  }
-  {
-    simpl in HDEREF. inv HDEREF.
-    split.
-    { (* inbounds *)
-      intros HINB. apply H in HINB. rewrite HINB.
-      simpl. reflexivity. }
-    { (* ot inbounds *)
-      intros HNOTINB. apply H0 in HNOTINB. rewrite HNOTINB.
-      reflexivity. }
-  }
-  assumption.
-  omega.
-Qed.
-
-Lemma get_deref_phy_I_cons2:
-  forall m bid mb bwid o cid I i
-         (HGET:Some mb = Ir.Memory.get m bid)
-         (HWF1:Ir.Memory.wf m)
-         (HSZ:bwid > 0)
-         (HDEREF:Ir.get_deref m (Ir.pphy o I cid) bwid = nil),
-     Ir.get_deref m (Ir.pphy o (i::I) cid) bwid = nil.
-Proof.
-  intros.
-  unfold Ir.get_deref in *.
-  unfold Ir.get_deref_blks_phyptr in *.
-  assert ( Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: i :: I) =
-           Ir.Memory.inbounds_blocks2 m (i :: o :: o + bwid :: I)).
-  { apply inbounds_blocks2_Permutation with (I := i::o::o+bwid::I).
-    eapply perm_trans. eapply perm_swap. eapply perm_skip.
-    eapply perm_swap. reflexivity. }
-  rewrite H in *. clear H.
-
-  destruct (Ir.Memory.inbounds_blocks2 m (o::o+bwid::I)) eqn:Hib2.
-  { apply inbounds_blocks2_cons2 with (i := i) in Hib2. rewrite Hib2.
-    reflexivity.
-  }
-  { dup Hib2.
-    apply Ir.Memory.inbounds_blocks2_singleton2 in Hib0; try congruence; try omega.
-    destruct l; try (simpl in Hib0; omega).
-    destruct p.
-    apply inbounds_blocks2_cons with (i := i) in Hib2.
-    destruct Hib2.
-    destruct (in_range i (Ir.MemBlock.P0_range t)).
-    { exploit H. reflexivity. intros HH. rewrite HH.
-      rewrite HDEREF. reflexivity. }
-    { exploit H0. reflexivity. intros HH. rewrite HH.
-      reflexivity. }
-  }
-Qed.
-  
-Lemma get_deref_phy_same:
-  forall m1 m2 bid mb bwid o cid ofs I
-         (HGET:Some mb = Ir.Memory.get m1 bid)
-         (HWF1:Ir.Memory.wf m1)
-         (HWF2:Ir.Memory.wf m2)
-         (HSAME:Ir.Memory.get m1 bid = Ir.Memory.get m2 bid)
-         (HSZ:bwid > 0)
-         (HDEREF:Ir.get_deref m1 (Ir.pphy o I cid) bwid = (bid, mb, ofs)::nil)
-         (HCALLTIME:Ir.Memory.calltimes m1 = Ir.Memory.calltimes m2),
-    Ir.get_deref m1 (Ir.pphy o I cid) bwid =
-    Ir.get_deref m2 (Ir.pphy o I cid) bwid.
-Proof.
-  intros.
-  induction I.
-  { eapply get_deref_phy_nil_same; try eassumption. }
-  { remember (Ir.get_deref m1 (Ir.pphy o I cid) bwid) as bb.
-    symmetry in Heqbb.
-    dup Heqbb.
-    apply Ir.get_deref_singleton in Heqbb.
-    destruct Heqbb.
-    { (* get m1 (fst (fst bo)) is [x]. *)
-      destruct H. destruct H.
-      destruct bb. inv H.
-      destruct bb.
-      { inv H.
-        destruct x. destruct p. simpl in H0.
-        apply get_deref_phy_I_cons with (i := a) in Heqbb0; try congruence.
-        destruct Heqbb0.
-        destruct (in_range a (Ir.MemBlock.P0_range t)) eqn:HINR.
-        { exploit H. reflexivity. intros HH.
-          dup HDEREF. rewrite HH in HDEREF0. inv HDEREF0.
-          rewrite HDEREF.
-          exploit IHI. reflexivity. intros HH'. symmetry in HH'.
-          apply get_deref_phy_I_cons with (i := a) in HH'; try congruence.
-          destruct HH'. rewrite H2. reflexivity. congruence.
-        }
-        { exploit H1. reflexivity. intros HH.
-          dup HDEREF. rewrite HH in HDEREF0. inv HDEREF0. }
-      }
-      { inv H. }
-    }
-    { rewrite H in Heqbb0.
-      eapply get_deref_phy_I_cons2 with (i := a) in Heqbb0; try eassumption.
-      congruence.
-    }
-    { eassumption. }
-    { omega. }
-  }
-Qed.    
-
 Lemma twin_state_get_deref:
   forall md st1 st2 blkid mb1 ofs  o I cid bwid
          (HTWIN:twin_state st1 st2 blkid)
@@ -4540,83 +4446,71 @@ Lemma twin_state_get_deref:
     Ir.get_deref (Ir.Config.m st2) (Ir.pphy o I cid) bwid = nil.
 Proof.
   intros.
-  unfold Ir.get_deref in *.
-  unfold Ir.get_deref_blks_phyptr in *.
-  remember (Ir.Memory.inbounds_blocks2 (Ir.Config.m st1) (o :: o + bwid :: I))
-           as inb1.
-  remember (Ir.Memory.inbounds_blocks2 (Ir.Config.m st2) (o :: o + bwid :: I))
-           as inb2.
-  symmetry in Heqinb1.
-  symmetry in Heqinb2.
-  dup Heqinb1.
-  dup Heqinb2.
-  apply Ir.Memory.inbounds_blocks2_singleton2 in Heqinb1; try omega.
-  apply Ir.Memory.inbounds_blocks2_singleton2 in Heqinb2; try omega.
-  destruct inb2. reflexivity.
-  destruct inb2; try (simpl in Heqinb2; omega).
-  destruct inb1. inv HDEREF1.
-  destruct inb1; try (simpl in Heqinb1; omega).
-  { destruct cid.
-    { (* call time is the same. *)
-      decompose_HTWIN HTWIN blkid.
-      assert (HCT:Ir.Memory.calltime (Ir.Config.m st1) c =
-              Ir.Memory.calltime (Ir.Config.m st2) c).
-      { unfold Ir.Memory.calltime. rewrite <- HTWIN3. reflexivity. }
-      rewrite <- HCT.
-      destruct (Ir.Memory.calltime (Ir.Config.m st1) c).
-      { simpl in HDEREF1.
-        destruct (Ir.MemBlock.alive_before t (snd p0)) eqn:HAB;
-          try (inv HDEREF1; fail).
-        simpl in HDEREF1. inv HDEREF1.
-        simpl.
-        rewrite HAB.
-        destruct (
-  inv HWF1.
-  clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_no_bogus_ptr wf_no_bogus_ptr_mem.
-  inv HWF2.
-  clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_no_bogus_ptr wf_no_bogus_ptr_mem.
   dup HDEREF1.
-  apply Ir.get_deref_singleton in HDEREF1; try assumption.
-  destruct HDEREF1; try congruence.
-  destruct H as [bo [HEQ HDEREF1]].
-  inv HEQ.
-  simpl in HTWINBLK. rewrite orb_false_r in HTWINBLK.
-  rewrite PeanoNat.Nat.eqb_eq in HTWINBLK.
-  destruct bo. destruct p. simpl in HTWINBLK. subst b.
-  simpl in HDEREF1.
-  dup HDEREF0.
-  apply Ir.get_deref_inv in HDEREF0; try assumption.
-  (* has to show that the absolute address o is connected to n. *)
-  simpl in HDEREF3.
-  remember (Ir.get_deref_blks_phyptr (Ir.Config.m st1) o I cid bwid) as blks1.
-  (* show that blks1 is singleton *)
-  destruct blks1; simpl in HDEREF3; try congruence.
-  destruct blks1; simpl in HDEREF3; try congruence.
-  inv HDEREF3. clear Heqblks1.
+  eapply Ir.get_deref_inv in HDEREF1.
+  { remember (Ir.get_deref (Ir.Config.m st2) (Ir.pphy o I cid) bwid) as l'.
+    symmetry in Heql'.
+    dup Heql'.
+    eapply Ir.get_deref_phy_singleton in Heql'.
+    destruct Heql'.
+    { destruct H. destruct H. inv H. destruct H0.
+      destruct x. destruct p. simpl in H.
+      simpl in H0.
+      eapply Ir.get_deref_inv in H1.
+      (* okay , now use twin_state_inbounds_abs_reserved! *)
+      rewrite <- andb_assoc in HDEREF1.
+      rewrite andb_true_iff in HDEREF1. destruct HDEREF1.
+      erewrite Ir.MemBlock.inbounds_inbounds_abs in H3; try reflexivity.
+      erewrite Ir.MemBlock.inbounds_inbounds_abs in H3; try reflexivity.
+      rewrite <- PeanoNat.Nat.add_assoc in H3.
+      rewrite PeanoNat.Nat.add_comm with (n := bwid) in H3.
+      rewrite PeanoNat.Nat.add_assoc in H3.
+      dup H3.
+      eapply twin_state_inbounds_abs_reserved with (st2 := st2) (sz := bwid) in H2.
+      { exfalso. eapply H2.
+        exists b. exists t.
+        split.
+        { eassumption. }
+        rewrite andb_true_iff in H1. rewrite andb_true_iff in H1.
+        destruct H1. destruct H1.
+        split.
+        { assumption. }
+        { erewrite Ir.MemBlock.inbounds_inbounds_abs in H5; try reflexivity.
+          erewrite Ir.MemBlock.inbounds_inbounds_abs in H6; try reflexivity.
+          rewrite <- PeanoNat.Nat.add_assoc in H5.
+          rewrite PeanoNat.Nat.add_comm with (n := bwid) in H5.
+          rewrite PeanoNat.Nat.add_assoc in H5.
+          rewrite H6. rewrite H5. reflexivity.
+        }
+      }
+      { eassumption. }
+      { eassumption. }
+      { eassumption. }
+      { eassumption. }
+      { eassumption. }
+      { apply get_deref_phy_singleton in HDEREF0.
+        destruct HDEREF0.
+        { destruct H5. destruct H5. inv H5. simpl in H6.
+          destruct H6. rewrite PeanoNat.Nat.add_comm with (m := n) in H5.
+          rewrite H5. rewrite PeanoNat.Nat.add_comm with (m := ofs).
+          assumption. }
+        { inv H5. }
+        { inv HWF1. assumption. }
+        { omega. }
+      }
+      { eassumption. }
+      { inv HWF2. assumption. }
+      { assumption. }
+    }
+    { assumption. }
+    { inv HWF2. assumption. }
+    { omega. }
+  }
+  { omega. }
+  { inv HWF1. assumption. }
+  { congruence. }
+Qed.
 
-  (* now, unfold deref st2 *)
-  unfold Ir.deref in HDEREF2.
-  des_ifs.
-  dup Heq.
-  apply Ir.get_deref_singleton in Heq; try assumption.
-  destruct Heq; try congruence.
-  clear HDEREF2.
-  dup Heq0.
-  destruct H. destruct H as [HH HDEREF2].
-  inv HH. destruct x. destruct p. destruct p0.
-  apply Ir.get_deref_inv in Heq0; try assumption.
-  simpl in HDEREF2.
-  (* show that absolute address o is connected to n again. *)
-  simpl in Heq1.
-  remember (Ir.get_deref_blks_phyptr (Ir.Config.m st2) o I cid bwid) as blks2.
-  destruct blks2; simpl in Heq1; try congruence.
-  destruct blks2; simpl in Heq1; try congruence.
-  inv Heq1. clear Heqblks2.
-  simpl in HDEREF0. destruct p. simpl in Heq0.
-  simpl in HDEREF1, HDEREF2.
-  
-  (* okay, we're almost done.*)
-Admitted.
 
 (* Show that memory access from guessed pointer succeeds in
    one of twin state, it fails in the other state. *)
@@ -4669,10 +4563,27 @@ Proof.
       (* now, high-level proof :deref from st2 should fail. *)
       des_ifs.
       dup Heq3. (* Let's make get_Deref st1 singleton. *)
-      apply Ir.get_deref_singleton in Heq3.
+      apply Ir.get_deref_phy_singleton in Heq3.
       { destruct Heq3; try congruence.
-        destruct H. destruct H. inv H.
-        inv HDEREF. rewrite orb_false_r in H1. rewrite PeanoNat.Nat.eqb_eq in H1.
+        destruct H. destruct H. inv H. destruct H0.
+        destruct x. destruct p. simpl in H.  simpl in H0.
+        (* Okay, now Heq4 says that deref succeeds. *)
+        inv HDEREF. rewrite orb_false_r in H2. rewrite PeanoNat.Nat.eqb_eq in H2.
+        subst b. (* and the deref in st1 is blkid. *)
+
+        (* Now show that deref in st2 fails. *)
+        apply twin_state_get_deref with (md := md) (st2 := st2) in Heq4;
+          try eassumption; try congruence.
+        unfold Ir.deref in Heq2. rewrite Heq4 in Heq2.
+        (* false = true! *)
+        congruence.
+        eapply ty_bytesz_pos.
+      }
+      { inv HWF1. assumption. }
+      { eapply ty_bytesz_pos. }
+    }
+    { (* store is not terminator *)
+      unfold Ir.SmallStep.t_step in HTSTEP. 
         destruct x. destruct p. simpl in H1. subst b. simpl in H0.
         dup Heq4.
         apply Ir.get_deref_inv in Heq4.

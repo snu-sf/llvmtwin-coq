@@ -246,6 +246,60 @@ Proof.
       reflexivity. reflexivity. assumption.
 Qed.
 
+Lemma map_In:
+  forall {X Y:Type} (l:list X) (f:X -> Y) (y:Y) x
+         (HIN:List.In x l)
+         (HY:y = f x),
+    List.In y (List.map f l).
+Proof.
+  induction l.
+  intros. inv HIN.
+  intros. simpl in HIN.
+  destruct HIN. simpl. left.  congruence.
+  simpl. right. eapply IHl. eassumption. assumption.
+Qed.
+
+Lemma In_pair_split_snd {X Y:Type}:
+  forall (x:X) (y:Y) l (HIN:List.In (x, y) l),
+    List.In y (snd (List.split l)).
+Proof.
+  induction l. eauto. intros.
+  simpl in *. destruct HIN.
+  { rewrite H. destruct (List.split l).
+    simpl. left. reflexivity. }
+  { destruct a. apply IHl in H. destruct (List.split l).
+    simpl. right. eauto. }
+Qed.
+Lemma In_split2 {X:Type}:
+  forall x1 x2 (HDIFF:x1 <> x2) (l:list X)
+         (HIN1:List.In x1 l)
+         (HIN2:List.In x2 l),
+    exists l1 l2 l3, l = l1++x1::l2++x2::l3 \/
+                     l = l1++x2::l2++x1::l3.
+Proof.
+  intros.
+  apply List.in_split in HIN1.
+  destruct HIN1 as [l1 [l2 HIN1]].
+  rewrite HIN1 in HIN2.
+  apply List.in_app_or in HIN2.
+  destruct HIN2.
+  { apply List.in_split in H.
+    destruct H as [l3 [l4 H]].
+    rewrite H in HIN1.
+    exists l3, l4, l2.
+    right. rewrite <- List.app_assoc in HIN1.
+    rewrite <- List.app_comm_cons in HIN1.
+    assumption. }
+  { simpl in H.
+    destruct H. congruence.
+    apply List.in_split in H.
+    destruct H as [l3 [l4 H]].
+    rewrite H in HIN1.
+    exists l1, l3, l4.
+    left. assumption.
+  }
+Qed.
+
 (* Filtered list is shorter than the original list. *)
 Lemma filter_length:
   forall {X:Type} (l:list X) f,
@@ -1862,6 +1916,14 @@ Proof.
   - rewrite <- HEQ; apply Gt.gt_not_le; apply Nat.lt_add_pos_r; auto.
 Qed.
 
+Lemma disjoint_range_sym:
+  forall r1 r2, disjoint_range r1 r2 = disjoint_range r2 r1.
+Proof.
+  intros. unfold disjoint_range.
+  destruct r1. destruct r2.
+  intuition.
+Qed.
+
 Lemma disjoint_range_symm:
   forall r1 r2,
     disjoint_range r1 r2 = disjoint_range r2 r1.
@@ -2010,6 +2072,24 @@ Proof.
     reflexivity.
   }
   { congruence. }
+Qed.
+
+Lemma disjoint_ranges_app_false:
+  forall (rs:list (nat * nat)) (HNNIL: rs <> nil) (HNEMP: no_empty_range rs = true),
+    disjoint_ranges (rs ++ rs) = false.
+Proof.
+  intros.
+  destruct rs. congruence.
+  simpl.
+  rewrite List.forallb_app.
+  simpl.
+  simpl in HNEMP.
+  rewrite andb_true_iff in HNEMP.
+  destruct p.
+  simpl in *.
+  destruct HNEMP. rewrite PeanoNat.Nat.ltb_lt in H.
+  rewrite disjoint_same2; try omega.
+  simpl. rewrite andb_false_r. reflexivity.
 Qed.
 
 (* Lemma: no_empty_range still holds for appended lists *)
