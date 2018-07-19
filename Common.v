@@ -263,6 +263,15 @@ Proof.
       assumption.
 Qed.
 
+Lemma filter_reorder {X:Type}:
+  forall f1 f2 (l:list X),
+    List.filter f1 (List.filter f2 l) =
+    List.filter f2 (List.filter f1 l).
+Proof.
+  induction l. reflexivity.
+  simpl. des_ifs; simpl; des_ifs; congruence.
+Qed.
+
 Lemma app_equal {X:Type}:
   forall (l1' l2' l1 l2:list X) (x x':X)
          (HNOTIN1:~List.In x' l1)
@@ -979,6 +988,40 @@ Proof.
   - simpl. right. apply IHHLSS. assumption.
 Qed.
 
+Lemma lsubseq_combine_map {X Y:Type}:
+  forall (l11 l21:list X) (l12 l22:list Y) f
+         (HLEN1:List.length l11 = List.length l12)
+         (HLEN2:List.length l21 = List.length l22)
+         (HLSS:lsubseq (List.combine l11 l12) (List.combine l21 l22))
+         (HMAP:List.map f l12 = l11),
+    List.map f l22 = l21.
+Proof.
+  intros.
+  remember (List.combine l11 l12) as l'1.
+  remember (List.combine l21 l22) as l'2.
+  generalize dependent l11.
+  generalize dependent l12.
+  generalize dependent l21.
+  generalize dependent l22.
+  induction HLSS.
+  { intros. destruct l21; destruct l22; simpl in *; try congruence. }
+  { intros.
+    destruct l21; destruct l22; simpl in *; try congruence.
+    destruct l11; destruct l12; simpl in *; try congruence.
+    inversion Heql'2. subst x.
+    inversion Heql'1. subst x0. subst y.
+    inversion HMAP. subst x1.
+    erewrite IHHLSS; try eassumption. reflexivity.
+    congruence. congruence.
+  }
+  { intros.
+    destruct l11; destruct l12; simpl in *; try congruence.
+    inversion Heql'1. subst x. inversion HLEN1.
+    erewrite IHHLSS. reflexivity.
+    congruence. assumption. eapply H0. assumption.
+    inversion HMAP. reflexivity.
+  }
+Qed.
 
 (* Lemma: if length if output is larger than input,
    lsubseq does not hold. *)
@@ -1916,6 +1959,36 @@ Proof.
   { eapply Permutation_trans; eauto. }
 Qed.
 
+Lemma disjoint_ranges_In:
+  forall r1 r2 rs (HDISJ:disjoint_ranges rs = true)
+         (HIN1:List.In r1 rs)
+         (HIN2:List.In r2 rs)
+         (HNEQ:r1 <> r2),
+    disjoint_range r1 r2.
+Proof.
+  intros.
+  generalize dependent r1.
+  generalize dependent r2.
+  induction rs.
+  { intros. inv HIN1. }
+  { intros.
+    simpl in HIN1, HIN2.
+    inv HIN1; inv HIN2.
+    { congruence. }
+    { simpl in HDISJ.
+      rewrite andb_true_iff in HDISJ.
+      destruct HDISJ.
+      eapply forallb_In. eassumption. assumption. }
+    { simpl in HDISJ. rewrite andb_true_iff in HDISJ.
+      destruct HDISJ.
+      rewrite disjoint_range_sym.
+      eapply forallb_In. eassumption. assumption. }
+    { apply IHrs; try assumption.
+      simpl in HDISJ. rewrite andb_true_iff in HDISJ. tauto.
+    }
+  }
+Qed.
+
 Lemma disjoint_ranges_Permutation:
   forall l1 l2 (HPERM:Permutation l1 l2),
     disjoint_ranges l1 = disjoint_ranges l2.
@@ -2455,6 +2528,98 @@ Proof.
     eapply IHofss.
     + eapply H.
     + destruct res'. simpl. assumption.
+Qed.
+
+Lemma disjoint_include2_fold_left_Permutation {X:Type}:
+  forall l I I' x
+         (HL:List.fold_left (fun x ofs => disjoint_include2 (fst x) (snd x) ofs) I x
+                            = l)
+         (HPERM:Permutation I I'),
+    List.fold_left (fun (x:list (nat * nat) * list X) ofs =>
+                      disjoint_include2 (fst x) (snd x) ofs) I' x
+                            = l.
+Proof.
+  intros.
+  generalize dependent l.
+  generalize dependent x.
+  induction HPERM.
+  { intros. assumption. }
+  { simpl. intros. apply IHHPERM in HL. assumption. }
+  { simpl. intros.
+    assert ((disjoint_include2 (fst (disjoint_include2 (fst x0) (snd x0) y))
+            (snd (disjoint_include2 (fst x0) (snd x0) y)) x) =
+            (disjoint_include2 (fst (disjoint_include2 (fst x0) (snd x0) x))
+       (snd (disjoint_include2 (fst x0) (snd x0) x)) y)).
+    { unfold disjoint_include2.
+      rewrite <- combine_fst_snd_split.
+      rewrite <- combine_fst_snd_split.
+      rewrite filter_reorder. reflexivity. }
+    rewrite <- H. assumption. }
+  { intros.
+    apply IHHPERM1 in HL.
+    apply IHHPERM2 in HL.
+    assumption.
+  }
+Qed.
+
+Lemma disjoint_include2_fold_left_In {X:Type}:
+  forall I y (b:X) rs blks
+         (HLEN:List.length rs = List.length blks)
+         (HF:List.fold_left
+            (fun x ofs => disjoint_include2 (fst x) (snd x) ofs) I (rs, blks) = y)
+         (HIN:List.In b (snd y)),
+    List.In b blks.
+Proof.
+  intros.
+  symmetry in HF.
+  dup HF.
+  apply disjoint_include2_fold_left_len in HF.
+  apply disjoint_include2_fold_left_lsubseq in HF0.
+  apply lsubseq_combine in HF0.
+  destruct HF0.
+  eapply lsubseq_In. eapply HIN. eassumption.
+  assumption. assumption. assumption.
+Qed.
+
+Lemma disjoint_include2_fold_left_reorder {X:Type}:
+  forall a I rs (blks:list X),
+    List.fold_left (fun x ofs => disjoint_include2 (fst x) (snd x) ofs)
+              (I) (disjoint_include2 rs blks a) =
+    disjoint_include2
+      (fst (List.fold_left (fun x ofs => disjoint_include2 (fst x) (snd x) ofs)
+                          I (rs, blks)))
+      (snd (List.fold_left (fun x ofs => disjoint_include2 (fst x) (snd x) ofs)
+                          I (rs, blks))) a.
+Proof.
+  intros.
+  assert (List.fold_left (fun x ofs => disjoint_include2 (fst x) (snd x) ofs)
+              (I) (disjoint_include2 rs blks a) =
+          List.fold_left (fun x ofs => disjoint_include2 (fst x) (snd x) ofs)
+              (a::I) (rs, blks)).
+  { reflexivity. }
+  rewrite H.
+  assert (disjoint_include2
+    (fst
+       (List.fold_left
+          (fun (x : list (nat * nat) * list X) (ofs : nat) =>
+           disjoint_include2 (fst x) (snd x) ofs) I (rs, blks)))
+    (snd
+       (List.fold_left
+          (fun (x : list (nat * nat) * list X) (ofs : nat) =>
+           disjoint_include2 (fst x) (snd x) ofs) I (rs, blks))) a =
+          List.fold_left (fun x ofs => disjoint_include2 (fst x) (snd x) ofs)
+              (I ++ [a]) (rs, blks)).
+  { rewrite List.fold_left_app.
+    simpl. reflexivity. }
+  rewrite H0.
+  assert (Permutation (a::I) (I++[a])).
+  { assert (Permutation I (I ++ [])).
+    { rewrite List.app_nil_r. apply Permutation_refl. }
+    eapply Permutation_cons_app in H1.
+    eassumption. }
+  eapply disjoint_include2_fold_left_Permutation.
+  reflexivity.
+  apply Permutation_sym. assumption.
 Qed.
 
 (* Lemma: If there are two ranges (b1, l1), (b2, l2),

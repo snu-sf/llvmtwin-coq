@@ -2505,6 +2505,160 @@ Proof.
     assumption.
 Qed.
 
+Lemma inbounds_blocks2_In3:
+  forall m bid mb bwid o
+         (HGET:Some mb = Memory.get m bid)
+         (HSZ :bwid > 0)
+         (HINB:MemBlock.inbounds_abs o mb &&
+               MemBlock.inbounds_abs (o + bwid) mb = true)
+         (HALIVE:MemBlock.alive mb = true),
+    List.In (bid, mb) (inbounds_blocks2 m (o::(o + bwid)::nil)).
+Proof.
+  intros.
+  rewrite andb_true_iff in HINB.
+  destruct HINB.
+  eapply inbounds_blocks2_In.
+  eassumption.
+  reflexivity.
+  assumption.
+  assumption.
+  assumption.
+  omega.
+Qed.
+
+Lemma inbounds_blocks2_same:
+  forall m1 m2 bid mb bwid o
+         (HGET:Some mb = get m1 bid)
+         (HWF2:wf m2)
+         (HSAME:get m1 bid = get m2 bid)
+         (HSZ:bwid > 0)
+         (HINB:inbounds_blocks2 m1 (o::(o + bwid)::nil) = (bid, mb)::nil),
+    inbounds_blocks2 m1 (o::(o + bwid)::nil) =
+    inbounds_blocks2 m2 (o::(o + bwid)::nil).
+Proof.
+  intros.
+  rewrite HINB.
+  dup HINB.
+  apply inbounds_blocks2_forallb2 in HINB.
+  apply inbounds_blocks2_alive in HINB0.
+  simpl in HINB.
+  simpl in HINB0.
+  repeat (rewrite andb_true_r in HINB).
+  repeat (rewrite andb_true_r in HINB0).
+
+  remember (inbounds_blocks2 m2 (o::(o + bwid)::nil)) as ib.
+  assert (List.In (bid, mb) ib).
+  { rewrite Heqib. apply inbounds_blocks2_In3; try assumption. congruence. }
+  symmetry in Heqib.
+  apply inbounds_blocks2_singleton in Heqib; try omega.
+  destruct ib. inv H.
+  destruct ib. inv H. reflexivity. inv H0. simpl in Heqib. omega.
+  assumption.
+Qed.
+
+Lemma inbounds_blocks2_Permutation:
+  forall m l I I'
+         (HPERM:Permutation I I')
+         (HINB:inbounds_blocks2 m I = l),
+    inbounds_blocks2 m I' = l.
+Proof.
+  intros.
+  unfold inbounds_blocks2 in *.
+  simpl in HINB.
+  remember (List.fold_left
+              (fun blks_and_ranges abs_ofs =>
+               disjoint_include2 (fst blks_and_ranges) (snd blks_and_ranges) abs_ofs) I
+              (alive_P0_ranges m, alive_blocks m)) as ll.
+  symmetry in Heqll.
+  apply disjoint_include2_fold_left_Permutation with (I'0 := I') in Heqll.
+  rewrite Heqll. assumption. assumption.
+Qed.
+
+Lemma inbounds_blocks2_cons:
+  forall m I i bid mb
+         (HINB:inbounds_blocks2 m I = (bid, mb)::nil),
+    (in_range i (MemBlock.P0_range mb) = true ->
+     inbounds_blocks2 m (i::I) = (bid, mb)::nil) /\
+    (in_range i (MemBlock.P0_range mb) = false ->
+     inbounds_blocks2 m (i::I) = nil).
+Proof.
+  intros.
+  dup HINB.
+  unfold inbounds_blocks2 in *.
+  simpl.
+  remember ((List.fold_left
+              (fun blks_and_ranges abs_ofs =>
+               disjoint_include2 (fst blks_and_ranges) (snd blks_and_ranges) abs_ofs) I
+              (alive_P0_ranges m, alive_blocks m))) as tt.
+  destruct tt.
+  assert (List.map (fun mb => MemBlock.P0_range mb.(snd))
+                   (alive_blocks m) = alive_P0_ranges m).
+  { apply alive_blocks_P0_ranges. }
+  assert (List.length (alive_P0_ranges m) =
+          List.length (alive_blocks m)).
+  { apply alive_P0_ranges_blocks_len. }
+  assert (List.length l = List.length l0).
+  { apply disjoint_include2_fold_left_len in Heqtt.
+    simpl in Heqtt. congruence. assumption. }
+  assert (lsubseq (List.combine (alive_P0_ranges m)
+                                (alive_blocks m))
+                  (List.combine l l0)).
+  { replace l with (fst (l, l0)) by reflexivity.
+    replace l0 with (snd (l, l0)) at 2 by reflexivity.
+    replace (alive_P0_ranges m) with
+        (fst ((alive_P0_ranges m), alive_blocks m)) by reflexivity.
+    replace (alive_blocks m) with
+        (snd ((alive_P0_ranges m), alive_blocks m))
+      at 2 by reflexivity.
+    eapply disjoint_include2_fold_left_lsubseq.
+    { eassumption. }
+  }
+  assert (List.map (fun mb => MemBlock.P0_range mb.(snd)) l0 = l).
+  { eapply lsubseq_combine_map in H2; eassumption. }
+  simpl in HINB.
+  rewrite HINB in H3.
+  simpl in H3.
+
+  split.
+  { intros HH0.
+    rewrite disjoint_include2_fold_left_reorder.
+    rewrite <- Heqtt. simpl. simpl in HINB. rewrite HINB. rewrite <- H3.
+    unfold disjoint_include2. simpl.
+    rewrite HH0. simpl. reflexivity. }
+  { intros HH0.
+    rewrite disjoint_include2_fold_left_reorder.
+    rewrite <- Heqtt. simpl. simpl in HINB. rewrite HINB. rewrite <- H3.
+    unfold disjoint_include2. simpl.
+    rewrite HH0. simpl. reflexivity. }
+Qed.
+
+Lemma inbounds_blocks2_cons2:
+  forall m I i
+         (HINB:inbounds_blocks2 m I = nil),
+    inbounds_blocks2 m (i::I) = nil.
+Proof.
+  intros.
+  dup HINB.
+  unfold inbounds_blocks2 in *.
+  simpl.
+  rewrite disjoint_include2_fold_left_reorder.
+  remember ((List.fold_left
+               (fun
+                  (blks_and_ranges : list (nat * nat) * list (Ir.blockid * MemBlock.t))
+                  (abs_ofs : nat) =>
+                disjoint_include2 (fst blks_and_ranges) (snd blks_and_ranges) abs_ofs) I
+               (alive_P0_ranges m, alive_blocks m))) as fl.
+  destruct fl.
+  assert (length (fst (l, l0)) = length (snd (l, l0))).
+  { 
+    eapply disjoint_include2_fold_left_len.
+    eapply alive_P0_ranges_blocks_len.
+    eassumption. }
+  simpl in H. simpl in HINB.
+  destruct l. simpl. reflexivity.
+  rewrite HINB in H. simpl in H. omega.
+Qed.
+
 
 End Memory.
 
