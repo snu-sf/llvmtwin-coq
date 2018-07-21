@@ -3920,7 +3920,8 @@ Proof.
     split.
     inv H0; try congruence.
     { rewrite HSR0. eapply Ir.SmallStep.ss_br_goes_wrong.
-      eassumption. }
+      erewrite twin_state_cur_terminator_eq in HCUR. eassumption.
+      eassumption. eassumption. }
     { assumption. }
   }
   { assert (exists sr : Ir.SmallStep.step_res,

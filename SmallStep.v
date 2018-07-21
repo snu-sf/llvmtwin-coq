@@ -599,7 +599,9 @@ Inductive sstep: Ir.Config.t -> step_res -> Prop :=
     forall st sr (HISTEP:inst_step st sr),
       sstep st sr
 | ss_br_goes_wrong:
-    forall st (HTSTEP:t_step st = sr_goes_wrong),
+    forall st t
+           (HCUR:Some t = Ir.Config.cur_terminator md st)
+           (HTSTEP:t_step st = sr_goes_wrong),
       sstep st sr_goes_wrong
 | ss_br_success:
     (* It is assumed that phi is executed continuously

@@ -153,7 +153,7 @@ Definition refines_stack (s_tgt s_src:Ir.Stack.t) :=
                   refines_regfile (snd (snd itm_tgt)) (snd (snd itm_src)))
                s_tgt s_src.
 
-(*Definition refines_state (s_tgt s_src:Ir.Config.t) :=
+Definition refines_state (s_tgt s_src:Ir.Config.t) :=
   refines_memory s_tgt.(Ir.Config.m) s_src.(Ir.Config.m) /\
   refines_stack s_tgt.(Ir.Config.s) s_src.(Ir.Config.s) /\
   s_tgt.(Ir.Config.cid_to_f) = s_src.(Ir.Config.cid_to_f) /\
@@ -177,7 +177,7 @@ Inductive refines_step_res: step_res -> step_res -> Prop :=
     forall e_tgt e_src s_tgt s_src
            (HREFE:refines_event e_tgt e_src)
            (HREFS:Ir.Config.eq s_tgt s_src), (* Just checks equality. *)
-    refines_step_res (sr_success e_tgt s_tgt) (sr_success e_src s_src).*)
+    refines_step_res (sr_success e_tgt s_tgt) (sr_success e_src s_src).
 
 
 

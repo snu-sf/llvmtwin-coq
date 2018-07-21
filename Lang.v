@@ -343,12 +343,12 @@ Definition next_trivial_pc (p:pc) (f:t): option pc :=
    If there's no such instruction, returns None. *)
 Definition get_phi (p:pc) (f:t): option PhiNode.t :=
   match p with
-  | pc_inst bbid iidx =>
+  | pc_phi bbid pidx =>
     match (getbb bbid f) with
     | None => None
     | Some bb =>
-      if Nat.ltb iidx (List.length bb.(BasicBlock.phis)) then
-        Some (List.nth iidx bb.(BasicBlock.phis) (0, Ir.ity 0, nil))
+      if Nat.ltb pidx (List.length bb.(BasicBlock.phis)) then
+        Some (List.nth pidx bb.(BasicBlock.phis) (0, Ir.ity 0, nil))
       else (* unreachable *)
         None
     end
@@ -363,9 +363,7 @@ Definition get_inst (p:pc) (f:t): option Inst.t :=
     match (getbb bbid f) with
     | None => None
     | Some bb =>
-      if Nat.leb (List.length bb.(BasicBlock.phis)) iidx &&
-                 Nat.ltb iidx (List.length bb.(BasicBlock.phis) +
-                               List.length bb.(BasicBlock.insts)) then
+      if Nat.ltb iidx (List.length bb.(BasicBlock.insts)) then
         Some (List.nth iidx bb.(BasicBlock.insts) (Ir.Inst.ievent (Ir.opreg 0)))
       else (* unreachable *)
         None

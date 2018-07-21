@@ -735,12 +735,8 @@ Proof.
   unfold Ir.IRFunction.get_inst in HCUR.
   unfold Ir.IRFunction.get_terminator.
   des_ifs.
-  rewrite andb_true_iff in Heq2.
-  destruct Heq2.
-  rewrite PeanoNat.Nat.leb_le in H.
-  rewrite PeanoNat.Nat.ltb_lt in H0.
+  rewrite PeanoNat.Nat.ltb_lt in Heq2.
   rewrite PeanoNat.Nat.eqb_eq in Heq1.
-  rewrite Heq1 in H0.
   omega.
 Qed.
 
@@ -756,12 +752,6 @@ Proof.
   unfold Ir.IRFunction.get_inst in HCUR.
   unfold Ir.IRFunction.get_phi.
   des_ifs.
-  rewrite andb_true_iff in Heq2.
-  destruct Heq2.
-  rewrite PeanoNat.Nat.ltb_lt in H0.
-  rewrite PeanoNat.Nat.ltb_lt in Heq1.
-  rewrite PeanoNat.Nat.leb_le in H.
-  omega.
 Qed.
 
 

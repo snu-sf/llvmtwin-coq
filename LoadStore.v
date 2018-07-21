@@ -477,8 +477,7 @@ Proof.
 Qed.
 
 Lemma get_deref_phy_I_cons2:
-  forall m bid mb bwid o cid I i
-         (HGET:Some mb = Ir.Memory.get m bid)
+  forall m bwid o cid I i
          (HWF1:Ir.Memory.wf m)
          (HSZ:bwid > 0)
          (HDEREF:Ir.get_deref m (Ir.pphy o I cid) bwid = nil),
@@ -512,6 +511,87 @@ Proof.
   }
 Qed.
   
+Lemma get_deref_phy_I:
+  forall m bid mb bwid o cid ofs I
+         (HGET:Some mb = Ir.Memory.get m bid)
+         (HWF1:Ir.Memory.wf m)
+         (HSZ:bwid > 0)
+         (HDEREF:Ir.get_deref m (Ir.pphy o nil cid) bwid = (bid, mb, ofs)::nil),
+    Ir.get_deref m (Ir.pphy o I cid) bwid = (bid, mb, ofs)::nil \/
+    Ir.get_deref m (Ir.pphy o I cid) bwid = nil.
+Proof.
+  induction I.
+  { intros. left. assumption. }
+  { intros. exploit IHI; try assumption. intros HH.
+    destruct HH.
+    { eapply get_deref_phy_I_cons with (i := a) in H; try assumption.
+      destruct H.
+      destruct (in_range a (Ir.MemBlock.P0_range mb)) eqn:HIN.
+      { exploit H. reflexivity. intros. left. assumption. }
+      { exploit H0. reflexivity. intros. right. assumption. }
+    }
+    { right.
+      eapply get_deref_phy_I_cons2 in H; eassumption.
+    }
+  }
+Qed.
+
+Lemma get_deref_phy_I2:
+  forall m bwid o cid I
+         (HWF1:Ir.Memory.wf m)
+         (HSZ:bwid > 0)
+         (HDEREF:Ir.get_deref m (Ir.pphy o nil cid) bwid = nil),
+    Ir.get_deref m (Ir.pphy o I cid) bwid = nil.
+Proof.  induction I.
+  { intros. assumption. }
+  { intros. exploit IHI; try assumption. intros HH.
+    eapply get_deref_phy_I_cons2 with (i := a) in HH; try assumption.
+  }
+Qed.
+
+Lemma get_deref_phy_cid:
+  forall m bid mb bwid o cid ofs I
+         (HGET:Some mb = Ir.Memory.get m bid)
+         (HWF1:Ir.Memory.wf m)
+         (HSZ:bwid > 0)
+         (HDEREF:Ir.get_deref m (Ir.pphy o I None) bwid = (bid, mb, ofs)::nil),
+    Ir.get_deref m (Ir.pphy o I cid) bwid = (bid, mb, ofs)::nil \/
+    Ir.get_deref m (Ir.pphy o I cid) bwid = nil.
+Proof.
+  intros.
+  unfold get_deref in *.
+  unfold get_deref_blks_phyptr in *.
+  destruct (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: I)) eqn:HH;
+    try (inv HDEREF; fail).
+  simpl in HDEREF.
+  destruct l; try (inv HDEREF; fail).
+  simpl in HDEREF. inv HDEREF.
+  destruct cid.
+  { destruct (Ir.Memory.calltime m c).
+    { simpl.
+      destruct (Ir.MemBlock.alive_before t (snd p)).
+      { simpl. left. reflexivity. }
+      { right. reflexivity. }
+    }
+    { left. simpl. reflexivity. }
+  }
+  { left. reflexivity. }
+Qed.
+
+Lemma get_deref_phy_cid2:
+  forall m bwid o cid I
+         (HWF1:Ir.Memory.wf m)
+         (HSZ:bwid > 0)
+         (HDEREF:Ir.get_deref m (Ir.pphy o I None) bwid = nil),
+    Ir.get_deref m (Ir.pphy o I cid) bwid = nil.
+Proof.
+  intros.
+  unfold get_deref in *.
+  unfold get_deref_blks_phyptr in *.
+  destruct (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: I)) eqn:HH;
+    try (inv HDEREF; fail).
+  reflexivity.
+Qed.
 
 Lemma get_deref_blks_phyptr_inbounds_blocks2:
   forall b t m o Is cid sz
@@ -563,7 +643,6 @@ Proof.
       apply In_pair_split_snd in H1.
       apply Ir.Memory.inbounds_blocks2_forallb in Heqlt.
       eapply forallb_In in Heqlt; try eassumption.
-      SearchAbout Ir.MemBlock.addr.
       eapply Ir.MemBlock.inbounds_abs_addr in Heqlt. omega. reflexivity.
     }
     omega.
@@ -712,144 +791,124 @@ Qed.
    physical pointer which is converted from (bid, ofs) both
    access a same memory block with same offset, if
    access size is larger than zero. *)
-Theorem get_deref_log_phy_same:
-  forall (m:Ir.Memory.t) (m_wf:Ir.Memory.wf m) bid ofs p' (sz:nat) bo
+Theorem get_deref_ptr_phy_same:
+  forall (m:Ir.Memory.t) (m_wf:Ir.Memory.wf m) p p' (sz:nat) bo
          (HSZ: 0 < sz)
-         (HDEREF: get_deref m (Ir.plog bid ofs) sz = bo::nil)
-         (HP':log_to_phy m bid ofs  = Some p'),
+         (HDEREF: get_deref m p sz = bo::nil)
+         (HP':ptr_to_phy m p  = Some p'),
     get_deref m p' sz = bo::nil.
 Proof.
   intros.
+  destruct p as [bid ofs | o Is cid].
+  {
+    unfold ptr_to_phy in HP'.
     unfold log_to_phy in HP'.
-  remember (Ir.Memory.get m bid) as blk.
-  symmetry in Heqblk.
-  destruct blk as [blk | ].
-  + remember (Ir.MemBlock.alive blk) as alive.
-    remember (Ir.MemBlock.inbounds ofs blk) as inb1.
-    remember (Ir.MemBlock.inbounds (ofs + sz) blk) as inb2.
-    assert (HLOG := get_deref_log m bid ofs sz (bo::nil) blk HDEREF Heqblk).
-    destruct HLOG as [HLOG | HLOG]; try (inversion HLOG; fail).
-    inversion HLOG. rewrite H0 in *. clear H0 HLOG.
-    assert (HMOD: (Ir.MemBlock.addr blk + ofs) mod Ir.MEMSZ =
-            Ir.MemBlock.addr blk + ofs).
-    { apply Nat.mod_small.
-      destruct bo. destruct p.
-      eapply get_deref_ofs_lt_MEMSZ.
-      eassumption. eassumption. eassumption. }
-    rewrite HMOD in HP'.
-    inversion HP'.
-    assert (HCOND: Ir.MemBlock.alive blk && Ir.MemBlock.inbounds ofs blk &&
-                   Ir.MemBlock.inbounds (ofs + sz) blk = true).
-    {
-      eapply get_deref_log_inv.
-      eexists.
-      apply HDEREF.
-      assumption.
-    }
-    rewrite <- Heqalive, <- Heqinb1, <- Heqinb2 in HCOND.
-    destruct alive; destruct inb1; destruct inb2;
-      simpl in HCOND; try (inversion HCOND; fail).
-    rewrite Ir.MemBlock.inbounds_inbounds_abs
-      with (ofs_abs := Ir.MemBlock.addr blk + ofs)
-      in Heqinb1.
-    rewrite Ir.MemBlock.inbounds_inbounds_abs
-      with (ofs_abs := Ir.MemBlock.addr blk + ofs + sz)
-      in Heqinb2.
-    unfold get_deref.
-    unfold get_deref_blks_phyptr.
-    remember (Ir.Memory.inbounds_blocks2 m
-             (Ir.MemBlock.addr blk + ofs :: Ir.MemBlock.addr blk + ofs + sz :: nil))
-               as blks'.
-    assert (List.In (bid, blk) blks').
-    { apply Ir.Memory.inbounds_blocks2_In with (m := m)
-            (abs_ofs1 := Ir.MemBlock.addr blk + ofs)
-            (abs_ofs2 := Ir.MemBlock.addr blk + ofs + sz).
-      - congruence.
-      - assumption.
-      - congruence.
-      - congruence.
-      - congruence.
-      - apply PeanoNat.Nat.lt_neq.
+    remember (Ir.Memory.get m bid) as blk.
+    symmetry in Heqblk.
+    destruct blk as [blk | ].
+    + remember (Ir.MemBlock.alive blk) as alive.
+      remember (Ir.MemBlock.inbounds ofs blk) as inb1.
+      remember (Ir.MemBlock.inbounds (ofs + sz) blk) as inb2.
+      assert (HLOG := get_deref_log m bid ofs sz (bo::nil) blk HDEREF Heqblk).
+      destruct HLOG as [HLOG | HLOG]; try (inversion HLOG; fail).
+      inversion HLOG. rewrite H0 in *. clear H0 HLOG.
+      assert (HMOD: (Ir.MemBlock.addr blk + ofs) mod Ir.MEMSZ =
+                    Ir.MemBlock.addr blk + ofs).
+      { apply Nat.mod_small.
+        destruct bo. destruct p.
+        eapply get_deref_ofs_lt_MEMSZ.
+        eassumption. eassumption. eassumption. }
+      rewrite HMOD in HP'.
+      inversion HP'.
+      assert (HCOND: Ir.MemBlock.alive blk && Ir.MemBlock.inbounds ofs blk &&
+                                       Ir.MemBlock.inbounds (ofs + sz) blk = true).
+      {
+        eapply get_deref_log_inv.
+        eexists.
+        apply HDEREF.
+        assumption.
+      }
+      rewrite <- Heqalive, <- Heqinb1, <- Heqinb2 in HCOND.
+      destruct alive; destruct inb1; destruct inb2;
+        simpl in HCOND; try (inversion HCOND; fail).
+      rewrite Ir.MemBlock.inbounds_inbounds_abs
+        with (ofs_abs := Ir.MemBlock.addr blk + ofs)
+        in Heqinb1.
+      rewrite Ir.MemBlock.inbounds_inbounds_abs
+        with (ofs_abs := Ir.MemBlock.addr blk + ofs + sz)
+        in Heqinb2.
+      unfold get_deref.
+      unfold get_deref_blks_phyptr.
+      remember (Ir.Memory.inbounds_blocks2 m
+        (Ir.MemBlock.addr blk + ofs :: Ir.MemBlock.addr blk + ofs + sz :: nil))
+        as blks'.
+      assert (List.In (bid, blk) blks').
+      { apply Ir.Memory.inbounds_blocks2_In with (m := m)
+          (abs_ofs1 := Ir.MemBlock.addr blk + ofs)
+          (abs_ofs2 := Ir.MemBlock.addr blk + ofs + sz).
+        - congruence.
+        - assumption.
+        - congruence.
+        - congruence.
+        - congruence.
+        - apply PeanoNat.Nat.lt_neq.
+          apply PeanoNat.Nat.lt_add_pos_r.
+          assumption.
+      }
+      assert (List.length blks' < 2).
+      { eapply Ir.Memory.inbounds_blocks2_singleton with
+            (ofs1 := Ir.MemBlock.addr blk + ofs)
+            (ofs2 := Ir.MemBlock.addr blk + ofs + sz).
+        eassumption.
+        apply PeanoNat.Nat.lt_neq.
         apply PeanoNat.Nat.lt_add_pos_r.
         assumption.
+        congruence.
+      }
+      destruct blks' as [| blk1' blks'].
+      * inversion H.
+      * destruct blks'.
+        simpl.
+        simpl in H.
+        destruct H as [H | H].
+        -- rewrite H. simpl.
+           rewrite Minus.minus_plus.
+           reflexivity.
+        -- inversion H.
+        -- simpl in H1.
+           assert (2 + length blks' >= 2).
+           { apply PeanoNat.Nat.le_add_r. }
+           replace (S (S (length blks'))) with (2 + length blks') in H2.
+           apply Lt.le_not_lt in H2.
+           omega.
+           reflexivity.
+      * omega.
+      * omega.
+    + inversion HP'.
+  }
+  { unfold ptr_to_phy in HP'.
+    inv HP'.
+    remember (get_deref m (Ir.pphy o [] None) sz) as blks.
+    dup Heqblks.
+    symmetry in Heqblks0.
+    apply get_deref_singleton in Heqblks0; try assumption.
+    destruct Heqblks0.
+    { destruct H. destruct H. inv H.
+      destruct x. destruct p. simpl in H0.
+      apply get_deref_phy_I with (I := Is) in H1; try congruence; try omega.
+      destruct H1.
+      { apply get_deref_phy_cid with (cid := cid) in H; try congruence; try omega.
+        destruct H; try congruence. }
+      { eapply get_deref_phy_cid2 with (cid := cid) in H; try congruence; try omega. }
     }
-    assert (List.length blks' < 2).
-    { eapply Ir.Memory.inbounds_blocks2_singleton with
-          (ofs1 := Ir.MemBlock.addr blk + ofs)
-          (ofs2 := Ir.MemBlock.addr blk + ofs + sz).
-      eassumption.
-      apply PeanoNat.Nat.lt_neq.
-      apply PeanoNat.Nat.lt_add_pos_r.
-      assumption.
+    { rewrite H in Heqblks.
+      symmetry in Heqblks.
+      eapply get_deref_phy_I2 with (I := Is) in Heqblks; try eauto.
+      eapply get_deref_phy_cid2 with (cid := cid) in Heqblks; try eauto.
       congruence.
     }
-    destruct blks' as [| blk1' blks'].
-    * inversion H.
-    * destruct blks'.
-      simpl.
-      simpl in H.
-      destruct H as [H | H].
-      -- rewrite H. simpl.
-         rewrite Minus.minus_plus.
-         reflexivity.
-      -- inversion H.
-      -- simpl in H1.
-         assert (2 + length blks' >= 2).
-         { apply PeanoNat.Nat.le_add_r. }
-         replace (S (S (length blks'))) with (2 + length blks') in H2.
-         apply Lt.le_not_lt in H2.
-         omega.
-         reflexivity.
-    * omega.
-    * omega.
-  + inversion HP'.
+  } 
 Qed.
-
-(* This is for a physical pointer. WIP
-  - destruct p as [p cid].
-    destruct p as [o Is].
-    simpl in HP'.
-    inversion HP'.
-    unfold get_deref in HDEREF.
-    unfold get_deref_blks_phyptr in HDEREF.
-    remember (Ir.Memory.inbounds_blocks_all m (o::o+sz::Is)) as res.
-    assert (List.length res < 2).
-    { eapply Ir.Memory.inbounds_blocks2_singleton2 with
-          (ofs1 := o) (ofs2 := o+sz).
-      eassumption.
-      apply PeanoNat.Nat.lt_neq.
-      apply PeanoNat.Nat.lt_add_pos_r.
-      assumption.
-      rewrite <- Heqres. reflexivity.
-    }
-    destruct res as [| bo1 res].
-    + simpl in HDEREF. inversion HDEREF.
-    + destruct res.
-      destruct bo1 as [bid1 blk1].
-      symmetry in Heqres.
-      assert (HCOND := Ir.Memory.inbounds_blocks2_forallb2 m
-                        (o::o+sz::Is) ((bid1,blk1)::nil) Heqres).
-      simpl in HCOND.
-      repeat (rewrite andb_true_r in HCOND).
-      repeat (rewrite andb_true_iff in HCOND).
-      destruct HCOND as [HCOND1 HCOND].
-      destruct HCOND as [HCOND2 HCOND].
-      destruct cid as [ | cid].
-      * remember (Ir.Memory.calltime m c) as calltime.
-        destruct calltime.
-        simpl in HDEREF.
-        remember (Ir.MemBlock.alive_before t blk1) as ab.
-        destruct ab.
-        -- simpl in HDEREF.
-           unfold get_deref.
-           unfold get_deref_blks_phyptr.
-           remember (Ir.Memory.inbounds_blocks2 m (o::o+sz::nil)) as res'.
-           assert (List.In (bid1, blk1) res').
-           {
-             eapply Ir.Memory.inbounds_blocks_In.
-             - e
-           }
-*)
 
 (**************************************************
  Lemmas about load_bytes & store_bytes & store_val
