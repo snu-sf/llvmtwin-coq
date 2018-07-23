@@ -41,6 +41,7 @@ Definition incrpc (c:Ir.Config.t) :=
   | None => c (* Cannot happen *)
   end.
 
+(* Updates register & Increments PC. *)
 Definition update_reg_and_incrpc (c:Ir.Config.t) (r:Ir.reg) (v:Ir.val) :=
   incrpc (Ir.Config.update_rval c r v).
 
@@ -90,8 +91,12 @@ Definition psub p1 p2 m bsz :=
   match (p1, p2) with
   | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     if Nat.eqb l1 l2 then
+      (* psub on two same block *)
       Ir.num (twos_compl_sub o1 o2 bsz)
-    else Ir.poison
+    else
+      (* psub on two different blocks *)
+      Ir.poison
+  (* In all other cases, returns concrete number *)
   | (Ir.pphy o1 _ _, Ir.plog _ _) =>
     Ir.num (twos_compl_sub o1 (p2N p2 m bsz) bsz)
   | (Ir.plog _ _, Ir.pphy o2 _ _) =>
@@ -107,6 +112,8 @@ Definition gep (p:Ir.ptrval) (idx0:nat) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir
   | Ir.plog l o =>
     let o' := twos_compl_add o idx Ir.PTRSZ in
     if inb then
+      (* In case of inbounds: check whether input/output pointer is
+         within bounds. *)
       match (Ir.Memory.get m l) with
       | Some blk =>
         if Ir.MemBlock.inbounds o blk &&
@@ -114,7 +121,9 @@ Definition gep (p:Ir.ptrval) (idx0:nat) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir
         else Ir.poison (* out of bounds *)
       | None => Ir.poison (* unreachable *)
       end
-    else Ir.ptr (Ir.plog l o')
+    else
+      (* otherwise: just returns the pointer with updated offset. *)
+      Ir.ptr (Ir.plog l o')
   | Ir.pphy o Is cid =>
     let o' := twos_compl_add o idx Ir.PTRSZ in
     if inb then
@@ -128,6 +137,7 @@ Definition gep (p:Ir.ptrval) (idx0:nat) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir
         (* idx is negative: no constraint. *)
         Ir.ptr (Ir.pphy o' (o::o'::Is) cid)
     else
+      (* if no inbounds tag, don't update Is. *)
       Ir.ptr (Ir.pphy o' Is cid)
   end.
 
@@ -136,6 +146,7 @@ Definition free p m: option (Ir.Memory.t) :=
   match p with
   | Ir.plog l 0 => Ir.Memory.free m l
   | Ir.pphy o Is cid =>
+    (* find a block which corresponds to o. *)
     match (Ir.Memory.zeroofs_block m o) with
     | None => None
     | Some (bid, mb) =>
@@ -146,15 +157,21 @@ Definition free p m: option (Ir.Memory.t) :=
   | _ => None
   end.
 
+(* Returns true if `icmp eq` on two poiners will return nondeterministic
+   value, false otherwise. *)
 Definition icmp_eq_ptr_nondet_cond (p1 p2:Ir.ptrval) (m:Ir.Memory.t): bool :=
   match (p1, p2) with
   | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     match (Ir.Memory.get m l1, Ir.Memory.get m l2) with
     | (Some mb1, Some mb2) =>
-      (negb (Nat.eqb l1 l2)) &&
+      (negb (Nat.eqb l1 l2)) && (* two pointers should point to diff. blocks *)
+       (* o1 = n /\ o2 = 0 *)
       ((Nat.eqb o1 mb1.(Ir.MemBlock.n) && Nat.eqb o2 0) ||
+       (* n < o1 *)
        (mb1.(Ir.MemBlock.n) <? o1) ||
+       (* o1 = 0 /\ o2 = n *)
        (Nat.eqb o1 0 && Nat.eqb o2 mb2.(Ir.MemBlock.n)) ||
+       (* n < o2 *)
        (mb2.(Ir.MemBlock.n) <? o2) ||
        (* even if offsets are inbounds, comparison result is nondeterministic
           if lifetimes are disjoint. *)
@@ -185,12 +202,15 @@ Definition icmp_eq_ptr (p1 p2:Ir.ptrval) (m:Ir.Memory.t): option bool :=
     Some (Nat.eqb (p2N p1 m Ir.PTRSZ) o2)
   end.
 
+(* Returns true if `icmp ule` on two poiners will return nondeterministic
+   value, false otherwise. *)
 Definition icmp_ule_ptr_nondet_cond (p1 p2:Ir.ptrval) (m:Ir.Memory.t): bool :=
   match (p1, p2) with
   | (Ir.plog l1 o1, Ir.plog l2 o2) =>
-    negb (Nat.eqb l1 l2) ||
+    negb (Nat.eqb l1 l2) || (* they point to different blocks, or *)
     match Ir.Memory.get m l1 with
     | Some mb1 =>
+      (* ~ (o1 <= n /\ o2 <= n) *)
       (negb (Nat.leb o1 (Ir.MemBlock.n mb1))) ||
       (negb (Nat.leb o2 (Ir.MemBlock.n mb1)))
     | None => false
@@ -304,12 +324,12 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         | Some (Ir.ptr p) =>
           match retty with
           | Ir.ptrty _ => Ir.ptr p
-          | _ => Ir.poison
+          | _ => Ir.poison (* ex: `bitcast i8* to i64' is invalid. *)
           end
         | Some (Ir.num n) =>
           match retty with
           | Ir.ity _ => Ir.num n
-          | _ => Ir.poison
+          | _ => Ir.poison (* ex: `bitcast i64 to i8*' is invaild. *)
           end
         | _ => Ir.poison
         end))
@@ -378,14 +398,19 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
 
 (* Inductive definition of small-step semantics of instruction. *)
 Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
+(* small-step with deterministic semantics. *)
 | s_det: forall c sr
       (HNEXT:Some sr = inst_det_step c), inst_step c sr
 
+(* a case where malloc nondeterministically returns NULL.
+   This is required because we really cannot expect when
+   malloc will return NULL in assembly code. *)
 | s_malloc_null: forall c i r szty opsz
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.imalloc r szty opsz),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.ptr Ir.NULL)))
 
+(* a case where malloc returned oom. *)
 | s_malloc_oom: forall c i r szty opsz nsz
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.imalloc r szty opsz)
@@ -395,7 +420,8 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
     inst_step c sr_oom
 
 (* Malloc which does twin memory allocation.
-   P is the list of beginning offsets *)
+   P is the list of beginning offsets.
+   l is the returned block id. *)
 | s_malloc: forall c i r szty opsz nsz (P:list nat) m' l contents
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.imalloc r szty opsz)
@@ -413,6 +439,7 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
                                            (Ir.Config.update_m c m') r
                     (Ir.ptr (Ir.plog l 0))))
 
+(* a case when icmp eq returns value nondeterminstically *)
 | s_icmp_eq_nondet: forall c i r opty op1 op2 p1 p2 res
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.iicmp_eq r opty op1 op2)
@@ -421,6 +448,7 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
       (HNONDET:icmp_eq_ptr_nondet_cond p1 p2 (Ir.Config.m c) = true),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num res)))
 
+(* a case when icmp ule returns value nondeterminstically *)
 | s_icmp_ule_nondet: forall c i r opty op1 op2 p1 p2 res
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.iicmp_ule r opty op1 op2)
@@ -682,7 +710,7 @@ Proof.
   - congruence.
 Qed.
 
-Lemma update_rval_wf:
+Theorem update_rval_wf:
   forall c c' r v
          (HWF:Ir.Config.wf md c)
          (HC':c' = Ir.Config.update_rval c r v)
@@ -731,7 +759,7 @@ Proof.
   }
 Qed.
 
-Lemma update_reg_and_incrpc_wf:
+Theorem update_reg_and_incrpc_wf:
   forall c c' v r
          (HWF:Ir.Config.wf md c)
          (HC':c' = update_reg_and_incrpc c r v)
@@ -748,7 +776,7 @@ Proof.
   eapply H. reflexivity.
 Qed.
 
-Lemma t_step_wf:
+Theorem t_step_wf:
   forall c c' e
          (HWF:Ir.Config.wf md c)
          (HSTEP:t_step c = sr_success e c'),
@@ -877,16 +905,6 @@ Proof.
   }
 Qed.
 
-Lemma fresh_bid_store_val:
-  forall m p v t,
-    Ir.Memory.fresh_bid (Ir.store_val m p v t) =
-    Ir.Memory.fresh_bid m.
-Proof.
-  intros.
-  unfold Ir.store_val. unfold Ir.store_bytes.
-  unfold Ir.Memory.set.
-  des_ifs.
-Qed.
 
 
 
@@ -964,7 +982,8 @@ Proof.
 Qed.
 
 (* Theorem: if changes_mem returns false, memory isn't
-   changed after inst_step. *)
+   changed after inst_step.
+   This includes ptrtoint/inttoptr/psub/gep/icmp. *)
 Theorem changes_mem_spec:
   forall c i c' e
          (HWF:Ir.Config.wf md c)

@@ -1854,6 +1854,25 @@ Proof.
     + apply IHl in H. simpl. right. assumption.
 Qed.
 
+Lemma list_find_key_spec {X:Type}:
+  forall (l:list (nat * X)) key val
+         (HIN:List.In (key,val) l)
+         (HNODUP:List.NoDup (list_keys l)),
+    list_find_key l key = [(key, val)].
+Proof.
+  intros.
+  remember (list_find_key l key) as res.
+  dup Heqres.
+  eapply list_find_key_NoDup in Heqres; try assumption.
+  assert (List.In (key, val) res).
+  { rewrite Heqres0.
+    eapply list_find_key_In.
+    assumption. }
+  destruct res. inv H.
+  destruct res. inv H. reflexivity. inv H0. simpl in Heqres.
+  omega.
+Qed.
+
 
 
 (*******************************************

@@ -13,6 +13,7 @@ Require Import Memory.
 Module Ir.
 
 
+(* The list of dereferenced blocks, given a physical pointer. *)
 Definition get_deref_blks_phyptr (m:Ir.Memory.t) (o:nat) (Is:list nat)
            (cid:option Ir.callid) (sz:nat)
 : list (Ir.blockid * Ir.MemBlock.t) :=
@@ -51,6 +52,8 @@ Definition get_deref (m:Ir.Memory.t) (p:Ir.ptrval) (sz:nat)
              (get_deref_blks_phyptr m o Is cid sz)
   end.
 
+(* Boolean version of get_deref.
+   If get_deref returns [], this returns false, true otherwise. *)
 Definition deref (m:Ir.Memory.t) (p:Ir.ptrval) (sz:nat): bool :=
   match (get_deref m p sz) with
   | nil => false | _=> true
@@ -64,6 +67,7 @@ Definition load_bytes (m:Ir.Memory.t) (p:Ir.ptrval) (sz:nat): list Ir.Byte.t :=
   | (bid, blk, ofs)::_ => Ir.MemBlock.bytes blk ofs sz
   end.
 
+(* Returns a value, after dereferencing p with sz btes. *)
 Definition load_val (m:Ir.Memory.t) (p:Ir.ptrval) (t:Ir.ty): Ir.val :=
   let bytes := load_bytes m p (Ir.ty_bytesz t) in
   match t with
@@ -79,6 +83,7 @@ Definition load_val (m:Ir.Memory.t) (p:Ir.ptrval) (t:Ir.ty): Ir.val :=
     end
   end.
 
+(* Store bytes bs into p. *)
 Definition store_bytes (m:Ir.Memory.t) (p:Ir.ptrval) (bs:list Ir.Byte.t)
 :Ir.Memory.t :=
   match get_deref m p (List.length bs) with
@@ -90,6 +95,7 @@ Definition store_bytes (m:Ir.Memory.t) (p:Ir.ptrval) (bs:list Ir.Byte.t)
       Ir.Memory.set m bid (Ir.MemBlock.set_bytes blk ofs bs)
   end.
 
+(* Store value v into p. *)
 Definition store_val (m:Ir.Memory.t) (p:Ir.ptrval) (v:Ir.val) (t:Ir.ty)
 : Ir.Memory.t :=
   match (t, v) with
@@ -126,12 +132,12 @@ Definition ptr_to_phy (m:Ir.Memory.t) (p:Ir.ptrval): option Ir.ptrval :=
 
 
 (***********************************************
-                Lemmas about get_deref
+            Lemmas about get_deref
  ***********************************************)
 
-(* Theorem: get_deref log(bid, ofs) either returns the input (bid, block, ofs)
+(* get_deref log(bid, ofs) either returns the input (bid, block, ofs)
    or returns nothing. *)
-Theorem get_deref_log:
+Lemma get_deref_log:
   forall (m:Ir.Memory.t) bid ofs sz bos blk
          (HDEREF: get_deref m (Ir.plog bid ofs) sz = bos)
          (HBLK: Ir.Memory.get m bid = Some blk),
@@ -604,7 +610,7 @@ Proof.
   { eapply List.filter_In. eassumption. }
 Qed.
 
-Theorem get_deref_phy_singleton:
+Lemma get_deref_phy_singleton:
   forall (m:Ir.Memory.t) (m_wf:Ir.Memory.wf m) o Is cid (sz:nat) bos
          (HSZ: 0 < sz)
          (HDEREF: Ir.get_deref m (Ir.pphy o Is cid) sz = bos),
@@ -740,7 +746,7 @@ Proof.
   }
 Qed.
 
-Theorem get_deref_ofs_lt_MEMSZ:
+Lemma get_deref_ofs_lt_MEMSZ:
   forall (m:Ir.Memory.t) (m_wf:Ir.Memory.wf m) p sz bid mb ofs
          (HSZ:0 < sz)
          (HDEREF:get_deref m p sz = (bid, mb, ofs)::nil),
@@ -1151,5 +1157,17 @@ Proof.
       assumption. }
   }
 Qed.
+
+Lemma fresh_bid_store_val:
+  forall m p v t,
+    Ir.Memory.fresh_bid (Ir.store_val m p v t) =
+    Ir.Memory.fresh_bid m.
+Proof.
+  intros.
+  unfold Ir.store_val. unfold Ir.store_bytes.
+  unfold Ir.Memory.set.
+  des_ifs.
+Qed.
+
 
 End Ir.

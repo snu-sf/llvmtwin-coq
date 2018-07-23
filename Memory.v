@@ -9,8 +9,13 @@ Require Import Sorting.Permutation.
 
 Module Ir.
 
+(* Pointer value is 16 bits.
+   The reason why it is not set as 32 or 64 is that sometimes
+   it makes simpl and some tactics (almost) stop :( *)
 Definition PTRSZ := 16.
+(* The size of memory. *)
 Definition MEMSZ := Nat.shiftl 1 PTRSZ.
+(* # of twin blocks. *)
 Definition TWINCNT := 3.
 (* A maximum value of alignment that will guarantee
    success of machine-level memory access in this target.
@@ -69,13 +74,18 @@ Proof.
 Qed.
 
 
-
+(* block types.
+   stack: a block in stack
+   heap: a block in heap
+   global: a global variable
+   function: a function variable *)
 Inductive blockty :=
 | stack | heap | global | function.
 
 
 Module Bit.
 
+(* Definition of a bit. *)
 Inductive t :=
 | bint: bool -> t
 (* (p, i). Note that 0 <= i < PTRSZ is kept as invariant. *)
@@ -265,6 +275,7 @@ End Bit.
 
 Module Byte.
 
+(* Definition of a byte. *)
 Structure t := mk
  {b0:Bit.t;
   b1:Bit.t;
@@ -624,7 +635,7 @@ Structure t := mk
     P: list nat
   }.
 
-(* Returns (start_ofs, size)s including all twin blocks. *)
+(* Returns (start_ofs, size)s that include all twin blocks. *)
 Definition P_ranges (mb:t):list (nat * nat) :=
   List.map (fun ofs => (ofs, mb.(n))) mb.(P).
 
@@ -637,47 +648,61 @@ Definition P0_range (mb:t): nat * nat :=
   (addr mb, mb.(n)).
 
 
+(* Well-formendess of a memory block. *)
 Structure wf (mb:t) := mkWf
   {
+    (* wf_tcond: Wellformedness of lifetime of a block. *)
     wf_tcond: forall t (FREED:mb.(r).(snd) = Some t), mb.(r).(fst) < t;
+    (* wf_clen: length of bytes is equivalent to n. *)
     wf_clen: List.length mb.(c) = mb.(n);
     (* wf_poslen: There's no zero-size block in the memory.
        In this formalization, malloc(0) returns NULL, so this invariant
        holds. *)
     wf_poslen: no_empty_range (P_ranges mb) = true;
+    (* wf_align: alignment criteria *)
     wf_align: forall p (HAS:List.In p mb.(P)), Nat.modulo p mb.(a) = 0;
     (* wf_mem: Note that this is "<", not "<=", because p + n wouldn't
        be representable in 2^32 bits *)
     wf_inmem: forall p (HAS:List.In p mb.(P)), p + mb.(n) < MEMSZ;
+    (* wf_notnull: block starting offset cannot be 0
+       (because this formalization assumes that address space is always 0) *)
     wf_notnull: forall p (HAS:List.In p mb.(P)), ~ (p = 0);
+    (* all twin blocks are disjoint *)
     wf_disj: disjoint_ranges (P_ranges mb) = true;
+    (* has correct number of twin blocks. *)
     wf_twin: List.length mb.(P) = TWINCNT
   }.
 
+(* is block t alive? *)
 Definition alive (mb:t): bool :=
   match mb.(r).(snd) with
   | None => true | Some _ => false
   end.
 
+(* Is block t alive before time the_time? *)
 Definition alive_before (the_time:nat) (mb:t): bool :=
   Nat.ltb mb.(r).(fst) the_time.
 
+(* 0 <= ofs <= block size of mb? *)
 Definition inbounds (ofs:nat) (mb:t): bool :=
   Nat.leb ofs mb.(n).
 
+(* start_ofs <= ofs <= start_ofs + block size of mb? *)
 Definition inbounds_abs (ofs':nat) (mb:t): bool :=
   in_range ofs' (P0_range mb).
 
-(* offset, len *)
+(* Get bytes in (offset, offset +len) *)
 Definition bytes (mb:t) (ofs len:nat): list (Byte.t) :=
   List.firstn len (List.skipn ofs mb.(c)).
 
+(* Update bytes. *)
 Definition set_bytes (mb:t) (ofs:nat) (bytes:list (Byte.t)): t :=
   mk mb.(bt) mb.(r) mb.(n) mb.(a)
      (List.firstn ofs (mb.(c)) ++ bytes ++
       List.skipn (ofs + List.length bytes) mb.(c))
      mb.(P).
 
+(* Set the end of lifetime if it was alive. *)
 Definition set_lifetime_end (mb:t) (newt:time): option t :=
   if alive mb then
     Some (mk mb.(bt) (mb.(r).(fst), Some newt)
@@ -742,6 +767,30 @@ Proof.
     apply Heqflag.
     apply Plus.plus_le_compat_l.
     assumption.
+Qed.
+
+Lemma inbounds_abs_lt_MEMSZ:
+  forall mb i
+         (HWF:Ir.MemBlock.wf mb)
+         (HINB:Ir.MemBlock.inbounds_abs i mb = true),
+    i < Ir.MEMSZ.
+Proof.
+  intros.
+  unfold Ir.MemBlock.inbounds_abs in HINB.
+  unfold in_range in HINB.
+  rewrite andb_true_iff in HINB.
+  destruct HINB.
+  rewrite PeanoNat.Nat.leb_le in H0.
+  unfold Ir.MemBlock.P0_range in *.
+  simpl in *.
+  destruct HWF.
+  eapply le_lt_trans.
+  eassumption.
+  apply wf_inmem0.
+  unfold Ir.MemBlock.addr.
+  destruct (Ir.MemBlock.P mb).
+  simpl in wf_twin0. unfold Ir.TWINCNT in wf_twin0. congruence.
+  simpl. left. reflexivity.
 Qed.
 
 Lemma bytes_length:
@@ -1066,6 +1115,21 @@ Proof.
     simpl in Heqf. congruence.
     assumption.
   - congruence.
+Qed.
+
+Lemma In_get:
+  forall m b mb
+         (HWF:Ir.Memory.wf m)
+         (HIN:List.In (b, mb) (Ir.Memory.blocks m)),
+    Some mb = Ir.Memory.get m b.
+Proof.
+  intros.
+  unfold Ir.Memory.get.
+  assert (list_find_key (Ir.Memory.blocks m) b = [(b, mb)]).
+  { eapply list_find_key_spec.
+    assumption.
+    inv HWF. assumption. }
+  rewrite H. reflexivity.
 Qed.
 
 Lemma get_In_key:
@@ -1429,6 +1493,67 @@ Proof.
     destruct fres. inversion H. inversion Heqr.
 Qed.
 
+Lemma get_fresh_bid:
+  forall m (HWF:wf m) mb l
+         (HGET:get m l = Some mb),
+    l < m.(fresh_bid).
+Proof.
+  intros.
+  inversion HWF.
+  symmetry in HGET.
+  apply get_In with (blks := m.(blocks)) in HGET; try reflexivity.
+  rewrite forallb_forall in wf_newid0.
+  apply list_keys_In in HGET.
+  apply wf_newid0 in HGET.
+  rewrite PeanoNat.Nat.ltb_lt in HGET.
+  assumption.
+Qed.
+
+Lemma get_new:
+  forall m m' l blkty nsz a c P l0
+         (HWF:Ir.Memory.wf m)
+         (HNEW:(m', l) = Ir.Memory.new m blkty nsz a c P)
+         (HDISJ:Ir.Memory.allocatable m (List.map (fun addr => (addr, nsz)) P) = true)
+         (HSZ2:nsz > 0)
+         (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk (Ir.heap) (begt, None) nsz
+                                                            (Ir.SYSALIGN) c P))
+         (HL0:l0 < Ir.Memory.fresh_bid m),
+    Ir.Memory.get m' l0 = Ir.Memory.get m l0.
+Proof.
+  intros.
+  unfold Ir.Memory.new in HNEW.
+  inv HNEW.
+  unfold Ir.Memory.get. simpl.
+  apply PeanoNat.Nat.lt_neq in HL0.
+  apply not_eq_sym in HL0.
+  rewrite <- PeanoNat.Nat.eqb_neq in HL0.
+  rewrite HL0. reflexivity.
+Qed.
+
+Lemma get_set_diff2:
+  forall m bid mb' m' bid'
+         (HWF:Ir.Memory.wf m)
+         (HWF':Ir.Memory.wf m')
+         (HGET:Ir.Memory.get m bid = None)
+         (HSET:m' = Ir.Memory.set m bid' mb')
+         (HDIFF:bid <> bid'),
+    Ir.Memory.get m' bid = None.
+Proof.
+  intros.
+  unfold Ir.Memory.get.
+  symmetry in HGET.
+  rewrite HSET.
+  unfold Ir.Memory.set.
+  simpl. rewrite list_find_key_set_diffkey.
+  unfold Ir.Memory.get in HGET. congruence.
+  congruence.
+Qed.
+
+
+(**********************************************
+      Preservation of wellformedness,
+      and a few lemmas that use it
+ **********************************************)
 
 Theorem new_wf:
   forall m (HWF:wf m) t n a c P m' mb
@@ -1620,20 +1745,33 @@ Proof.
     }
 Qed.
 
-Lemma get_fresh_bid:
-  forall m (HWF:wf m) mb l
-         (HGET:get m l = Some mb),
-    l < m.(fresh_bid).
+(* Wellformedness, inversed direction - when a new block is added. *)
+Lemma wf_newblk_inv:
+  forall mt blocks newblk calltime fresh_cid
+         (HWF: wf (mk mt (newblk::blocks) calltime fresh_cid)),
+    wf (mk mt blocks calltime fresh_cid).
 Proof.
   intros.
-  inversion HWF.
-  symmetry in HGET.
-  apply get_In with (blks := m.(blocks)) in HGET; try reflexivity.
-  rewrite forallb_forall in wf_newid0.
-  apply list_keys_In in HGET.
-  apply wf_newid0 in HGET.
-  rewrite PeanoNat.Nat.ltb_lt in HGET.
-  assumption.
+  destruct HWF.
+  split.
+  - intros.
+    apply wf_blocks0 with (i := i).
+    simpl. simpl in HAS. right. assumption.
+  - simpl. simpl in wf_uniqueid0.
+    inversion wf_uniqueid0. assumption.
+  - simpl in *. rewrite andb_true_iff in wf_newid0.
+    destruct wf_newid0. assumption.
+  - unfold alive_P_ranges in *.
+    unfold alive_blocks in *.
+    simpl in *.
+    destruct (MemBlock.alive (snd newblk)) eqn:HALIVE.
+    + simpl in wf_disjoint0.
+      apply disjoint_ranges_append in wf_disjoint0.
+      destruct wf_disjoint0.
+      assumption.
+    + assumption.
+  - simpl in *. intros.
+    eapply wf_blocktime0. right. eassumption.
 Qed.
 
 Lemma get_free:
@@ -1678,27 +1816,6 @@ Proof.
   }
 Qed.
 
-Lemma get_new:
-  forall m m' l blkty nsz a c P l0
-         (HWF:Ir.Memory.wf m)
-         (HNEW:(m', l) = Ir.Memory.new m blkty nsz a c P)
-         (HDISJ:Ir.Memory.allocatable m (List.map (fun addr => (addr, nsz)) P) = true)
-         (HSZ2:nsz > 0)
-         (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk (Ir.heap) (begt, None) nsz
-                                                            (Ir.SYSALIGN) c P))
-         (HL0:l0 < Ir.Memory.fresh_bid m),
-    Ir.Memory.get m' l0 = Ir.Memory.get m l0.
-Proof.
-  intros.
-  unfold Ir.Memory.new in HNEW.
-  inv HNEW.
-  unfold Ir.Memory.get. simpl.
-  apply PeanoNat.Nat.lt_neq in HL0.
-  apply not_eq_sym in HL0.
-  rewrite <- PeanoNat.Nat.eqb_neq in HL0.
-  rewrite HL0. reflexivity.
-Qed.
-
 Lemma get_free_some:
   forall m m' l l0 blk
          (HWF:Ir.Memory.wf m)
@@ -1736,25 +1853,6 @@ Proof.
   }
 Qed.
 
-Lemma get_set_diff2:
-  forall m bid mb' m' bid'
-         (HWF:Ir.Memory.wf m)
-         (HWF':Ir.Memory.wf m')
-         (HGET:Ir.Memory.get m bid = None)
-         (HSET:m' = Ir.Memory.set m bid' mb')
-         (HDIFF:bid <> bid'),
-    Ir.Memory.get m' bid = None.
-Proof.
-  intros.
-  unfold Ir.Memory.get.
-  symmetry in HGET.
-  rewrite HSET.
-  unfold Ir.Memory.set.
-  simpl. rewrite list_find_key_set_diffkey.
-  unfold Ir.Memory.get in HGET. congruence.
-  congruence.
-Qed.
-
 Lemma get_free_none:
   forall m m' l l0
          (HWF:Ir.Memory.wf m)
@@ -1788,35 +1886,6 @@ Qed.
 (**********************************************
       Lemmas&Theorems about inboundness
  **********************************************)
-
-(* Wellformedness, inversed direction - when a new block is added. *)
-Lemma wf_newblk_inv:
-  forall mt blocks newblk calltime fresh_cid
-         (HWF: wf (mk mt (newblk::blocks) calltime fresh_cid)),
-    wf (mk mt blocks calltime fresh_cid).
-Proof.
-  intros.
-  destruct HWF.
-  split.
-  - intros.
-    apply wf_blocks0 with (i := i).
-    simpl. simpl in HAS. right. assumption.
-  - simpl. simpl in wf_uniqueid0.
-    inversion wf_uniqueid0. assumption.
-  - simpl in *. rewrite andb_true_iff in wf_newid0.
-    destruct wf_newid0. assumption.
-  - unfold alive_P_ranges in *.
-    unfold alive_blocks in *.
-    simpl in *.
-    destruct (MemBlock.alive (snd newblk)) eqn:HALIVE.
-    + simpl in wf_disjoint0.
-      apply disjoint_ranges_append in wf_disjoint0.
-      destruct wf_disjoint0.
-      assumption.
-    + assumption.
-  - simpl in *. intros.
-    eapply wf_blocktime0. right. eassumption.
-Qed.
 
 Lemma blocks_alive_blocks_lsubseq:
   forall (m:t),
@@ -2717,6 +2786,103 @@ Proof.
     rewrite Heqx, Heqy.
     apply alive_P0_ranges_blocks_len.
     assumption.
+Qed.
+
+Lemma inbounds_blocks2_intersect:
+  forall m l i1 i2 I I' l'
+         (HWF:Ir.Memory.wf m)
+         (HDIFF:i1 <> i2)
+         (HINB1:Ir.Memory.inbounds_blocks2 m (i1::i2::I) = l)
+         (HINB2:Ir.Memory.inbounds_blocks2 m (i1::i2::I') = l'),
+    l = l' \/ l = [] \/ l' = [].
+Proof.
+  intros.
+  dup HINB1.
+  apply Ir.Memory.inbounds_blocks2_singleton2 in HINB0.
+  dup HINB2.
+  apply Ir.Memory.inbounds_blocks2_singleton2 in HINB3.
+  destruct l.
+  { eauto. }
+  destruct l.
+  { destruct l'. eauto.
+    destruct l'.
+    { destruct p. destruct p0.
+      destruct (b =? b0) eqn:HEQID.
+      { rewrite PeanoNat.Nat.eqb_eq in HEQID.
+        subst b0.
+        assert (List.In (b, t0) (Ir.Memory.blocks m)).
+        { eapply Ir.Memory.inbounds_blocks2_In2.
+          rewrite HINB1. reflexivity. }
+        assert (List.In (b, t1) (Ir.Memory.blocks m)).
+        { eapply Ir.Memory.inbounds_blocks2_In2.
+          rewrite HINB2. reflexivity. }
+        eapply Ir.Memory.blocks_get in H; try eassumption; try reflexivity.
+        eapply Ir.Memory.blocks_get in H0; try eassumption; try reflexivity.
+        simpl in *. left. congruence. }
+      { rewrite PeanoNat.Nat.eqb_neq in HEQID.
+        dup HINB1.
+        dup HINB2.
+        eapply Ir.Memory.inbounds_blocks2_forallb2 in HINB4.
+        simpl in HINB4.
+        repeat (rewrite andb_true_r in HINB4).
+        eapply Ir.Memory.inbounds_blocks2_forallb2 in HINB5.
+        simpl in HINB5.
+        repeat (rewrite andb_true_r in HINB5).
+        (* make alive *)
+        dup HINB1.
+        apply Ir.Memory.inbounds_blocks2_alive in HINB6. simpl in HINB6.
+        rewrite andb_true_r in HINB6.
+        dup HINB2.
+        apply Ir.Memory.inbounds_blocks2_alive in HINB7. simpl in HINB7.
+        rewrite andb_true_r in HINB7.
+        (* inbounds_blocks2 -> List.In *)
+        symmetry in HINB1.
+        eapply Ir.Memory.inbounds_blocks2_In2 in HINB1.
+        symmetry in HINB2.
+        eapply Ir.Memory.inbounds_blocks2_In2 in HINB2.
+        rewrite andb_true_iff in HINB4. destruct HINB4.
+        rewrite andb_true_iff in H0. destruct H0.
+        rewrite andb_true_iff in HINB5. destruct HINB5.
+        rewrite andb_true_iff in H3. destruct H3.
+        dup HWF. inv HWF.
+        assert (disjoint_ranges (Ir.Memory.alive_P0_ranges m) = true).
+        { eapply disjoint_lsubseq_disjoint.
+          eapply wf_disjoint0.
+          eapply Ir.Memory.alive_P_P0_ranges_lsubseq.
+          assumption. }
+        assert (disjoint_range (Ir.MemBlock.P0_range t0)
+                               (Ir.MemBlock.P0_range t1) = true).
+        { eapply Ir.Memory.disjoint_range_P0_range.
+          eassumption.
+          apply In_get in HINB1; try assumption. eassumption.
+          assumption.
+          apply In_get in HINB2; try assumption. eassumption.
+          assumption.
+          assumption. }
+        (* okay, now let's get inconsistency. *)
+        unfold Ir.MemBlock.P0_range in H6.
+        simpl in H6.
+        unfold disjoint_range in H6.
+        rewrite orb_true_iff in H6.
+        rewrite PeanoNat.Nat.leb_le in H6.
+        rewrite PeanoNat.Nat.leb_le in H6.
+        unfold Ir.MemBlock.inbounds_abs in H, H0, H2, H3.
+        unfold in_range in H, H0, H2, H3.
+        rewrite andb_true_iff in H, H0, H2, H3.
+        unfold Ir.MemBlock.P0_range in H, H0, H2, H3.
+        simpl in H, H0, H2, H3.
+        repeat (rewrite PeanoNat.Nat.leb_le in *).
+        omega.
+      }
+    }
+    simpl in HINB3.
+    omega.
+  }
+  simpl in HINB0. omega.
+  assumption.
+  assumption.
+  assumption.
+  assumption.
 Qed.
 
 Lemma inbounds_blocks2_In3:
