@@ -376,8 +376,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
   | None => Some sr_goes_wrong
   end.
 
-(* Inductive definition of small-step semantics of instruction.
-   Note that sr_nondet is never used in inst_step. *)
+(* Inductive definition of small-step semantics of instruction. *)
 Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
 | s_det: forall c sr
       (HNEXT:Some sr = inst_det_step c), inst_step c sr
@@ -395,6 +394,8 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
             Ir.Memory.allocatable (Ir.Config.m c) (List.map (fun addr => (addr, nsz)) P) = true),
     inst_step c sr_oom
 
+(* Malloc which does twin memory allocation.
+   P is the list of beginning offsets *)
 | s_malloc: forall c i r szty opsz nsz (P:list nat) m' l contents
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.imalloc r szty opsz)
