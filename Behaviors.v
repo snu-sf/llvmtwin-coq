@@ -13,7 +13,7 @@ Module Ir.
 
 Inductive event :=
 | e_none: event
-| e_some (n:N): event.
+| e_some (n:nat): event.
 
 Definition not_none (e:event): bool :=
   match e with

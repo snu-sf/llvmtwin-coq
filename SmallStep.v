@@ -1,6 +1,6 @@
 Require Import List.
 Require Import Bool.
-Require Import BinNatDef.
+Require Import BinNat.
 Require Import Omega.
 Require Import sflib.
 
@@ -46,20 +46,17 @@ Definition update_reg_and_incrpc (c:Ir.Config.t) (r:Ir.reg) (v:Ir.val) :=
 
 
 (* Helper functions *)
-Definition twos_compl (n:N) (sz:nat):N :=
-  N.modulo n (N.shiftl 2%N (N.of_nat (sz - 1))).
+Definition twos_compl (n:nat) (sz:nat):nat :=
+  Nat.modulo n (Nat.shiftl 2 (sz - 1)).
 
-Definition twos_compl2 (n:nat) (sz:nat):N :=
-  N.modulo (N.of_nat n) (N.shiftl 2%N (N.of_nat (sz - 1))).
+Definition twos_compl_add (x y:nat) (sz:nat):nat :=
+  twos_compl (x + y) sz.
 
-Definition twos_compl_add (x y:N) (sz:nat):N :=
-  twos_compl (N.add x y) sz.
-
-Definition twos_compl_sub (x y:N) (sz:nat):N :=
-  twos_compl (N.sub (N.add x (N.shiftl 2%N (N.of_nat (sz - 1)))) y) sz.
+Definition twos_compl_sub (x y:nat) (sz:nat):nat :=
+  twos_compl (x + (Nat.shiftl 2 (sz - 1)) - y) sz.
 
 Definition to_num (b:bool): Ir.val :=
-  Ir.num (if b then 1%N else 0%N).
+  Ir.num (if b then 1 else 0).
 
 
 (* Definition of the result after a step. *)
@@ -75,17 +72,17 @@ Inductive step_res :=
              Semantics of instructions.
  ****************************************************)
 
-(* Convert a pointer into N. *)
-Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):N :=
+(* Convert a pointer into nat. *)
+Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):nat :=
   match p with
   | Ir.plog l o =>
     match Ir.log_to_phy m l o with
     | Some (Ir.pphy o' _ _) =>
-      twos_compl2 o' sz
-    | _ => twos_compl2 o sz (* unreachable in well-typed program *)
+      twos_compl o' sz
+    | _ => twos_compl o sz (* unreachable in well-typed program *)
     end
   | Ir.pphy o _ _ =>
-    twos_compl2 o sz
+    twos_compl o sz
   end.
 
 (* Pointer subtraction. *)
@@ -93,22 +90,22 @@ Definition psub p1 p2 m bsz :=
   match (p1, p2) with
   | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     if Nat.eqb l1 l2 then
-      Ir.num (twos_compl_sub (N.of_nat o1) (N.of_nat o2) bsz)
+      Ir.num (twos_compl_sub o1 o2 bsz)
     else Ir.poison
   | (Ir.pphy o1 _ _, Ir.plog _ _) =>
-    Ir.num (twos_compl_sub (N.of_nat o1) (p2N p2 m bsz) bsz)
+    Ir.num (twos_compl_sub o1 (p2N p2 m bsz) bsz)
   | (Ir.plog _ _, Ir.pphy o2 _ _) =>
-    Ir.num (twos_compl_sub (p2N p1 m bsz) (N.of_nat o2) bsz)
+    Ir.num (twos_compl_sub (p2N p1 m bsz) o2 bsz)
   | (Ir.pphy o1 _ _, Ir.pphy o2 _ _) =>
-    Ir.num (twos_compl_sub (N.of_nat o1) (N.of_nat o2) bsz)
+    Ir.num (twos_compl_sub o1 o2 bsz)
   end.
 
 (* getelementptr with/without inbounds tag. *)
-Definition gep (p:Ir.ptrval) (idx0:N) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir.val :=
-  let idx := N.mul idx0 (N.of_nat (Ir.ty_bytesz t)) in
+Definition gep (p:Ir.ptrval) (idx0:nat) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir.val :=
+  let idx := idx0 * (Ir.ty_bytesz t) in
   match p with
   | Ir.plog l o =>
-    let o' := N.to_nat (twos_compl_add (N.of_nat o) idx Ir.PTRSZ) in
+    let o' := twos_compl_add o idx Ir.PTRSZ in
     if inb then
       match (Ir.Memory.get m l) with
       | Some blk =>
@@ -119,11 +116,11 @@ Definition gep (p:Ir.ptrval) (idx0:N) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir.v
       end
     else Ir.ptr (Ir.plog l o')
   | Ir.pphy o Is cid =>
-    let o' := N.to_nat (twos_compl_add (N.of_nat o) idx Ir.PTRSZ) in
+    let o' := twos_compl_add o idx Ir.PTRSZ in
     if inb then
-      if N.ltb idx (N.shiftl 1 (N.sub (N.of_nat Ir.PTRSZ) 1%N)) then
+      if Nat.ltb idx (Nat.shiftl 1 (Ir.PTRSZ - 1)) then
         (* Added idx is positive. *)
-        if Nat.ltb o' Ir.MEMSZ then
+        if Nat.ltb (o + idx) Ir.MEMSZ then
           (* Should not overflow Ir.MEMSZ *)
           Ir.ptr (Ir.pphy o' (o::o'::Is) cid)
         else Ir.poison
@@ -183,9 +180,9 @@ Definition icmp_eq_ptr (p1 p2:Ir.ptrval) (m:Ir.Memory.t): option bool :=
       if icmp_eq_ptr_nondet_cond p1 p2 m then None
       else Some false
   | (Ir.pphy o1 Is1 cid1, _) =>
-    Some (N.eqb (N.of_nat o1) (p2N p2 m Ir.PTRSZ))
+    Some (Nat.eqb o1 (p2N p2 m Ir.PTRSZ))
   | (_, Ir.pphy o2 Is2 cid2) =>
-    Some (N.eqb (p2N p1 m Ir.PTRSZ) (N.of_nat o2))
+    Some (Nat.eqb (p2N p1 m Ir.PTRSZ) o2)
   end.
 
 Definition icmp_ule_ptr_nondet_cond (p1 p2:Ir.ptrval) (m:Ir.Memory.t): bool :=
@@ -213,12 +210,12 @@ Definition icmp_ule_ptr (p1 p2:Ir.ptrval) (m:Ir.Memory.t): option bool :=
       | None => false (* unreachable *)
       end
     | (Ir.pphy o1 Is1 cid1, _) =>
-      N.leb (N.of_nat o1) (p2N p2 m Ir.PTRSZ)
+      Nat.leb o1 (p2N p2 m Ir.PTRSZ)
     | (_, Ir.pphy o2 Is2 cid2) =>
-      N.leb (p2N p1 m Ir.PTRSZ) (N.of_nat o2)
+      Nat.leb (p2N p1 m Ir.PTRSZ) o2
     end.
 
-Definition binop (bopc:Ir.Inst.bopcode) (i1 i2:N) (bsz:nat):N :=
+Definition binop (bopc:Ir.Inst.bopcode) (i1 i2:nat) (bsz:nat):nat :=
   match bopc with
   | Ir.Inst.bop_add => twos_compl_add i1 i2 bsz
   | Ir.Inst.bop_sub => twos_compl_sub i1 i2 bsz
@@ -333,7 +330,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         match retty with
         | Ir.ptrty retty =>
           match (Ir.Config.get_val c opint) with
-          | Some (Ir.num n) => Ir.ptr (Ir.pphy (N.to_nat n) nil None)
+          | Some (Ir.num n) => Ir.ptr (Ir.pphy n nil None)
           | _ => Ir.poison
           end
         | _ => Ir.poison
@@ -349,7 +346,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
       match (Ir.Config.get_val c op1, Ir.Config.get_val c op2) with
       (* Integer comparison *)
       | (Some (Ir.num n1), Some (Ir.num n2)) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r (to_num (N.eqb n1 n2))))
+        Some (sr_success Ir.e_none (update_reg_and_incrpc c r (to_num (Nat.eqb n1 n2))))
       (* Pointer comparison *)
       | (Some (Ir.ptr p1), Some (Ir.ptr p2)) =>
         match (icmp_eq_ptr p1 p2 (Ir.Config.m c)) with
@@ -364,7 +361,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
       match (Ir.Config.get_val c opptr1, Ir.Config.get_val c opptr2) with
       (* Integer comparison *)
       | (Some (Ir.num n1), Some (Ir.num n2)) =>
-        Some (sr_success Ir.e_none (update_reg_and_incrpc c r (to_num (N.leb n1 n2))))
+        Some (sr_success Ir.e_none (update_reg_and_incrpc c r (to_num (Nat.leb n1 n2))))
       (* Comparison with pointer *)
       | (Some (Ir.ptr p1), Some (Ir.ptr p2)) =>
         match (icmp_ule_ptr p1 p2 (Ir.Config.m c)) with
@@ -395,21 +392,21 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
       (HINST:i = Ir.Inst.imalloc r szty opsz)
       (HSZ:Some (Ir.num nsz) = Ir.Config.get_val c opsz)
       (HNOSPACE:~exists (P:list nat),
-            Ir.Memory.allocatable (Ir.Config.m c) (List.map (fun addr => (addr, N.to_nat nsz)) P) = true),
+            Ir.Memory.allocatable (Ir.Config.m c) (List.map (fun addr => (addr, nsz)) P) = true),
     inst_step c sr_oom
 
 | s_malloc: forall c i r szty opsz nsz (P:list nat) m' l contents
       (HCUR:Some i = Ir.Config.cur_inst md c)
       (HINST:i = Ir.Inst.imalloc r szty opsz)
       (HSZ:Some (Ir.num nsz) = Ir.Config.get_val c opsz)
-      (HSZ2:N.to_nat nsz > 0)
-      (HC:contents = List.repeat (Ir.Byte.poison) (N.to_nat nsz))
+      (HSZ2:nsz > 0)
+      (HC:contents = List.repeat (Ir.Byte.poison) nsz)
       (HMBWF:forall begt, Ir.MemBlock.wf (Ir.MemBlock.mk
-                                            (Ir.heap) (begt, None) (N.to_nat nsz)
+                                            (Ir.heap) (begt, None) nsz
                                             (Ir.SYSALIGN) contents P))
       (HDISJ:Ir.Memory.allocatable (Ir.Config.m c)
-                       (List.map (fun addr => (addr, N.to_nat nsz)) P) = true)
-      (HNEW: (m', l) = Ir.Memory.new (Ir.Config.m c) (Ir.heap) (N.to_nat nsz)
+                       (List.map (fun addr => (addr, nsz)) P) = true)
+      (HNEW: (m', l) = Ir.Memory.new (Ir.Config.m c) (Ir.heap) nsz
                                      (Ir.SYSALIGN) contents P),
     inst_step c (sr_success Ir.e_none (update_reg_and_incrpc
                                            (Ir.Config.update_m c m') r
@@ -531,7 +528,7 @@ Definition t_step (c:Ir.Config.t) : step_res :=
       let tgt :=
           match (Ir.Config.get_val c condop) with
           | Some (Ir.num cond) =>
-            if N.eqb cond 0%N then Some bbid_f
+            if Nat.eqb cond 0 then Some bbid_f
             else Some bbid_t
           | _ => None (* note that 'br poison' is UB. *)
           end in

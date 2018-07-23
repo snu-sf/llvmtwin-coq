@@ -90,6 +90,18 @@ Proof.
     apply HEQ.
 Qed.
 
+Lemma get_update:
+  forall rf r v,
+    Ir.Regfile.get (Ir.Regfile.update rf r v) r = Some v.
+Proof.
+  intros.
+  unfold Ir.Regfile.get.
+  unfold Ir.Regfile.update.
+  unfold list_find_key.
+  simpl.
+  rewrite PeanoNat.Nat.eqb_refl. reflexivity.
+Qed.
+
 End Regfile.
 
 

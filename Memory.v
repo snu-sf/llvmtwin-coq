@@ -646,7 +646,9 @@ Structure wf (mb:t) := mkWf
        holds. *)
     wf_poslen: no_empty_range (P_ranges mb) = true;
     wf_align: forall p (HAS:List.In p mb.(P)), Nat.modulo p mb.(a) = 0;
-    wf_inmem: forall p (HAS:List.In p mb.(P)), p + mb.(n) <= MEMSZ;
+    (* wf_mem: Note that this is "<", not "<=", because p + n wouldn't
+       be representable in 2^32 bits *)
+    wf_inmem: forall p (HAS:List.In p mb.(P)), p + mb.(n) < MEMSZ;
     wf_notnull: forall p (HAS:List.In p mb.(P)), ~ (p = 0);
     wf_disj: disjoint_ranges (P_ranges mb) = true;
     wf_twin: List.length mb.(P) = TWINCNT

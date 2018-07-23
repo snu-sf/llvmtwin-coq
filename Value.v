@@ -4,7 +4,7 @@ Require Import Memory.
 Module Ir.
 
 Inductive val :=
-| num: N -> val
+| num: nat -> val
 | ptr: Ir.ptrval -> val
 | poison: val.
 

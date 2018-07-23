@@ -66,14 +66,14 @@ Module IcmpEq.
 
 Theorem icmp_eq_int_false:
   forall st r rty op1 op2 sr md
-         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 1%N))
-         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 2%N))
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 1))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 2))
          (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_eq r rty op1 op2))
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := false *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0)).
 Proof.
   intros.
   inv HINST; try congruence.
@@ -89,14 +89,14 @@ Qed.
 
 Theorem icmp_eq_int_true:
   forall st r rty op1 op2 sr md
-         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 15%N))
-         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 15%N))
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 15))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 15))
          (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_eq r rty op1 op2))
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := true *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1)).
 Proof.
   intros.
   inv HINST; try congruence.
@@ -190,7 +190,7 @@ Theorem icmp_eq_ptr_diffblock_false1:
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := false *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0)).
 Proof.
   intros.
   assert (HNEQ1: o1 <> Ir.MemBlock.n mb1). omega.
@@ -248,7 +248,7 @@ Theorem icmp_eq_ptr_diffblock_false2:
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := false *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0)).
 Proof.
   intros.
   assert (HNEQ2: o2 <> Ir.MemBlock.n mb2). omega.
@@ -345,7 +345,7 @@ Proof.
   - destruct res.
     {
       exists (Ir.SmallStep.sr_success Ir.e_none
-               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 1%N))).
+               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 1))).
       split.
       { eapply Ir.SmallStep.s_icmp_eq_nondet.
         eassumption. reflexivity. eassumption. eassumption.
@@ -357,12 +357,12 @@ Proof.
       }
     }
     { exists (Ir.SmallStep.sr_success Ir.e_none
-               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 0%N))).
+               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 0))).
       split.
       { eapply Ir.SmallStep.s_icmp_eq_nondet.
         eassumption. reflexivity. eassumption. eassumption.
         eassumption. }
-      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num (N.pos p))) <>
+      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num (S res))) <>
                 (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 0))).
         { apply update_reg_and_incrpc_diffval. congruence. assumption. }
         congruence.
@@ -435,7 +435,7 @@ Proof.
   - destruct res.
     {
       exists (Ir.SmallStep.sr_success Ir.e_none
-               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 1%N))).
+               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 1))).
       split.
       { eapply Ir.SmallStep.s_icmp_eq_nondet.
         eassumption. reflexivity. eassumption. eassumption.
@@ -447,12 +447,12 @@ Proof.
       }
     }
     { exists (Ir.SmallStep.sr_success Ir.e_none
-               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 0%N))).
+               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 0))).
       split.
       { eapply Ir.SmallStep.s_icmp_eq_nondet.
         eassumption. reflexivity. eassumption. eassumption.
         eassumption. }
-      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num (N.pos p))) <>
+      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num (S res))) <>
                 (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 0))).
         { apply update_reg_and_incrpc_diffval. congruence. assumption. }
         congruence.
@@ -525,7 +525,7 @@ Proof.
   - destruct res.
     {
       exists (Ir.SmallStep.sr_success Ir.e_none
-               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 1%N))).
+               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 1))).
       split.
       { eapply Ir.SmallStep.s_icmp_eq_nondet.
         eassumption. reflexivity. eassumption. eassumption.
@@ -537,12 +537,12 @@ Proof.
       }
     }
     { exists (Ir.SmallStep.sr_success Ir.e_none
-               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 0%N))).
+               (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 0))).
       split.
       { eapply Ir.SmallStep.s_icmp_eq_nondet.
         eassumption. reflexivity. eassumption. eassumption.
         eassumption. }
-      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num (N.pos p))) <>
+      { assert ((Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num (S res))) <>
                 (Ir.SmallStep.update_reg_and_incrpc md st r0 (Ir.num 0))).
         { apply update_reg_and_incrpc_diffval. congruence. assumption. }
         congruence.
@@ -562,14 +562,14 @@ Module IcmpUle.
 
 Theorem icmp_ule_int_true1:
   forall st r rty op1 op2 sr md
-         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 1%N))
-         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 2%N))
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 1))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 2))
          (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := true *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1)).
 Proof.
   intros.
   inv HINST; try congruence.
@@ -585,14 +585,14 @@ Qed.
 
 Theorem icmp_ule_int_true2:
   forall st r rty op1 op2 sr md
-         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 15%N))
-         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 15%N))
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 15))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 15))
          (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := true *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1)).
 Proof.
   intros.
   inv HINST; try congruence.
@@ -608,14 +608,14 @@ Qed.
 
 Theorem icmp_ule_int_false:
   forall st r rty op1 op2 sr md
-         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 15%N))
-         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 14%N))
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.num 15))
+         (HOP2:Ir.Config.get_val st op2 = Some (Ir.num 14))
          (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.iicmp_ule r rty op1 op2))
          (HINST:Ir.SmallStep.inst_step md st sr),
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := false *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0)).
 Proof.
   intros.
   inv HINST; try congruence.
@@ -750,7 +750,7 @@ Proof.
         rewrite HCUR. reflexivity. reflexivity. eassumption.
         eassumption. eassumption. }
       { assert ((Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0)) <>
-                (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num (N.pos p)))).
+                (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num (S res)))).
         { apply update_reg_and_incrpc_diffval.
           congruence. assumption. }
         congruence.
@@ -813,7 +813,7 @@ Proof.
         rewrite HCUR. reflexivity. reflexivity. eassumption.
         eassumption. eassumption. }
       { assert ((Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 0)) <>
-                (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num (N.pos p)))).
+                (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num (S res)))).
         { apply update_reg_and_incrpc_diffval.
           congruence. assumption. }
         congruence.
@@ -865,7 +865,7 @@ Theorem psub_sameblock1:
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := 1 *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 1)).
 Proof.
   intros.
   inv HINST; try congruence.
@@ -894,7 +894,7 @@ Theorem psub_sameblock2:
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := 255 *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 255%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 255)).
 Proof.
   intros.
   inv HINST; try congruence.
@@ -955,7 +955,7 @@ Theorem psub_log_phy:
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := 20 *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 20%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 20)).
 Proof.
   intros.
   inv HINST; try congruence.
@@ -991,7 +991,7 @@ Theorem psub_log_phy2:
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := 13 *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 13%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 13)).
 Proof.
   intros.
   inv HINST; try congruence.
@@ -1024,7 +1024,7 @@ Theorem psub_phy_phy:
     sr = Ir.SmallStep.sr_success
            Ir.e_none (* no event *)
            (* new state, with PC incremented & r := 2 *)
-           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 2%N)).
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.num 2)).
 Proof.
   intros.
   inv HINST; try congruence.

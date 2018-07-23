@@ -2160,10 +2160,10 @@ Lemma gep_free_invariant:
 Proof.
   intros.
   destruct p as [l0 o0 | ].
-  { 
+  {
     unfold Ir.SmallStep.gep.
     destruct (Ir.Memory.get m' l0) eqn:Hget';
-      destruct (Ir.Memory.get (Ir.Config.m st) l0) eqn:Hget; try reflexivity.
+      destruct (Ir.Memory.get (Ir.Config.m st) l0) eqn:Hget.
     { repeat (rewrite get_free_inbounds with (m := Ir.Config.m st) (m' := m')
                                              (l := l) (l0 := l0) (blk := t0) (blk' := t));
         try ( destruct HWF; assumption );
@@ -2187,6 +2187,7 @@ Proof.
       destruct H.
       congruence.
     }
+    reflexivity.
   }
   { unfold Ir.SmallStep.gep.
     simpl. reflexivity. }

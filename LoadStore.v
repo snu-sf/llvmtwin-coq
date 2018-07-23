@@ -70,7 +70,7 @@ Definition load_val (m:Ir.Memory.t) (p:Ir.ptrval) (t:Ir.ty): Ir.val :=
   | Ir.ity bitsz =>
     match Ir.Byte.getint bytes bitsz with
     | None => Ir.poison
-    | Some n => Ir.num (N.modulo n (N.shiftl 1 (N.of_nat bitsz)))
+    | Some n => Ir.num (Nat.modulo (N.to_nat n) (Nat.shiftl 1 bitsz))
     end
   | Ir.ptrty _ =>
     match Ir.Byte.getptr bytes with
@@ -94,7 +94,7 @@ Definition store_val (m:Ir.Memory.t) (p:Ir.ptrval) (v:Ir.val) (t:Ir.ty)
 : Ir.Memory.t :=
   match (t, v) with
   | (Ir.ity bitsz, Ir.num n) =>
-    let bs := Ir.Byte.ofint n bitsz in
+    let bs := Ir.Byte.ofint (N.of_nat n) bitsz in
     if (Ir.ty_bytesz (Ir.ity bitsz)) =? List.length bs then
       store_bytes m p bs
     else m (* Wrongly typed. *)
@@ -762,7 +762,7 @@ Proof.
     rewrite andb_true_iff in HINV.
     rewrite andb_true_iff in HINV.
     destruct HINV as [[HINV1 HINV2] HINV3].
-    assert (Ir.MemBlock.addr mb + Ir.MemBlock.n mb <= Ir.MEMSZ).
+    assert (Ir.MemBlock.addr mb + Ir.MemBlock.n mb < Ir.MEMSZ).
     {
       assert (Ir.MemBlock.wf mb).
       { eapply Ir.Memory.wf_blocks.

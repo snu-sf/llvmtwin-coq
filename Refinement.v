@@ -16,7 +16,7 @@ Module Refinement.
 Definition refines_value (v_tgt v_src:Ir.val): bool :=
   match (v_tgt, v_src) with
   | (_, Ir.poison) => true
-  | (Ir.num ntgt, Ir.num nsrc) => N.eqb ntgt nsrc
+  | (Ir.num ntgt, Ir.num nsrc) => Nat.eqb ntgt nsrc
   | (Ir.ptr ptgt, Ir.ptr psrc) => Ir.ptr_eqb ptgt psrc
   | (_, _) => false
   end.
@@ -43,7 +43,7 @@ Definition refines_byte (b_tgt b_src:Ir.Byte.t): bool :=
 
 Definition refines_event (e_tgt e_src:Ir.event): bool :=
   match (e_tgt, e_src) with
-  | (Ir.e_some vtgt, Ir.e_some vsrc) => N.eqb vtgt vsrc
+  | (Ir.e_some vtgt, Ir.e_some vsrc) => Nat.eqb vtgt vsrc
   | (Ir.e_none, Ir.e_none) => true
   | _ => false
   end.
@@ -190,7 +190,7 @@ Theorem refines_value_refl:
 Proof.
   intros.
   destruct v; unfold refines_value.
-  - rewrite N.eqb_eq. auto.
+  - rewrite Nat.eqb_eq. auto.
   - rewrite Ir.ptr_eqb_refl. reflexivity.
   - reflexivity.
 Qed.
@@ -200,7 +200,7 @@ Theorem refines_event_refl:
 Proof.
   intros.
   destruct e. unfold refines_event. reflexivity.
-  unfold refines_event. rewrite N.eqb_eq. reflexivity.
+  unfold refines_event. rewrite Nat.eqb_eq. reflexivity.
 Qed.
 
 Theorem refines_trace_refl:

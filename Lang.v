@@ -28,7 +28,7 @@ Definition ty_bytesz (t:ty):nat :=
   Nat.div (7 + ty_bitsz t) 8.
 
 Inductive const :=
-| cnum: ty -> N -> const
+| cnum: ty -> nat -> const
 | cnullptr: ty -> const
 | cpoison: ty -> const
 | cglb: nat -> const.
