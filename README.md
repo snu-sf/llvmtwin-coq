@@ -18,6 +18,8 @@ This is a Coq formalization of OOPSLA'18 LLVM memory model.
 
 - Semantics of load/store: `Ir.load_val`/`Ir.store_val` in [LoadStore.v](LoadStore.v)
 
+- Definition of twin state, observedness, guessed pointer, etc: [TwinExecution.v](TwinExecution.v)
+
 
 ### Definition of IR syntax & Program Behavior
 
@@ -44,7 +46,7 @@ This is a Coq formalization of OOPSLA'18 LLVM memory model.
 
 ### Proofs
 
-- Proof of a property of a guessed address (sec. 4.11): [TwinExecution.v](TwinExecution.v)
+- Proof of a property of a guessed address (sec. 4.11): [TwinExecutionProof.v](TwinExecutionProof.v)
     - Theorem `malloc_creates_twin_state` states that malloc either returns a NULL pointer, or it creates a twin state.
     - Theorem `twin_execution` states that 'twin-state-ness' is preserved if the block is not observed.
     - Theorem `access_from_guessed_pointer_fails` states that if a guessed pointer accesses a block, then the access fails at the twin state.

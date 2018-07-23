@@ -26,33 +26,6 @@ Import Ir.
                  Main Theorems 
  *******************************************************)
 
-Lemma get_val_update_reg_and_incrpc_samereg:
-  forall md st r v
-         (HSTACK:Ir.Config.s st <> nil), (* stack is not empty. *)
-    Ir.Config.get_val (Ir.SmallStep.update_reg_and_incrpc md st r v)
-                      (Ir.opreg r) =
-    Some v.
-Proof.
-  intros.
-  unfold Ir.SmallStep.update_reg_and_incrpc.
-  unfold Ir.Config.get_val.
-  unfold Ir.Config.get_rval.
-  unfold Ir.SmallStep.incrpc.
-  unfold Ir.Config.cur_fdef_pc.
-  unfold Ir.Config.get_funid.
-  unfold Ir.Config.update_rval.
-  destruct (Ir.Config.s st); try congruence.
-  destruct p. destruct p.
-  simpl.
-  destruct (list_find_key (Ir.Config.cid_to_f st) c).
-  { simpl. apply Ir.Regfile.get_update. }
-  { simpl.
-    des_ifs.
-    - simpl in Heq. inv Heq. apply Ir.Regfile.get_update.
-    - simpl in Heq. inv Heq. apply Ir.Regfile.get_update.
-    - simpl in Heq. inv Heq. apply Ir.Regfile.get_update.
-  }
-Qed.  
 
 (* If malloc succeeds, it always creates twin-state. *)
 Theorem malloc_creates_twin_state:
@@ -259,73 +232,6 @@ Qed.
 
 
 
-Lemma eq_wom_update_reg_and_incrpc:
-  forall st1 st2 md r v (HEQ:Ir.Config.eq_wom st1 st2),
-    Ir.Config.eq_wom
-      (Ir.SmallStep.update_reg_and_incrpc md st1 r v)
-      (Ir.SmallStep.update_reg_and_incrpc md st2 r v).
-Proof.
-  intros.
-  unfold Ir.SmallStep.update_reg_and_incrpc.
-  destruct st1.
-  destruct st2.
-  split.
-  { unfold Ir.Config.update_rval.
-    simpl.
-    destruct s; destruct s0.
-    { unfold Ir.SmallStep.incrpc. simpl. constructor. }
-    { inv HEQ. simpl in H. inv H. }
-    { inv HEQ. simpl in H. inv H. }
-    { inv HEQ. simpl in H. inv H. destruct H4.
-      destruct p. destruct p0. simpl in H.
-      inv H. destruct H1. simpl in H.
-      destruct p. destruct p0. inv H. simpl in H1. simpl in *. subst p.
-      unfold Ir.SmallStep.incrpc.
-      unfold Ir.Config.cur_fdef_pc. unfold Ir.Config.get_funid.
-      destruct H0. subst.
-      unfold Ir.Config.update_pc.
-      simpl. des_ifs; simpl.
-      { constructor. simpl.
-        split. reflexivity.
-        split. reflexivity.
-        apply Ir.Regfile.update_eq. assumption.
-        assumption.
-      }
-      { constructor. simpl.
-        split. reflexivity.
-        split. reflexivity.
-        apply Ir.Regfile.update_eq. assumption.
-        assumption.
-      }
-      { constructor. simpl.
-        split. reflexivity.
-        split. reflexivity.
-        apply Ir.Regfile.update_eq. assumption.
-        assumption.
-      }
-      { constructor. simpl.
-        split. reflexivity.
-        split. reflexivity.
-        apply Ir.Regfile.update_eq. assumption.
-        assumption.
-      }
-    }
-  }
-  split.
-  { unfold Ir.Config.update_rval.
-    unfold Ir.SmallStep.incrpc.
-    simpl.
-    inv HEQ. inv H0. simpl in H1. subst cid_to_f.
-    des_ifs.
-  }
-  { unfold Ir.Config.update_rval.
-    unfold Ir.SmallStep.incrpc.
-    simpl.
-    inv HEQ. inv H0. simpl in H2. subst cid_fresh.
-    des_ifs.
-  }
-Qed.
-
 Opaque Ir.MEMSZ.
 Opaque Ir.PTRSZ.
 
@@ -334,7 +240,8 @@ Opaque Ir.PTRSZ.
    (3) current instruction never observes the twin block id,
    each step on the two input states make twin state as well.
    Note that in this lemma instruction is limited to
-   non-phi, non-terminator instructions (by definition of inst_step. *)
+   non-phi, non-terminator instructions (by definition of inst_step).
+   For phi / terminator: see the next lemmas. *)
 Lemma twin_execution_inst_unidir:
   forall (md:Ir.IRModule.t) (blkid:Ir.blockid)
          (st1 st2:Ir.Config.t) (sr1 sr2:Ir.SmallStep.step_res)
@@ -1784,6 +1691,7 @@ Qed.
 
 
 
+(* Does current instruction dereference blkid? *)
 Definition inst_derefs md (st:Ir.Config.t) (blkid:Ir.blockid): bool :=
   match (Ir.Config.cur_inst md st) with
   | Some i =>
@@ -1932,7 +1840,6 @@ Proof.
     }
   }
 Qed.
-
 
 Lemma inbounds_abs_canonicalize:
   forall m mb1 bid o sz
@@ -2140,6 +2047,8 @@ Proof.
   assumption.
 Qed.
 
+(* This lemma states that if state st1 dereferences blkid,
+   twin state st2 dereferences nothing (which means UB). *)
 Lemma twin_state_get_deref:
   forall md st1 st2 blkid mb1 ofs  o I cid bwid
          (HTWIN:twin_state st1 st2 blkid)
