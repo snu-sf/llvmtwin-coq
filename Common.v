@@ -317,6 +317,15 @@ Proof.
       assumption.
 Qed.
 
+Lemma filter_true {X:Type}:
+  forall (l : list X),
+    List.filter (fun (x:X) => true) l = l.
+Proof.
+  induction l.
+  { reflexivity. }
+  { simpl. rewrite IHl. reflexivity. }
+Qed.
+
 Lemma filter_reorder {X:Type}:
   forall f1 f2 (l:list X),
     List.filter f1 (List.filter f2 l) =
@@ -324,6 +333,60 @@ Lemma filter_reorder {X:Type}:
 Proof.
   induction l. reflexivity.
   simpl. des_ifs; simpl; des_ifs; congruence.
+Qed.
+
+Lemma filter_map_combine {X Y:Type}:
+  forall (l1 l2:list X) (l3 l4:list Y) (ff:X -> bool) (fm:X -> Y)
+         (HFILTER:l2 = List.filter ff l1)
+         (HMAP1:l3 = List.map fm l1)
+         (HMAP2:l4 = List.map fm l2),
+    List.combine l4 l2 = List.filter (fun itm => ff itm.(snd)) (List.combine l3 l1).
+Proof.
+  induction l1.
+  { simpl. intros. subst l2. subst l3. simpl in HMAP2.
+    subst l4. reflexivity. }
+  { simpl. intros.
+    destruct (ff a) eqn:HCOND.
+    { destruct l2. inv HFILTER.
+      simpl in HMAP2.
+      destruct l3; destruct l4; try ss.
+      inv HFILTER. inv HMAP1. inv HMAP2.
+      rewrite HCOND.
+      erewrite IHl1; reflexivity.
+    }
+    { destruct l3; ss.
+      inv HMAP1. rewrite HCOND.
+      erewrite IHl1; reflexivity.
+    }
+  }
+Qed.
+
+Lemma split_filter_combine_map2_snd {X Y:Type}:
+  forall (l2 l4:list Y) (l1 l3:list X) (f:(X * Y) -> bool) (g:Y -> X)
+         (HS: (l3, l4) = List.split (List.filter f (List.combine l1 l2)))
+         (HMAP: l1 = List.map g l2),
+    l4 = List.filter (fun x => f (g x, x)) l2.
+Proof.
+  induction l2.
+  { simpl in *. intros. subst l1. simpl in HS. congruence. }
+  { simpl in *.
+    intros.
+    destruct l1; try congruence.
+    simpl in HS.
+    inv HMAP.
+    destruct (f (g a, a)) eqn:HCOND.
+    { simpl in HS.
+      remember (List.split (List.filter f (List.combine (List.map g l2) l2))) as hs.
+      destruct hs.
+      inv HS.
+      erewrite <- IHl2. reflexivity.  eassumption. reflexivity.
+    }
+    { simpl in HS.
+      eapply IHl2 in HS.
+      eassumption.
+      reflexivity.
+    }
+  }
 Qed.
 
 Lemma app_equal {X:Type}:
@@ -1140,6 +1203,61 @@ Proof.
   induction l. constructor. simpl.
   destruct (f a) eqn:H. constructor. assumption.
   constructor. assumption.
+Qed.
+
+Lemma lsubseq_filter2 {X:Type}:
+  forall (l1 l2 l3 l4 : list X) (f:X -> bool)
+         (HLSS:lsubseq l1 l2)
+         (HF1:l3 = List.filter f l1)
+         (HF1:l4 = List.filter f l2),
+    lsubseq l3 l4.
+Proof.
+  intros.
+  generalize dependent l3.
+  generalize dependent l4.
+  induction HLSS.
+  { intros. simpl in HF0. inv HF0. constructor. }
+  { intros.
+    simpl in *.
+    destruct (f x) eqn:HCOND.
+    { inv HF0.
+      constructor. eapply IHHLSS; try reflexivity.
+    }
+    { eapply IHHLSS; try eassumption. }
+  }
+  { intros.
+    simpl in *.
+    destruct (f x) eqn:HCOND.
+    { inv HF1. constructor. eapply IHHLSS; try reflexivity. }
+    { eapply IHHLSS; try eassumption. }
+  }
+Qed.
+
+Lemma lsubseq_filter3 {X:Type}:
+  forall (l1 l2 l3 : list X) (f:X -> bool)
+         (HLSS:lsubseq l1 l2)
+         (HF1:l3 = List.filter f l2),
+    lsubseq l1 l3.
+Proof.
+  intros.
+  generalize dependent l3.
+  induction HLSS.
+  { intros. simpl in HF1. inv HF1. constructor. }
+  { intros.
+    simpl in *.
+    destruct (f x) eqn:HCOND.
+    { inv HF1.
+      constructor. eapply IHHLSS; try reflexivity.
+    }
+    { constructor.
+      eapply IHHLSS; try eassumption. }
+  }
+  { intros.
+    simpl in *.
+    destruct (f x) eqn:HCOND.
+    { inv HF1. constructor. eapply IHHLSS; try reflexivity. }
+    { constructor. eapply IHHLSS; try eassumption. }
+  }
 Qed.
 
 Lemma lsubseq_append: forall {X:Type} (l1 l2 l3 l4:list X)
@@ -2721,6 +2839,32 @@ Proof.
   apply Permutation_sym. assumption.
 Qed.
 
+Lemma disjoint_include2_fold_left_rel {X:Type}:
+  forall (l1:list (nat * nat)) (l2:list X) (f:X -> (nat*nat)) res ofss
+         (HMAP:List.map f l2 = l1)
+         (HF:res = List.fold_left
+                     (fun x ofs => disjoint_include2 (fst x) (snd x) ofs) ofss
+                     (l1, l2)),
+    List.map f (snd res) = (fst res).
+Proof.
+  intros.
+  generalize dependent res.
+  generalize dependent l1.
+  generalize dependent l2.
+  induction ofss.
+  { simpl. intros. rewrite HF. simpl. congruence.  }
+  { intros. simpl in HF.
+    rewrite disjoint_include2_fold_left_reorder in HF.
+    remember (List.fold_left
+               (fun (x : list (nat * nat) * list X) (ofs : nat) =>
+                disjoint_include2 (fst x) (snd x) ofs) ofss (l1, l2)) as rr.
+    exploit IHofss. eassumption.  eassumption. intros HH.
+    eapply disjoint_include2_rel in HH.
+    rewrite <- HF in HH.
+    assumption.
+  }
+Qed.
+
 (* Lemma: If there are two ranges (b1, l1), (b2, l2),
    and they include some natural number i,
    and they are disjoint,
@@ -3093,3 +3237,28 @@ Proof.
   }
 Qed.
 
+
+(*******************************************
+      Lemmas about natural numbers
+ *******************************************)
+
+Lemma mod_gt:
+  forall n m p (HP:p > 0), n mod p > m -> n > m.
+Proof.
+  intros.
+  unfold "mod" in H.
+  destruct p. inv H.
+  assert (p <= p). omega.
+  apply Nat.divmod_spec with (x := n) (q := 0) in H0.
+  destruct (Nat.divmod n p 0 p).
+  simpl in *.
+  destruct H0.
+  rewrite Nat.mul_0_r in *.
+  rewrite Nat.sub_diag in *.
+  rewrite Nat.add_0_r in *.
+  rewrite Nat.add_0_r in *.
+  rewrite H0.
+  eapply Nat.lt_le_trans.
+  eapply H.
+  apply le_plus_r.
+Qed.

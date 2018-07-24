@@ -2191,6 +2191,41 @@ Proof.
   eapply lsubseq_split_snd. assumption.
 Qed.
 
+Lemma inbounds_blocks2_filter:
+  forall x l m,
+    Ir.Memory.inbounds_blocks2 m (x :: l) =
+      List.filter (fun b => Ir.MemBlock.inbounds_abs x b.(snd))
+                  (Ir.Memory.inbounds_blocks2 m l).
+Proof.
+  intros.
+  unfold Ir.Memory.inbounds_blocks2.
+  simpl.
+  rewrite disjoint_include2_fold_left_reorder.
+  remember ((List.fold_left
+             (fun (x0 : list (nat * nat) * list (Ir.blockid * Ir.MemBlock.t)) (ofs : nat)
+              => disjoint_include2 (fst x0) (snd x0) ofs) l
+             (Ir.Memory.alive_P0_ranges m, Ir.Memory.alive_blocks m))) as qq.
+  dup Heqqq.
+  eapply disjoint_include2_fold_left_rel in Heqqq0.
+  2: eapply Ir.Memory.alive_blocks_P0_ranges.
+  unfold disjoint_include2.
+  unfold Ir.MemBlock.inbounds_abs.
+  remember (List.split
+       (List.filter
+          (fun x0 : nat * nat * (Ir.blockid * Ir.MemBlock.t) => in_range x (fst x0))
+          (List.combine (fst qq) (snd qq)))) as pp.
+  dup Heqpp.
+  eapply split_filter_combine_map in Heqpp.
+  2: eassumption.
+  destruct qq. simpl in *.
+  destruct pp. simpl in *.
+  eapply split_filter_combine_map2_snd in Heqpp0.
+  2: rewrite Heqqq0.
+  2: reflexivity.
+  simpl in Heqpp0.
+  assumption.
+Qed.
+
 Lemma inbounds_blocks2_lsubseq:
   forall (m:t) a abs_ofs blks1 blks2
          (HALL1:inbounds_blocks2 m (a::abs_ofs) = blks1)
@@ -2247,6 +2282,65 @@ Proof.
   rewrite <- Heqres2 in HALL1.
   rewrite HALL2, HALL1 in H1.
   assumption.
+Qed.
+
+Lemma inbounds_blocks2_lsubseq2:
+  forall (m : Ir.Memory.t) (abs_ofs1 abs_ofs2 : list nat)
+    (blks1 blks2 : list (Ir.blockid * Ir.MemBlock.t))
+    (HINB1:Ir.Memory.inbounds_blocks2 m abs_ofs1 = blks1)
+    (HINB2:Ir.Memory.inbounds_blocks2 m abs_ofs2 = blks2)
+    (HLSS:lsubseq abs_ofs1 abs_ofs2),
+  lsubseq blks2 blks1.
+Proof.
+  intros.
+  generalize dependent blks1.
+  generalize dependent blks2.
+  induction HLSS.
+  { intros. unfold Ir.Memory.inbounds_blocks2 in HINB2.
+    simpl in HINB2.
+    unfold Ir.Memory.inbounds_blocks2 in HINB1.
+    remember (List.fold_left
+               (fun blks_and_ranges abs_ofs =>
+                disjoint_include2 (fst blks_and_ranges)
+                                  (snd blks_and_ranges) abs_ofs) l
+               (Ir.Memory.alive_P0_ranges m, Ir.Memory.alive_blocks m)) as tmp.
+    dup Heqtmp.
+    eapply disjoint_include2_fold_left_lsubseq in Heqtmp.
+    apply lsubseq_combine in Heqtmp.
+    destruct Heqtmp. congruence.
+    apply Ir.Memory.alive_P0_ranges_blocks_len.
+    apply disjoint_include2_fold_left_len in Heqtmp0.
+    congruence.
+    apply Ir.Memory.alive_P0_ranges_blocks_len.
+  }
+  { intros.
+    remember (Ir.Memory.inbounds_blocks2 m l1) as blks1'.
+    symmetry in Heqblks1'.
+    remember (Ir.Memory.inbounds_blocks2 m l2) as blks2'.
+    symmetry in Heqblks2'.
+    exploit IHHLSS. reflexivity. reflexivity.
+    intros HH.
+    rewrite inbounds_blocks2_filter in HINB1.
+    rewrite inbounds_blocks2_filter in HINB2.
+    rewrite Heqblks1' in HINB1.
+    rewrite Heqblks2' in HINB2.
+    eapply lsubseq_filter2.
+    eapply HH.
+    rewrite HINB2. reflexivity.
+    rewrite HINB1. reflexivity.
+  }
+  { intros.
+    remember (Ir.Memory.inbounds_blocks2 m l1) as blks1'.
+    symmetry in Heqblks1'.
+    exploit IHHLSS. reflexivity. reflexivity.
+    intros HH.
+    rewrite inbounds_blocks2_filter in HINB1.
+    rewrite Heqblks1' in HINB1.
+    eapply lsubseq_filter3.
+    rewrite HINB2 in HH.
+    eapply HH.
+    rewrite HINB1. reflexivity.
+  }
 Qed.
 
 (* Theorem: The results of inbounds_blocks2,
@@ -2333,9 +2427,9 @@ Proof.
   apply blocks_alive_blocks_lsubseq.
 Qed.
 
-(* Theorem: inbounds_blocks2 with two different
+(* Lemma: inbounds_blocks2 with two different
    elements returns only one block. *)
-Theorem inbounds_blocks2_singleton:
+Lemma inbounds_blocks2_singleton:
   forall (m:t) (ofs1 ofs2:nat) l (HWF:wf m)
          (HNEQ:~ (ofs1 = ofs2))
          (HINB:inbounds_blocks2 m (ofs1::ofs2::nil) = l),
@@ -2619,9 +2713,9 @@ Proof.
   }
 Qed.
 
-(* Theorem: inbounds_blocks2 with at least two different
+(* Lemma: inbounds_blocks2 with at least two different
    elements returns only one block. *)
-Theorem inbounds_blocks2_singleton2:
+Lemma inbounds_blocks2_singleton2:
   forall (m:t) (ofs1 ofs2:nat) l ofs' (HWF:wf m)
          (HNEQ:~ (ofs1 = ofs2))
          (HINB:inbounds_blocks2 m (ofs1::ofs2::ofs') = l),
@@ -2705,9 +2799,9 @@ Proof.
   - assumption.
 Qed.
 
-(* Theorem: if there's alive block blk, which has abs_ofs1 & abs_ofs2
+(* Lemma: if there's alive block blk, which has abs_ofs1 & abs_ofs2
    as its inbounds, blk must be included in the result of inbounds_blocks2. *)
-Theorem inbounds_blocks2_In:
+Lemma inbounds_blocks2_In:
   forall (m:t) (bid:blockid) (blk:MemBlock.t) blks abs_ofs1 abs_ofs2
          (HBLK: Some blk = get m bid)
          (HRES: blks = inbounds_blocks2 m (abs_ofs1::abs_ofs2::nil))
@@ -2753,7 +2847,7 @@ Proof.
   eassumption.
 Qed.
 
-Theorem inbounds_blocks2_In2:
+Lemma inbounds_blocks2_In2:
   forall m b t Is
          (HBT: b::t = Ir.Memory.inbounds_blocks2 m Is),
     List.In b (Ir.Memory.blocks m).
@@ -3037,6 +3131,83 @@ Proof.
   simpl in H. simpl in HINB.
   destruct l. simpl. reflexivity.
   rewrite HINB in H. simpl in H. omega.
+Qed.
+
+Lemma inbounds_blocks2_singleton3:
+  forall m bid mb ofs1 ofs2
+    (HWF:Ir.Memory.wf m)
+    (HGET:Some mb = Ir.Memory.get m bid)
+    (HALIVE:Ir.MemBlock.alive mb = true)
+    (HOFS:ofs1 <> ofs2)
+    (HINB1:Ir.MemBlock.inbounds_abs ofs1 mb = true)
+    (HINB2:Ir.MemBlock.inbounds_abs ofs2 mb = true),
+    Ir.Memory.inbounds_blocks2 m [ofs1; ofs2] = [(bid, mb)].
+Proof.
+  intros.
+  remember (Ir.Memory.inbounds_blocks2 m [ofs1; ofs2]) as blk.
+  dup Heqblk.
+  symmetry in Heqblk.
+  eapply Ir.Memory.inbounds_blocks2_singleton in Heqblk; try assumption.
+  eapply Ir.Memory.inbounds_blocks2_In in Heqblk0; try eassumption.
+  destruct blk. inv Heqblk0.
+  destruct blk. inv Heqblk0. reflexivity. inv H. simpl in Heqblk.
+  omega.
+Qed.
+
+Lemma inbounds_blocks2_singleton4:
+  forall (m:Ir.Memory.t) (ofs1 ofs2:nat) ofs' bid mb
+         (HWF:Ir.Memory.wf m)
+         (HGET:Some mb = Ir.Memory.get m bid)
+         (HALIVE:Ir.MemBlock.alive mb = true)
+         (HNEQ:ofs1 <> ofs2)
+         (HFORALLB:List.forallb
+                     (fun i => Ir.MemBlock.inbounds_abs i mb)
+                     (ofs1::ofs2::ofs') = true),
+    Ir.Memory.inbounds_blocks2 m (ofs1::ofs2::ofs') = [(bid, mb)].
+Proof.
+  intros.
+  assert (Ir.Memory.inbounds_blocks2 m (ofs1::ofs2::nil) = [(bid, mb)]).
+  { simpl in HFORALLB.
+    rewrite andb_true_iff in HFORALLB.
+    destruct HFORALLB.
+    rewrite andb_true_iff in H0.
+    destruct H0.
+    eapply inbounds_blocks2_singleton3; try eassumption. }
+  (* okay.. now we shuld do induction on ofs'.
+     Prior to that, do permutation. *)
+  assert (Ir.Memory.inbounds_blocks2 m (ofs1 :: ofs2 :: ofs') =
+          Ir.Memory.inbounds_blocks2 m (ofs' ++ (ofs1::ofs2::nil))).
+  { erewrite Ir.Memory.inbounds_blocks2_Permutation
+    with (I := (ofs' ++ [ofs1; ofs2])).
+    reflexivity.
+    replace (ofs1::ofs2::ofs') with ((ofs1::ofs2::nil) ++ ofs') by reflexivity.
+    eapply Permutation_app2. reflexivity.
+  }
+  rewrite H0.
+  clear H0.
+  clear HNEQ.
+  simpl in HFORALLB.
+  rewrite andb_true_iff in HFORALLB.
+  destruct HFORALLB.
+  rewrite andb_true_iff in H1.
+  destruct H1.
+  clear H0. clear H1.
+  (* okay ready. *)
+  induction ofs'.
+  { simpl. assumption. }
+  { simpl.
+    simpl in H2.
+    rewrite andb_true_iff in H2.
+    destruct H2.
+    apply IHofs' in H1.
+    apply Ir.Memory.inbounds_blocks2_cons with (i := a) in H1.
+    assert (in_range a (Ir.MemBlock.P0_range mb) = true).
+    { unfold Ir.MemBlock.inbounds_abs in H0.
+      assumption.
+    }
+    apply H1 in H2.
+    assumption.
+  }
 Qed.
 
 

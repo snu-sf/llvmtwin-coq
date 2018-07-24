@@ -172,6 +172,23 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma get_deref_log_alive:
+  forall m l o p mb sz
+         (HGET:Some mb = Ir.Memory.get m l)
+         (HDEREF:Ir.get_deref m (Ir.plog l o) sz = [p]),
+    Ir.MemBlock.alive mb = true.
+Proof.
+  intros.
+  assert (exists p, Ir.get_deref m (Ir.plog l o) sz = [p]).
+  { eexists. rewrite HDEREF. reflexivity. }
+  eapply Ir.get_deref_log_inv in H.
+  2: rewrite <- HGET. 2: reflexivity.
+  rewrite andb_true_iff in H.
+  destruct H.
+  rewrite andb_true_iff in H.
+  intuition.
+Qed.
+
 Lemma get_deref_inv:
   forall (m:Ir.Memory.t) p bid ofs sz blk
          (HSZ:sz > 0)
@@ -555,6 +572,82 @@ Proof.  induction I.
   }
 Qed.
 
+Lemma get_deref_phy_I3:
+  forall m bid mb bwid o ofs I
+         (HGET:Some mb = Ir.Memory.get m bid)
+         (HALIVE:Ir.MemBlock.alive mb = true)
+         (HWF:Ir.Memory.wf m)
+         (HSZ:bwid > 0)
+         (HDEREF:Ir.get_deref m (Ir.pphy o nil None) bwid = [(bid, mb, ofs)])
+         (HFORALLB:List.forallb (fun i => Ir.MemBlock.inbounds_abs i mb) I = true),
+  Ir.get_deref m (Ir.pphy o I None) bwid = [(bid, mb, ofs)].
+Proof.
+  intros.
+  unfold Ir.get_deref in *.
+  unfold Ir.get_deref_blks_phyptr in *.
+  destruct (Ir.Memory.inbounds_blocks2 m [o; o + bwid]) eqn:HINB; try simpl in HDEREF;
+    try congruence.
+  destruct p.
+  simpl in *.
+  destruct l; simpl in HDEREF; try (inv HDEREF; fail).
+  inv HDEREF.
+  assert (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: I) = [(bid, mb)]).
+  { eapply Ir.Memory.inbounds_blocks2_singleton4; try assumption.
+    omega.
+    simpl.
+    simpl in HINB.
+    apply Ir.Memory.inbounds_blocks2_forallb2 in HINB.
+    simpl in HINB.
+    repeat (rewrite andb_true_r in HINB).
+    rewrite andb_true_iff in HINB.
+    destruct HINB.
+    rewrite H. rewrite H0.
+    simpl. assumption.
+  }
+  rewrite H. simpl. reflexivity.
+Qed.
+
+Lemma get_deref_phy_I_subseq:
+  forall m bid mb bwid o ofs I1 I2
+         (HGET:Some mb = Ir.Memory.get m bid)
+         (HWF:Ir.Memory.wf m)
+         (HSZ:bwid > 0)
+         (HLSS:lsubseq I1 I2)
+         (HDEREF:Ir.get_deref m (Ir.pphy o I1 None) bwid = [(bid, mb, ofs)]),
+      Ir.get_deref m (Ir.pphy o I2 None) bwid = [(bid, mb, ofs)].
+Proof.
+  intros.
+  unfold Ir.get_deref in *.
+  unfold Ir.get_deref_blks_phyptr in *.
+  remember (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: I1)) as blks1.
+  remember (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: I2)) as blks2.
+  symmetry in Heqblks1.
+  symmetry in Heqblks2.
+  dup Heqblks1.
+  apply Ir.Memory.inbounds_blocks2_singleton2 in Heqblks1; try assumption; try omega.
+  destruct blks1. ss.
+  destruct blks1; simpl in HDEREF; try (inv HDEREF; fail).
+  destruct p. simpl in HDEREF. inversion HDEREF. subst b. subst t. subst ofs.
+  clear HDEREF.
+  dup Heqblks0.
+  eapply Ir.Memory.inbounds_blocks2_forallb2 in Heqblks3.
+  simpl in Heqblks3.
+  repeat (rewrite andb_true_r in Heqblks3).
+  rewrite andb_true_iff in Heqblks3. destruct Heqblks3.
+  rewrite andb_true_iff in H0. destruct H0.
+  assert (lsubseq blks2 [(bid, mb)]).
+  { eapply Ir.Memory.inbounds_blocks2_lsubseq2.
+    eassumption.
+    eassumption.
+    constructor. constructor. assumption. }
+  apply Ir.Memory.inbounds_blocks2_singleton2 in Heqblks2; try assumption; try omega.
+  destruct blks2. inv H2.
+  destruct blks2.
+  inv H2. reflexivity.
+  inv H6.
+  simpl in Heqblks2. omega.
+Qed.
+
 Lemma get_deref_phy_cid:
   forall m bid mb bwid o cid ofs I
          (HGET:Some mb = Ir.Memory.get m bid)
@@ -597,6 +690,27 @@ Proof.
   destruct (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: I)) eqn:HH;
     try (inv HDEREF; fail).
   reflexivity.
+Qed.
+
+Lemma get_deref_phy_cid3:
+  forall m bid mb bwid o cid ofs I
+         (HGET:Some mb = Ir.Memory.get m bid)
+         (HWF:Ir.Memory.wf m)
+         (HSZ:bwid > 0)
+         (HDEREF:Ir.get_deref m (Ir.pphy o I cid) bwid = [(bid, mb, ofs)]),
+      Ir.get_deref m (Ir.pphy o I None) bwid = [(bid, mb, ofs)].
+Proof.
+  intros.
+  unfold Ir.get_deref in *.
+  unfold Ir.get_deref_blks_phyptr in *.
+  remember (Ir.Memory.inbounds_blocks2 m (o :: o + bwid :: I)) as blks.
+  symmetry in Heqblks.
+  apply Ir.Memory.inbounds_blocks2_singleton2 in Heqblks; try assumption; try omega.
+  destruct blks. ss.
+  destruct blks.
+  des_ifs.
+  simpl in HDEREF. des_ifs.
+  simpl in Heqblks. omega.
 Qed.
 
 Lemma get_deref_blks_phyptr_inbounds_blocks2:

@@ -628,7 +628,7 @@ Proof.
 Qed.
 
 (* Very important lemma. *)
-Lemma physicalized_ptr_phy_I:
+Lemma physicalized_ptr_log_I:
   forall v1 v2 m
          (HPP:physicalized_ptr m v1 v2),
     forall md l1 o1 o2 I2 cid2 mb st
@@ -695,7 +695,7 @@ Qed.
 (* NOTE: This lemma does not hold anymore if function call is introduced.
  This lemma should be replaced with something else which gives criteria
  to cid. (ex: cid is never bogus) *)
-Lemma physicalized_ptr_phy_cid:
+Lemma physicalized_ptr_log_cid:
   forall v1 v2 m
          (HPP:physicalized_ptr m v1 v2),
     forall md l1 o1 o2 I2 cid2 mb st
@@ -724,145 +724,30 @@ Proof.
   }
 Qed.
 
-Lemma mod_gt:
-  forall n m p (HP:p > 0), n mod p > m -> n > m.
+Lemma physicalized_ptr_log_get:
+  forall v1 v2 m
+         (HPP:physicalized_ptr m v1 v2),
+    forall md l1 o1 st
+         (HM:m = Ir.Config.m st)
+         (HWF:Ir.Config.wf md st)
+         (HV1:v1 = Ir.ptr (Ir.plog l1 o1)),
+      exists mb, Some mb = Ir.Memory.get (Ir.Config.m st) l1.
 Proof.
-  intros.
-  unfold "mod" in H.
-  destruct p. inv H.
-  assert (p <= p). omega.
-  apply Nat.divmod_spec with (x := n) (q := 0) in H0.
-  destruct (Nat.divmod n p 0 p).
-  simpl in *.
-  destruct H0.
-  rewrite Nat.mul_0_r in *.
-  rewrite Nat.sub_diag in *.
-  rewrite Nat.add_0_r in *.
-  rewrite Nat.add_0_r in *.
-  rewrite H0.
-  eapply Nat.lt_le_trans.
-  eapply H.
-  apply le_plus_r.
+  intros v1 v2 m HPP.
+  induction HPP.
+  { intros. inv HV1. unfold Ir.ptr_to_phy in HP2.
+    unfold Ir.log_to_phy in HP2.
+    des_ifs. eexists. reflexivity.
+  }
+  { intros. inv HV1.
+    unfold Ir.SmallStep.gep in *.
+    des_ifs.
+    { eapply IHHPP.
+      reflexivity. eassumption. reflexivity. }
+    { eapply IHHPP.
+      reflexivity. eassumption. reflexivity. }
+  }
 Qed.
-  
-
-Lemma mod_sub:
-  forall n m p (HN:n mod p >= m) (HP:p > 0),
-    (n mod p - m) = ((n - m) mod p).
-Proof.
-  admit.
-Admitted.
-
-Lemma get_deref_gep_pphy_inb_success:
-  forall m t p0 b t0 o I cid n0 idx sz
-    (HWF:Ir.Memory.wf m)
-    (HGET:Ir.Memory.get m b = Some t0)
-    (HSZ:sz > 0)
-    (HGEP:Ir.SmallStep.gep (Ir.pphy o I cid) idx t m true = Ir.ptr p0)
-    (HDEREF:Ir.get_deref m (Ir.pphy o I cid) sz = [(b, t0, n0)])
-    (HINB1:Ir.MemBlock.inbounds_abs ((o + idx * Ir.ty_bytesz t) mod Ir.MEMSZ)
-                                    t0 = true)
-    (HINB2:Ir.MemBlock.inbounds_abs ((o + idx * Ir.ty_bytesz t) mod Ir.MEMSZ + sz)
-                                    t0 = true),
-  Ir.get_deref m p0 sz =
-  [(b, t0, Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t) Ir.PTRSZ)].
-Proof.
-  intros.
-  assert (HINB3:Ir.MemBlock.inbounds_abs o t0 = true).
-  { dup HDEREF.
-    apply Ir.get_deref_phy_singleton in HDEREF0; try assumption.
-    destruct HDEREF0; try congruence.
-    destruct H. destruct H. inv H. simpl in H0.
-    destruct H0.
-    apply Ir.get_deref_inv in HDEREF; try congruence.
-    rewrite andb_true_iff in HDEREF. destruct HDEREF.
-    rewrite andb_true_iff in H1. destruct H1.
-    erewrite Ir.MemBlock.inbounds_inbounds_abs in H3. eapply H3. omega. }
-  assert (HINB4:Ir.MemBlock.inbounds_abs (o+sz) t0 = true).
-  { dup HDEREF.
-    apply Ir.get_deref_phy_singleton in HDEREF0; try assumption.
-    destruct HDEREF0; try congruence.
-    destruct H. destruct H. inv H. simpl in H0.
-    destruct H0.
-    apply Ir.get_deref_inv in HDEREF; try congruence.
-    rewrite andb_true_iff in HDEREF. destruct HDEREF.
-    rewrite andb_true_iff in H1. destruct H1.
-    erewrite Ir.MemBlock.inbounds_inbounds_abs in H2. eapply H2. omega. }
-
-  unfold Ir.SmallStep.gep in HGEP.
-  des_ifs.
-  { (* positive offset *)
-    unfold Ir.get_deref in *.
-
-    assert (Ir.get_deref_blks_phyptr m
-       (Ir.SmallStep.twos_compl_add o (idx * Ir.ty_bytesz t) Ir.PTRSZ)
-       (o :: Ir.SmallStep.twos_compl_add o (idx * Ir.ty_bytesz t) Ir.PTRSZ :: I)
-       cid sz = (Ir.get_deref_blks_phyptr m o I cid sz)).
-    { admit. }
-    rewrite H.
-    remember (Ir.get_deref_blks_phyptr m o I cid sz) as res.
-    destruct res. simpl in HDEREF. inv HDEREF.
-    destruct res.
-    { simpl in HDEREF. inv HDEREF.
-      simpl.
-      assert (Ir.SmallStep.twos_compl_add o (idx * Ir.ty_bytesz t) Ir.PTRSZ -
-                                          Ir.MemBlock.addr (snd p) =
-              Ir.SmallStep.twos_compl_add (o - Ir.MemBlock.addr (snd p)) 
-                                          (idx * Ir.ty_bytesz t) Ir.PTRSZ).
-      { unfold Ir.SmallStep.twos_compl_add.
-        unfold Ir.SmallStep.twos_compl.
-        rewrite PTRSZ_MEMSZ.
-        rewrite mod_sub.
-        admit.
-        { unfold Ir.MemBlock.inbounds_abs in HINB1.
-          unfold in_range in HINB1.
-          unfold Ir.MemBlock.P0_range in HINB1.
-          simpl in HINB1.
-          rewrite andb_true_iff in HINB1.
-          destruct HINB1. rewrite Nat.leb_le in H0. omega. }
-        { assert (HH := MEMSZ_nonzero). omega. }
-      }
-      rewrite H0.
-      reflexivity.
-    }
-    { simpl in HDEREF. inv HDEREF. }
-  }
-  { (* negative offset *)
-    unfold Ir.get_deref in *.
-    assert (HPHYP:Ir.get_deref_blks_phyptr m
-       (Ir.SmallStep.twos_compl_add o (idx * Ir.ty_bytesz t) Ir.PTRSZ)
-       (o :: Ir.SmallStep.twos_compl_add o (idx * Ir.ty_bytesz t) Ir.PTRSZ :: I)
-       cid sz = (Ir.get_deref_blks_phyptr m o I cid sz)).
-    { admit. }
-    rewrite HPHYP.
-    destruct (Ir.get_deref_blks_phyptr m o I cid sz).
-    { simpl in HDEREF. inv HDEREF. }
-    destruct l.
-    { simpl in HDEREF. inv HDEREF.
-      simpl.
-      assert (Ir.SmallStep.twos_compl_add o (idx * Ir.ty_bytesz t) Ir.PTRSZ -
-              Ir.MemBlock.addr (snd p) =
-              Ir.SmallStep.twos_compl_add (o - Ir.MemBlock.addr (snd p)) 
-                                          (idx * Ir.ty_bytesz t) Ir.PTRSZ).
-      { unfold Ir.SmallStep.twos_compl_add.
-        unfold Ir.SmallStep.twos_compl.
-        rewrite PTRSZ_MEMSZ.
-        rewrite mod_sub.
-        admit.
-        { unfold Ir.MemBlock.inbounds_abs in HINB1.
-          unfold in_range in HINB1.
-          unfold Ir.MemBlock.P0_range in HINB1.
-          simpl in HINB1.
-          rewrite andb_true_iff in HINB1.
-          destruct HINB1. rewrite Nat.leb_le in H. omega. }
-        { assert (HH := MEMSZ_nonzero). omega. }
-      }
-      rewrite H. reflexivity.
-    }
-    simpl in HDEREF.
-    inv HDEREF.
-  }
-Admitted.
 
 Lemma get_deref_physicalized_ptr:
   forall md st sz p1 p2
@@ -874,236 +759,88 @@ Lemma get_deref_physicalized_ptr:
     (Ir.get_deref (Ir.Config.m st) p1 sz = []).
 Proof.
   intros.
-  dup HWF.
-  inv HWF.
-  remember (Ir.ptr p1) as v1.
-  remember (Ir.ptr p2) as v2.
-  generalize dependent p1.
-  generalize dependent p2.
-  clear wf_cid_to_f.
-  clear wf_cid_to_f2.
-  clear wf_stack.
-  clear wf_no_bogus_ptr.
-  clear wf_no_bogus_ptr_mem.
-  remember (Ir.Config.m st) as m.
-  generalize dependent st.
-  induction HPP.
-  { intros.
-    rename p0 into p2'.
-    rename p3 into p1'.
-    inv Heqv2. inv Heqv1.
-    remember (Ir.Config.m st) as m.
-    remember (Ir.get_deref m p1' sz) as bb.
-    symmetry in Heqbb.
-    dup Heqbb.
-    apply Ir.get_deref_singleton in Heqbb0; try eauto.
-    destruct Heqbb0.
-    { destruct H. destruct H. inv H.
-      eapply Ir.get_deref_ptr_phy_same with (p' := p2') in H1;
-        try eauto.
+  destruct p2.
+  { (* p2 is never log -> no *)
+    eapply physicalized_ptr_nonlog in HPP.
+    exfalso. eapply HPP. eauto. }
+  destruct p1.
+  { (* p1 is log! *)
+    dup HPP.
+    dup HPP.
+    dup HPP.
+    eapply physicalized_ptr_log_get in HPP; try reflexivity; try eassumption.
+    destruct HPP.
+    eapply physicalized_ptr_log in HPP0; try reflexivity; try eassumption.
+    eapply physicalized_ptr_log_I in HPP1; try reflexivity; try eassumption.
+    eapply physicalized_ptr_log_cid in HPP2; try reflexivity; try eassumption.
+    remember (Ir.get_deref (Ir.Config.m st) (Ir.plog b n0) sz) as res.
+    dup Heqres.
+    symmetry in Heqres.
+    eapply Ir.get_deref_log in Heqres.
+    2: rewrite <- H. 2: reflexivity.
+    destruct Heqres.
+    { (* okay, deref p1 succeeded. *)
+      subst res.
+      (* b is alive. *)
+      dup H0.
+      eapply Ir.get_deref_log_alive in H1; try eassumption.
+      left. eexists.
+      split. eassumption.
+      subst o.
+      (* prepare to apply get_deref_ptr_phy_same. *)
+      remember (Ir.ptr_to_phy (Ir.Config.m st) (Ir.plog b n0)).
+      symmetry in Heqo. dup Heqo.
+      unfold Ir.ptr_to_phy in Heqo.
+      unfold Ir.log_to_phy in Heqo.
+      rewrite <- H in Heqo.
+      rewrite HPP0 in Heqo.
+      rewrite <- Heqo in Heqo0. clear Heqo.
+      eapply Ir.get_deref_ptr_phy_same
+        with (p' := Ir.pphy n [] None) in H0; try assumption.
+      (* time to promote get_deref (pphy n [] None) into
+         get_deref (pphy n l None). *)
+      eapply Ir.get_deref_phy_I3; try assumption.
+      (* well, memory wf.. *)
+      inv HWF. assumption.
+      inv HWF. assumption.
     }
-    { right. eauto. }
-  }
-  { intros.
-    assert (IHHPP' := IHHPP wf_m st Heqm HWF0
-                            p2 (eq_refl (Ir.ptr p2)) p1 (eq_refl (Ir.ptr p1))).
-    clear IHHPP.
-    destruct IHHPP'.
-    { (* exists deref p1. *)
-      destruct H.
-      destruct H.
-      inv Heqv2.
-      destruct p2.
-      { (* p2 is never log -> no *)
-        eapply physicalized_ptr_nonlog in HPP.
-        exfalso. eapply HPP. eauto. }
-      { destruct p1.
-        { (* log, pphy *)
-          destruct inb.
-          { (* inb *)
-            unfold Ir.SmallStep.gep in Heqv1.
-            des_ifs.
-            assert (HALIVE:Ir.MemBlock.alive t0 = true).
-            { unfold Ir.get_deref in H.
-              rewrite Heq in H. des_ifs.
-              rewrite andb_true_iff in Heq1.
-              destruct Heq1.
-              rewrite andb_true_iff in H.
-              destruct H.
-              assumption.
-            }
-            (* Now we have:
-               Given Ir.plog(b, n0), n0 was inbounds of t0 and
-               (n0 + idx * |ty|) % (2^PTRSZ) is also inboundos f t0. *)
-            (* Let's make: (int)(log(b, n0)) = n. *)
-            eapply physicalized_ptr_log with (mb := t0) in HPP;
-              try reflexivity; try congruence.
-            rewrite andb_true_iff in Heq0. destruct Heq0.
-            (* okay, n + idx * |ty| should be also inbounds_abs! *)
-            assert (Ir.MemBlock.inbounds_abs
-                      ((n + idx * (Ir.ty_bytesz t)) mod Ir.MEMSZ) t0 = true).
-            { eapply inbounds_added_abs_true; try eassumption. }
-            (* n should be inbounds_abs as well. *)
-            assert (Ir.MemBlock.inbounds_abs n t0 = true).
-            { eapply inbounds_abs_true; try eassumption. }
-            (* Is n + idx*|t| + sz inbounds? *)
-            destruct (Ir.MemBlock.inbounds
-                        (Ir.SmallStep.twos_compl_add n0
-                          (idx * Ir.ty_bytesz t) Ir.PTRSZ + sz) t0) eqn:HINB.
-            { (* yes, inbounds. *)
-              (* n + idx*|t| + sz should be inbounds_abs as well. *)
-              assert (Ir.MemBlock.inbounds_abs
-                        ((n + (idx * (Ir.ty_bytesz t))) mod Ir.MEMSZ + sz) t0 = true).
-              { eapply inbounds_added_abs_true2; try eassumption. }
-              (*, okay now get get_deref m (r.plog b (n0 + idx * |t|)). *)
-              dup H.
-              eapply Ir.get_deref_log in H7; try eassumption.
-              destruct H7; try congruence.
-              inv H7.
-              assert (Ir.get_deref (Ir.Config.m st) (Ir.plog b
-                (Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t) Ir.PTRSZ)) sz =
-                [(b, t0,
-                  (Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t) Ir.PTRSZ))]).
-              { unfold Ir.get_deref.
-                rewrite Heq.
-                rewrite HALIVE.
-                rewrite HINB.
-                rewrite H3.
-                reflexivity. }
-              left.
-              eexists.
-              split. eassumption.
-              eapply get_deref_gep_pphy_inb_success; try eassumption.
-            }
-            { (* no, ofs+sz is not inbounds. cannot deref *)
-              right.
-              unfold Ir.get_deref.
-              rewrite Heq.
-              rewrite HINB.
-              rewrite andb_false_r. reflexivity. }
-          }
-          { (* inb = false *)
-            admit.
-          }
-        }
-        { (* pphy and pphy. *)
-          admit.
-        }
-      }
+    { (* Oh, deref p1 failed. *)
+      intuition.
     }
-    { (* deref p1 failed. *)
-      destruct p2.
-      { (* p2 is never log -> no *)
-        eapply physicalized_ptr_nonlog in HPP.
-        exfalso. eapply HPP. eauto. }
-      { destruct p1.
-        { (* p1 is log. *)
-          unfold Ir.get_deref in H.
-          des_ifs.
-          { (* IR.Memory.get b makes sense *)
-            clear Heq0.
-            (* make condition on I *)
-            dup HPP.
-            eapply physicalized_ptr_phy_I in HPP0; try eassumption;
-              try reflexivity.
-            2: rewrite Heq. 2: reflexivity.
-            (* make condition on cid. *)
-            dup HPP.
-            eapply physicalized_ptr_phy_cid in HPP; try eassumption; try reflexivity.
-            2: rewrite Heq. 2: reflexivity.
-            subst o.
-            (* what is gep (plog)? *)
-            unfold Ir.SmallStep.gep in Heqv1.
-            des_ifs.
-            { (* inbounds *)
-              remember (Ir.get_deref (Ir.Config.m st)
-                (Ir.plog b (Ir.SmallStep.twos_compl_add n0 
-                            (idx * Ir.ty_bytesz t) Ir.PTRSZ)) sz) as blks.
-              symmetry in Heqblks.
-              
-            dup Heqblks.
-            eapply Ir.get_deref_log_s
-      
-     
-
-
-
-Lemma get_deref_physicalized_ptr:
-  forall md st sz p1 p2
-         (HWF:Ir.Config.wf md st)
-         (HSZ:sz> 0)
-         (HPP:physicalized_ptr (Ir.Config.m st) (Ir.ptr p1) (Ir.ptr p2)),
-    forall blk, Ir.get_deref (Ir.Config.m st) p1 sz = [blk] ->
-                Ir.get_deref (Ir.Config.m st) p2 sz = [blk].
-Proof.
-  intros.
-  inv HWF.
-  remember (Ir.ptr p1) as v1.
-  remember (Ir.ptr p2) as v2.
-  generalize dependent blk.
-  generalize dependent p1.
-  generalize dependent p2.
-  clear wf_cid_to_f.
-  clear wf_cid_to_f2.
-  clear wf_stack.
-  clear wf_no_bogus_ptr.
-  clear wf_no_bogus_ptr_mem.
-  induction HPP.
-  { intros.
-    rename p0 into p2'.
-    rename p3 into p1'.
-    inv Heqv2. inv Heqv1.
-    eapply Ir.get_deref_ptr_phy_same.
-    { eassumption. }
-    { omega. }
-    { eassumption. }
-    { congruence. }
   }
-  { intros.
-    subst p2'.
-    subst p1'.
-    assert (HA := IHHPP wf_m p2 (eq_refl (Ir.ptr p2)) p1 ).
-    rename p0 into p2'.
-    rename p3 into p1'.
-    clear IHHPP.
-    unfold Ir.SmallStep.gep in Heqv1.
-    destruct p1.
-    { (* p1 was log. *)
-      destruct inb eqn:HINB.
-      { (* inbounds *)
-(*        des_ifs.
-        (* okay, how about p2? *)
-        unfold Ir.SmallStep.gep in Heqv2.
-        destruct p2.
-        { admit. }
-        { (* p2 is phy. *)
-          des_ifs.
-          { (* added offset was positive. *)
-            eapply Ir.get_deref_ptr_phy_same in H; try assumption.
-            2: unfold Ir.ptr_to_phy.
-            2: unfold Ir.log_to_phy.
-            2: rewrite Heq.
-            2: reflexivity.
-            (* okay, Ir.plog b n and Ir.pphy (n0 l o) has same integer repr. *)
-            dup HPP.
-            apply physicalized_ptr_log with (mb := t0) (l1 := b) (o1 := n)
-              (o2 := n0) (Is2 := l) (cid2 := o) in HPP0;
-              try congruence.
-            
-            
-            assert (Ir.get_deref m (Ir.plog b n) sz = [(b, t0, n)]).
-            { unfold Ir.get_deref.
-              rewrite Heq.
-              unfold Ir.get_deref in H.
-              rewrite Heq in H.
-              destruct (Ir.MemBlock.alive t0).
-              { simpl. 
-          { (* added offset was negative - no check *)
-  *) admit.
-      }
-      { inv Heqv1.
-        
-    
+  { (* p1 is phy. *)
+    dup HPP.
+    eapply physicalized_ptr_phy in HPP0; try reflexivity.
+    inv HPP0. inv H0.
+    (* same here. let's use Ir.get_deref_ptr_phy_same:
+       Ir.get_deref m p sz = [bo] ->
+       Ir.ptr_to_phy m p = Some p' -> Ir.get_deref m p' sz = [bo]. *)
+    remember (Ir.get_deref (Ir.Config.m st) (Ir.pphy n l0 o0) sz) as res.
+    dup Heqres.
+    symmetry in Heqres0.
+    eapply Ir.get_deref_phy_singleton in Heqres0; try omega.
+    destruct Heqres0.
+    { (* succeeded. *)
+      destruct H0.
+      destruct H0.
+      inv H0. destruct H1. destruct x. destruct p. simpl in H0.
+      simpl in H1.
+      (* make cid *)
+      eapply Ir.get_deref_phy_cid3 in H2; try congruence.
+      left. eexists. split. reflexivity.
+      eapply Ir.get_deref_phy_I_subseq; try eassumption.
+      congruence.
+      (* well, memory wf.. *)
+      inv HWF. assumption.
+      inv HWF. assumption.
+    }
+    { (* failed. *)
+      intuition.
+    }
+    inv HWF. assumption.
+  }
+Qed.
+
 
 Theorem load_refines:
   forall md1 md2 (* md2 is an optimized program *)
