@@ -983,7 +983,7 @@ Definition inbounds_blocks2 (m:t) (abs_ofss:list nat)
 (* Returns an alive block which have beginning address at abs_ofs. *)
 Definition zeroofs_block (m:t) (abs_ofs:nat)
 : option (blockid * MemBlock.t) :=
-  match (inbounds_blocks m abs_ofs) with
+  match (inbounds_blocks2 m (abs_ofs::abs_ofs+1::nil)) with
   | nil => None
   | t =>
     match (List.filter (fun mb => Nat.eqb (MemBlock.addr mb.(snd)) abs_ofs) t) with

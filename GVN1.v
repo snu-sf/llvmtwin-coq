@@ -17,6 +17,26 @@ Module Ir.
 
 Module GVN.
 
+(**************************************************************
+  This file proves validity of the first GVN optimization case:
+ 1. q is NULL or the result of an integer-to-pointer cast.
+
+  High-level structure of proof is as follows:
+  (1) We define the notion of `physicalized_ptr p1 p2`, meaning
+      that p2 is derived from (int* )(int)p1.
+      (Note that in GVN p2 will replace p1.)
+  (2) We show that a function get_deref, which returns a
+      dereferenced block (as well as offset), has some good
+      relation on p1 and p2.
+      To explain it briefly: if get_deref p1 succeeds,
+      get_deref p2 also succeeds and returns the same result.
+      The name of the lemma is physicalized_ptr_get_deref.
+  (3) Using this, we can show that load/store/free holds
+      refinement.
+  (4) For other operations: using p2 instead of p1 makes
+      the same result.
+ **************************************************************)
+
 Inductive physicalized_ptr: Ir.Memory.t -> Ir.val -> Ir.val -> Prop :=
 | ps_base:
     forall m p1 p2
@@ -457,6 +477,53 @@ Proof.
   }
 Qed.
       
+
+Lemma eq_incrpc2:
+  forall md1 md2 st i1 i2
+      (HINST1: Some i1 = Ir.Config.cur_inst md1 st)
+      (HINST2: Some i2 = Ir.Config.cur_inst md2 st),
+    Ir.Config.eq (Ir.SmallStep.incrpc md1 st) (Ir.SmallStep.incrpc md2 st).
+Proof.
+  intros.
+  unfold Ir.Config.cur_inst in HINST1.
+  unfold Ir.Config.cur_inst in HINST2.
+  split.
+  { unfold Ir.SmallStep.incrpc.
+    des_ifs;
+      repeat (rewrite Ir.Config.m_update_pc);
+      unfold Ir.Config.update_rval; des_ifs.
+  }
+  split.
+  { unfold Ir.Config.cur_fdef_pc in HINST1.
+    unfold Ir.Config.cur_fdef_pc in HINST2.
+    des_ifs.
+    unfold Ir.IRFunction.get_inst in HINST1.
+    unfold Ir.IRFunction.get_inst in HINST2.
+    destruct p1; try congruence.
+    des_ifs.
+    unfold Ir.SmallStep.incrpc.
+    unfold Ir.Config.cur_fdef_pc.
+    rewrite Heq0.
+    rewrite Heq1.
+    rewrite Heq2.
+    rewrite Heq3.
+    unfold Ir.IRFunction.next_trivial_pc.
+    rewrite Heq5.
+    rewrite Heq.
+    rewrite Heq6.
+    rewrite Heq4.
+    apply Ir.Stack.eq_refl.
+  }
+  split.
+  { unfold Ir.SmallStep.incrpc.
+    des_ifs;
+      unfold Ir.Config.update_pc; des_ifs.
+  }
+  { unfold Ir.SmallStep.incrpc.
+    des_ifs;
+      unfold Ir.Config.update_pc; des_ifs.
+  }
+Qed.
 
 Lemma eq_update_reg_and_incrpc2:
   forall md1 md2 st r v i1 i2
@@ -981,6 +1048,9 @@ Proof.
 Qed.
 
 
+(*****
+      Refinement on load instruction.
+ *****)
 Theorem load_refines:
   forall md1 md2 (* md2 is an optimized program *)
          st r retty opptr1 opptr2 v1 v2 sr1 sr2
@@ -1059,7 +1129,383 @@ Proof.
     unfold Ir.SmallStep.t_step in HTSTEP.
     des_ifs. }
 Qed.
-  
+
+
+Lemma store_val_get_deref:
+  forall m ptr1 ptr2 v valty
+         (HEQ:Ir.get_deref m ptr1 (Ir.ty_bytesz valty) =
+              Ir.get_deref m ptr2 (Ir.ty_bytesz valty)),
+    Ir.store_val m ptr1 v valty = Ir.store_val m ptr2 v valty.
+Proof.
+  intros.
+  unfold Ir.store_val.
+  unfold Ir.store_bytes.
+  destruct valty; destruct v; try reflexivity.
+  {
+    destruct (Ir.ty_bytesz (Ir.ity n) =? length (Ir.Byte.ofint
+                                                 (BinNatDef.N.of_nat n0) n))
+    eqn:HH;
+      try reflexivity.
+    rewrite PeanoNat.Nat.eqb_eq in HH.
+    rewrite HH in *.
+    rewrite HEQ. reflexivity. }
+  {
+    destruct (Ir.ty_bytesz (Ir.ptrty valty) =? length (Ir.Byte.ofptr p)) eqn:HH;
+      try reflexivity.
+    rewrite PeanoNat.Nat.eqb_eq in HH.
+    rewrite HH in *.
+    rewrite HEQ. reflexivity. }
+Qed.
+
+(*****
+      Refinement on store instruction.
+ *****)
+Theorem store_refines:
+  forall md1 md2 (* md2 is an optimized program *)
+         st valty opptr1 opptr2 opval v1 v2 sr1 sr2
+         (HWF1:Ir.Config.wf md1 st)
+         (HWF2:Ir.Config.wf md2 st) (* State st is wellformed on two modules *)
+         (* Two stores on a same state(including same PC) *)
+         (HINST1:Some (Ir.Inst.istore valty opptr1 opval) = Ir.Config.cur_inst md1 st)
+         (HINST2:Some (Ir.Inst.istore valty opptr2 opval) = Ir.Config.cur_inst md2 st)
+         (* Has a good relation between pointer operands *)
+         (HOP1:Ir.Config.get_val st opptr1 = Some v1)
+         (HOP2:Ir.Config.get_val st opptr2 = Some v2)
+         (HPP:physicalized_ptr (Ir.Config.m st) v1 v2)
+         (* And.. have a step. *)
+         (HSTEP1:Ir.SmallStep.sstep md1 st sr1)
+         (HSTEP2:Ir.SmallStep.sstep md2 st sr2),
+    Ir.Refinement.refines_step_res sr2 sr1. (* target refines source *)
+Proof.
+  intros.
+  inv HSTEP1.
+  { inv HSTEP2.
+    { inv HISTEP; try congruence.
+      unfold Ir.SmallStep.inst_det_step in HNEXT.
+      rewrite <- HINST1 in HNEXT.
+      rewrite HOP1 in HNEXT.
+      inv HISTEP0; try congruence.
+      unfold Ir.SmallStep.inst_det_step in HNEXT0.
+      rewrite <- HINST2 in HNEXT0.
+      rewrite HOP2 in HNEXT0.
+      inv HWF1.
+
+      clear wf_cid_to_f.
+      clear wf_cid_to_f2.
+      clear wf_stack.
+      clear wf_no_bogus_ptr.
+      clear wf_no_bogus_ptr_mem.
+
+      dup HPP.
+      eapply physicalized_ptr_valty in HPP.
+      destruct HPP.
+      { (* poison, poison *)
+        inv H. inv HNEXT. inv HNEXT0.
+        des_ifs; try constructor. constructor.
+        eapply eq_incrpc2; eassumption.
+      }
+      destruct H.
+      { (* poison, ptr *)
+        inv H. destruct H1. inv HNEXT.
+        des_ifs; try constructor. constructor.
+        eapply eq_incrpc2; eassumption. }
+      { (* ptr, ptr *)
+        inv H. inv H0. inv H1.
+        eapply physicalized_ptr_get_deref with
+          (sz := Ir.ty_bytesz valty) in HPP0; try eassumption.
+        destruct HPP0.
+        { inv H. inv H0.
+          unfold Ir.deref in *.
+          rewrite H in HNEXT. rewrite H1 in HNEXT0.
+          inv HNEXT. inv HNEXT0.
+          des_ifs; try constructor.
+          constructor.
+          erewrite store_val_get_deref with (ptr2 := x);
+            try congruence.
+          eapply eq_incrpc2; eassumption.
+          constructor.
+          eapply eq_incrpc2; eassumption.
+        }
+        { (* src fails *)
+          unfold Ir.deref in *.
+          rewrite H in HNEXT.
+          des_ifs; try constructor.
+          constructor.
+          eapply eq_incrpc2; eassumption.
+        }
+        apply Ir.ty_bytesz_pos.
+      }
+      inv HWF2. assumption.
+    }
+    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
+      congruence. }
+    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
+      unfold Ir.SmallStep.t_step in HTSTEP.
+      des_ifs. }
+  }
+  { constructor. }
+  { apply Ir.Config.cur_inst_not_cur_terminator in HINST1.
+    unfold Ir.SmallStep.t_step in HTSTEP.
+    des_ifs. }
+Qed.
+
+
+Lemma n_pos:
+  forall mb (HWF:Ir.MemBlock.wf mb),
+    Ir.MemBlock.n mb > 0.
+Proof.
+  intros.
+  inv HWF.
+  unfold Ir.MemBlock.P_ranges in wf_poslen.
+  unfold no_empty_range in wf_poslen.
+  destruct (Ir.MemBlock.P mb).
+  simpl in wf_twin. inv wf_twin.
+  simpl in wf_poslen.
+  rewrite andb_true_iff in wf_poslen.
+  destruct wf_poslen. rewrite PeanoNat.Nat.ltb_lt in H.
+  omega.
+Qed.
+
+Lemma zeroofs_block_addr:
+  forall mb bid m (HGET:Ir.Memory.get m bid = Some mb)
+         (HWF:Ir.Memory.wf m)
+         (HALIVE:Ir.MemBlock.alive mb = true),
+    Ir.Memory.zeroofs_block m (Ir.MemBlock.addr mb) = Some (bid, mb).
+Proof.
+  intros.
+  unfold Ir.Memory.zeroofs_block.
+  remember (Ir.Memory.inbounds_blocks2 m
+    [Ir.MemBlock.addr mb; Ir.MemBlock.addr mb + 1]) as blks.
+  symmetry in Heqblks.
+  dup Heqblks.
+  assert (List.In (bid, mb) blks).
+  { rewrite <- Heqblks0.
+    eapply Ir.Memory.inbounds_blocks2_In3.
+    congruence. omega.
+    unfold Ir.MemBlock.inbounds_abs.
+    rewrite andb_true_iff.
+    unfold in_range.
+    unfold Ir.MemBlock.P0_range.
+    simpl.
+    rewrite Nat.leb_refl.
+    assert (1 <= Ir.MemBlock.n mb).
+    { eapply n_pos. inv HWF.
+      exploit wf_blocks.
+      symmetry in HGET.
+      eapply Ir.Memory.get_In in HGET. eassumption. reflexivity.
+      eauto. }
+    simpl.
+    repeat (rewrite andb_true_iff).
+    repeat (rewrite PeanoNat.Nat.leb_le).
+    omega.
+    assumption.
+  }
+  eapply Ir.Memory.inbounds_blocks2_singleton in Heqblks.
+  destruct blks. inv H.
+  destruct blks.
+  inv H. simpl. rewrite PeanoNat.Nat.eqb_refl. reflexivity.
+  inv H0. simpl in Heqblks. omega.
+  assumption.
+  omega.
+Qed.
+
+Lemma free_get_deref:
+  forall m (HWF:Ir.Memory.wf m)
+         ptr bid blk (HDEREF:Ir.get_deref m ptr 1 = [(bid, blk, 0)]),
+    Ir.SmallStep.free ptr m = Ir.Memory.free m bid.
+Proof.
+  intros.
+  unfold Ir.SmallStep.free.
+  destruct ptr.
+  { dup HDEREF.
+    unfold Ir.get_deref in HDEREF0.
+    des_ifs. }
+  { dup HDEREF.
+    eapply Ir.get_deref_phy_singleton in HDEREF0; try omega; try assumption.
+    inv HDEREF0; try congruence.
+    inv H. inv H0. inv H1.
+    destruct x. destruct p. inv H.
+    simpl in H0.
+    rewrite Nat.add_0_r in *.
+    unfold Ir.deref.
+    rewrite HDEREF.
+    simpl.
+    erewrite zeroofs_block_addr. reflexivity.
+    assumption. assumption.
+    SearchAbout Ir.get_deref.
+    eapply Ir.get_deref_inv in HDEREF.
+    rewrite andb_true_iff in HDEREF. destruct HDEREF.
+    rewrite andb_true_iff in H. destruct H. assumption.
+    omega.
+    assumption. assumption.
+  }
+Qed.
+
+Lemma free_get_deref2:
+  forall m (HWF:Ir.Memory.wf m) n
+         ptr bid blk (HDEREF:Ir.get_deref m ptr 1 = [(bid, blk, S n)]),
+    Ir.SmallStep.free ptr m = None.
+Proof.
+  intros.
+  unfold Ir.SmallStep.free.
+  destruct ptr; try reflexivity.
+  { eapply Ir.get_deref_log with (blk := blk) in HDEREF.
+    inv HDEREF. inv H. reflexivity.
+    inv H.
+    unfold Ir.get_deref in HDEREF. des_ifs.
+  }
+  { unfold Ir.Memory.zeroofs_block.
+    dup HDEREF.
+    eapply Ir.get_deref_inv in HDEREF; try assumption; try omega.
+    { rewrite andb_true_iff in HDEREF.
+      rewrite andb_true_iff in HDEREF.
+      destruct HDEREF. destruct H.
+      eapply Ir.get_deref_phy_singleton in HDEREF0; try assumption; try omega.
+      inv HDEREF0; try ss. inv H2. inv H3. inv H2.
+      simpl in H4. inv H4.
+      erewrite Ir.MemBlock.inbounds_inbounds_abs in H1; try reflexivity.
+      erewrite Ir.MemBlock.inbounds_inbounds_abs in H0; try reflexivity.
+      assert (Ir.Memory.inbounds_blocks2 m
+           [Ir.MemBlock.addr blk + S n; Ir.MemBlock.addr blk + S n + 1]
+              = [(bid, blk)]).
+      { eapply Ir.Memory.inbounds_blocks2_singleton3.
+        assumption.
+        congruence.
+        assumption.
+        omega.
+        rewrite Nat.add_comm. assumption.
+        simpl in H0. rewrite Nat.add_comm with (m := S n).
+        simpl. rewrite Nat.add_shuffle0. assumption.
+      }
+      rewrite H3. simpl.
+      assert ((Ir.MemBlock.addr blk =? Ir.MemBlock.addr blk + S n) = false).
+      { rewrite PeanoNat.Nat.eqb_neq. omega. }
+      rewrite H4. reflexivity.
+    }
+    {
+      eapply Ir.get_deref_phy_singleton in HDEREF0; try assumption; try omega.
+      inv HDEREF0. inv H. inv H0. inv H1. inv H.
+      simpl in H0. congruence. congruence. }
+  }
+Qed.
+
+Lemma free_get_deref3:
+  forall m (HWF:Ir.Memory.wf m)
+         ptr (HDEREF:Ir.get_deref m ptr 1 = []),
+    Ir.SmallStep.free ptr m = None.
+Proof.
+  intros.
+  unfold Ir.SmallStep.free.
+  destruct ptr.
+  { dup HDEREF.
+    unfold Ir.get_deref in HDEREF0.
+    des_ifs. unfold Ir.Memory.free. rewrite Heq.
+    des_ifs.
+    simpl in Heq0. unfold Ir.MemBlock.inbounds in Heq0.
+    rewrite PeanoNat.Nat.leb_nle in Heq0.
+    exfalso. eapply Heq0. eapply n_pos.
+    { inv HWF. eapply wf_blocks.
+      symmetry in Heq. eapply Ir.Memory.get_In in Heq; try reflexivity.
+      eassumption. }
+    unfold Ir.Memory.free. des_ifs.
+  }
+  { unfold Ir.deref.
+    rewrite HDEREF. des_ifs.
+}
+Qed.
+
+
+(*****
+      Refinement on free instruction.
+ *****)
+Theorem free_refines:
+  forall md1 md2 (* md2 is an optimized program *)
+         st opptr1 opptr2 v1 v2 sr1 sr2
+         (HWF1:Ir.Config.wf md1 st)
+         (HWF2:Ir.Config.wf md2 st) (* State st is wellformed on two modules *)
+         (* Two frees on a same state(including same PC) *)
+         (HINST1:Some (Ir.Inst.ifree opptr1) = Ir.Config.cur_inst md1 st)
+         (HINST2:Some (Ir.Inst.ifree opptr2) = Ir.Config.cur_inst md2 st)
+         (* Has a good relation between pointer operands *)
+         (HOP1:Ir.Config.get_val st opptr1 = Some v1)
+         (HOP2:Ir.Config.get_val st opptr2 = Some v2)
+         (HPP:physicalized_ptr (Ir.Config.m st) v1 v2)
+         (* And.. have a step. *)
+         (HSTEP1:Ir.SmallStep.sstep md1 st sr1)
+         (HSTEP2:Ir.SmallStep.sstep md2 st sr2),
+    Ir.Refinement.refines_step_res sr2 sr1. (* target refines source *)
+Proof.
+  intros.
+  inv HSTEP1.
+  { inv HSTEP2.
+    { inv HISTEP; try congruence.
+      unfold Ir.SmallStep.inst_det_step in HNEXT.
+      rewrite <- HINST1 in HNEXT.
+      rewrite HOP1 in HNEXT.
+      inv HISTEP0; try congruence.
+      unfold Ir.SmallStep.inst_det_step in HNEXT0.
+      rewrite <- HINST2 in HNEXT0.
+      rewrite HOP2 in HNEXT0.
+      inv HWF1.
+
+      clear wf_cid_to_f.
+      clear wf_cid_to_f2.
+      clear wf_stack.
+      clear wf_no_bogus_ptr.
+      clear wf_no_bogus_ptr_mem.
+
+      dup HPP.
+      eapply physicalized_ptr_valty in HPP; try assumption.
+      destruct HPP.
+      { (* poison, poison *)
+        inv H. inv HNEXT. inv HNEXT0.
+        des_ifs; try constructor.
+      }
+      destruct H.
+      { (* poison, ptr *)
+        inv H. destruct H1. inv HNEXT.
+        des_ifs; try constructor. }
+      { (* ptr, ptr *)
+        inv H. inv H0. inv H1.
+        dup HPP0.
+        eapply physicalized_ptr_get_deref with
+          (sz := 1) in HPP0; try eassumption; try omega.
+        inv HPP0.
+        { inv H. inv H0.
+          destruct x1. destruct p.
+          destruct n.
+          {
+            apply free_get_deref in H; try assumption. rewrite H in HNEXT.
+            apply free_get_deref in H1; try assumption.
+            rewrite H1 in HNEXT0.
+            des_ifs.
+            constructor. constructor. eapply eq_incrpc2; eassumption.
+            constructor.
+          }
+          {
+            apply free_get_deref2 in H; try assumption. rewrite H in HNEXT.
+            apply free_get_deref2 in H1; try assumption. rewrite H1 in HNEXT0.
+            inv HNEXT. inv HNEXT0.
+            constructor.
+          }
+        }
+        { apply free_get_deref3 in H; try assumption.
+          rewrite H in HNEXT. inv HNEXT.
+          constructor. }
+      }
+    }
+    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
+      congruence. }
+    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
+      unfold Ir.SmallStep.t_step in HTSTEP.
+      des_ifs. }
+  }
+  { constructor. }
+  { apply Ir.Config.cur_inst_not_cur_terminator in HINST1.
+    unfold Ir.SmallStep.t_step in HTSTEP.
+    des_ifs. }
+Qed.
+
 
 End GVN.
 

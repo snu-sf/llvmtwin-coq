@@ -12,4 +12,4 @@ all:
 	coqc Refinement.v
 	coqc Reordering.v TwinExecution.v
 	coqc TwinExecutionProof.v
-	coqc GVN.v
+	coqc GVN1.v
