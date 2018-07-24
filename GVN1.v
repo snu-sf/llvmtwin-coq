@@ -11,7 +11,7 @@ Require Import State.
 Require Import LoadStore.
 Require Import SmallStep.
 Require Import Refinement.
-Require Import TwinExecution.
+Require Import SmallStepRefinement.
 
 Module Ir.
 
@@ -881,6 +881,38 @@ Qed.
 
 
 
+(* ends with refinement with common update_reg_and_incrpc calls *)
+Ltac thats_it :=
+          eapply Ir.SSRefinement.refines_update_reg_and_incrpc;
+            try eassumption;
+          [ apply Ir.Refinement.refines_state_eq;
+            apply Ir.Config.eq_refl
+          | try apply Ir.Refinement.refines_value_refl; constructor; fail ].
+
+Ltac cc_thats_it := constructor; constructor; thats_it.
+
+(* ends with refinement with common incrpc calls *)
+Ltac thats_it2 :=
+          eapply Ir.SSRefinement.refines_incrpc;
+            try eassumption;
+          apply Ir.Refinement.refines_state_eq;
+          apply Ir.Config.eq_refl.
+
+Ltac cc_thats_it2 := constructor; constructor; thats_it2.
+
+Ltac hey_terminator HINST2 :=
+  apply Ir.Config.cur_inst_not_cur_terminator in HINST2;
+       congruence.
+
+Ltac hey_terminator2 HINST2 HTSTEP :=
+  apply Ir.Config.cur_inst_not_cur_terminator in HINST2;
+       unfold Ir.SmallStep.t_step in HTSTEP;
+       des_ifs.
+
+Ltac unfold_all_ands_H :=
+  repeat (match goal with
+  | [ H : _ /\ _ |- _ ] => destruct H
+  end).
 
 
 
@@ -902,6 +934,8 @@ Qed.
 (*****
       Refinement on load instruction.
  *****)
+
+
 Theorem load_refines:
   forall md1 md2 (* md2 is an optimized program *)
          st r retty opptr1 opptr2 v1 v2 sr1 sr2
@@ -959,7 +993,7 @@ Proof.
           constructor. constructor.
           erewrite load_val_get_deref with (ptr2 := x);
             try congruence.
-          eapply eq_update_reg_and_incrpc2; eassumption.
+          thats_it.
         }
         { (* src fails *)
           unfold Ir.deref in *.
@@ -969,16 +1003,11 @@ Proof.
       }
       inv HWF2. assumption.
     }
-    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
-      congruence. }
-    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
-      unfold Ir.SmallStep.t_step in HTSTEP.
-      des_ifs. }
+    hey_terminator HINST2.
+    hey_terminator2 HINST2 HTSTEP.
   }
-  { constructor. }
-  { apply Ir.Config.cur_inst_not_cur_terminator in HINST1.
-    unfold Ir.SmallStep.t_step in HTSTEP.
-    des_ifs. }
+  constructor.
+  hey_terminator2 HINST1 HTSTEP.
 Qed.
 
 
@@ -1052,14 +1081,14 @@ Proof.
       destruct HPP.
       { (* poison, poison *)
         inv H. inv HNEXT. inv HNEXT0.
-        des_ifs; try constructor. constructor.
-        eapply eq_incrpc2; eassumption.
+        des_ifs; constructor. constructor.
+        thats_it2.
       }
       destruct H.
       { (* poison, ptr *)
         inv H. destruct H1. inv HNEXT.
         des_ifs; try constructor. constructor.
-        eapply eq_incrpc2; eassumption. }
+        thats_it2. }
       { (* ptr, ptr *)
         inv H. inv H0. inv H1.
         eapply physicalized_ptr_get_deref with
@@ -1073,31 +1102,26 @@ Proof.
           constructor.
           erewrite store_val_get_deref with (ptr2 := x);
             try congruence.
-          eapply eq_incrpc2; eassumption.
+          thats_it2.
           constructor.
-          eapply eq_incrpc2; eassumption.
+          thats_it2.
         }
         { (* src fails *)
           unfold Ir.deref in *.
           rewrite H in HNEXT.
           des_ifs; try constructor.
           constructor.
-          eapply eq_incrpc2; eassumption.
+          thats_it2.
         }
         apply Ir.ty_bytesz_pos.
       }
       inv HWF2. assumption.
     }
-    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
-      congruence. }
-    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
-      unfold Ir.SmallStep.t_step in HTSTEP.
-      des_ifs. }
+    hey_terminator HINST2.
+    hey_terminator2 HINST2 HTSTEP.
   }
   { constructor. }
-  { apply Ir.Config.cur_inst_not_cur_terminator in HINST1.
-    unfold Ir.SmallStep.t_step in HTSTEP.
-    des_ifs. }
+  hey_terminator2 HINST1 HTSTEP.
 Qed.
 
 
@@ -1330,7 +1354,8 @@ Proof.
             apply free_get_deref in H1; try assumption.
             rewrite H1 in HNEXT0.
             des_ifs.
-            constructor. constructor. eapply eq_incrpc2; eassumption.
+            constructor. constructor.
+            thats_it2.
             constructor.
           }
           {
@@ -1345,16 +1370,11 @@ Proof.
           constructor. }
       }
     }
-    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
-      congruence. }
-    { apply Ir.Config.cur_inst_not_cur_terminator in HINST2.
-      unfold Ir.SmallStep.t_step in HTSTEP.
-      des_ifs. }
+    hey_terminator HINST2.
+    hey_terminator2 HINST2 HTSTEP.
   }
   { constructor. }
-  { apply Ir.Config.cur_inst_not_cur_terminator in HINST1.
-    unfold Ir.SmallStep.t_step in HTSTEP.
-    des_ifs. }
+  hey_terminator2 HINST1 HTSTEP.
 Qed.
 
 
@@ -1396,7 +1416,138 @@ Proof.
       clear wf_stack.
       clear wf_no_bogus_ptr.
       clear wf_no_bogus_ptr_mem.
-      inv 
+      inv HNEXT. inv HNEXT0.
+      destruct retty; try
+       (constructor; constructor; thats_it).
+      dup HPP.
+      eapply physicalized_ptr_valty in HPP.
+      destruct HPP;
+        unfold_all_ands_H; ss.
+      { inv H. constructor. constructor. thats_it. }
+      destruct H.
+      { destruct H. destruct H0. inv H.
+        constructor. constructor. thats_it. }
+      { destruct H. destruct H. destruct H0. inv H.
+        destruct x0.
+        { eapply physicalized_ptr_nonlog in HPP0.
+          exfalso. apply HPP0. eexists. eexists. reflexivity. }
+        destruct x.
+        { (* log, phy *)
+          dup HPP0.
+          eapply physicalized_ptr_log_get in HPP0; try reflexivity;
+            try eassumption.
+          destruct HPP0.
+          eapply physicalized_ptr_convert in HPP1; try reflexivity; try eassumption.
+          unfold Ir.SmallStep.p2N.
+          unfold Ir.log_to_phy. rewrite <- H.
+          rewrite HPP1.
+          constructor. constructor. thats_it.
+        }
+        { (* phy, phy *)
+          eapply physicalized_ptr_phy in HPP0; try reflexivity.
+          unfold_all_ands_H; ss.
+          subst n0.
+          constructor. constructor. thats_it.
+        }
+      }
+      inv HWF2. assumption.
+    }
+    hey_terminator HINST2.
+    hey_terminator2 HINST2 HTSTEP.    
+  }
+  { constructor. }
+  hey_terminator2 HINST1 HTSTEP.
+Qed.
+
+(*****
+      Refinement on psub instruction.
+ *****)
+Theorem psub_refines:
+  forall md1 md2 (* md2 is an optimized program *)
+         st r opptr11 opptr12 opptr2 retty ptrty v1 v2 sr1 sr2
+         (HWF1:Ir.Config.wf md1 st)
+         (HWF2:Ir.Config.wf md2 st) (* State st is wellformed on two modules *)
+         (* Two stores on a same state(including same PC) *)
+         (HINST1:Some (Ir.Inst.ipsub r retty ptrty opptr11 opptr2) =
+                 Ir.Config.cur_inst md1 st)
+         (HINST2:Some (Ir.Inst.ipsub r retty ptrty opptr12 opptr2) =
+                 Ir.Config.cur_inst md2 st)
+         (* Has a good relation between the first pointer operands *)
+         (HOP1:Ir.Config.get_val st opptr11 = Some v1)
+         (HOP2:Ir.Config.get_val st opptr12 = Some v2)
+         (HPP:physicalized_ptr (Ir.Config.m st) v1 v2)
+         (* And.. have a step. *)
+         (HSTEP1:Ir.SmallStep.sstep md1 st sr1)
+         (HSTEP2:Ir.SmallStep.sstep md2 st sr2),
+    Ir.Refinement.refines_step_res sr2 sr1. (* target refines source *)
+Proof.
+  intros.
+  inv HSTEP1.
+  { inv HSTEP2.
+    { inv HISTEP; try congruence.
+      unfold Ir.SmallStep.inst_det_step in HNEXT.
+      rewrite <- HINST1 in HNEXT.
+      rewrite HOP1 in HNEXT.
+      inv HISTEP0; try congruence.
+      unfold Ir.SmallStep.inst_det_step in HNEXT0.
+      rewrite <- HINST2 in HNEXT0.
+      rewrite HOP2 in HNEXT0.
+      inv HWF1.
+
+      clear wf_cid_to_f.
+      clear wf_cid_to_f2.
+      clear wf_stack.
+      clear wf_no_bogus_ptr.
+      clear wf_no_bogus_ptr_mem.
+      inv HNEXT. inv HNEXT0.
+      destruct retty; try
+       (constructor; constructor; thats_it).
+      dup HPP.
+      eapply physicalized_ptr_valty in HPP.
+      destruct HPP;
+        unfold_all_ands_H; ss.
+      { inv H. constructor. constructor. thats_it. }
+      destruct H.
+      { destruct H. destruct H0. inv H.
+        constructor. constructor.
+        des_ifs;try thats_it.
+        eapply Ir.SSRefinement.refines_update_reg_and_incrpc;
+          try eassumption.
+        eapply Ir.Refinement.refines_state_eq.
+          apply Ir.Config.eq_refl.
+        unfold Ir.Refinement.refines_value.
+        des_ifs. }
+      { destruct H. destruct H. destruct H0. inv H.
+        destruct x0.
+        { eapply physicalized_ptr_nonlog in HPP0.
+          exfalso. apply HPP0. eexists. eexists. reflexivity. }
+        destruct x.
+        { (* log, phy *)
+          dup HPP0.
+          eapply physicalized_ptr_log_get in HPP0; try reflexivity;
+            try eassumption.
+          destruct HPP0.
+          eapply physicalized_ptr_convert in HPP1; try reflexivity; try eassumption.
+          unfold Ir.SmallStep.p2N.
+          unfold Ir.log_to_phy. rewrite <- H.
+          rewrite HPP1.
+          constructor. constructor. thats_it.
+        }
+        { (* phy, phy *)
+          eapply physicalized_ptr_phy in HPP0; try reflexivity.
+          unfold_all_ands_H; ss.
+          subst n0.
+          constructor. constructor. thats_it.
+        }
+      }
+      inv HWF2. assumption.
+    }
+    hey_terminator HINST2.
+    hey_terminator2 HINST2 HTSTEP.    
+  }
+  { constructor. }
+  hey_terminator2 HINST1 HTSTEP.
+Qed.
 
 End GVN.
 
