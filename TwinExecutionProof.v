@@ -438,7 +438,7 @@ Proof.
         }
         congruence.
       }
-      { (* ty is problematic *)
+      { (* deref. poison *)
         inv H0.
         erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
           try apply HTWIN.
@@ -446,12 +446,13 @@ Proof.
         { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
           rewrite <- Heqoi1.
           rewrite Hop11. reflexivity. }
-        { eapply ts_success; try reflexivity. thats_it. }
+        { eapply ts_goes_wrong; try reflexivity. }
       }
-      { inv H0.
+      { (* ty is problematic *)
+        inv H0.
         erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
           try apply HTWIN.
-        eexists. split.
+        eexists . split. 
         { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
           rewrite <- Heqoi1.
           rewrite Hop11. reflexivity. }
@@ -547,6 +548,17 @@ Proof.
           }
           congruence.
         }
+        { (* ptr is poison. *)
+          erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
+            try apply HTWIN.
+          eexists.
+          split.
+          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
+            rewrite <- Heqoi1.
+            rewrite Hop11. rewrite Hop22.
+            reflexivity. }
+          { constructor; reflexivity. }
+        }
       }
       { (* Hop22, Hop12 is none.*)
         dup Hop11. dup Hop21.
@@ -575,7 +587,7 @@ Proof.
         { inv H0.
           eexists. split.
           { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi1. rewrite Hop21. reflexivity.
+            rewrite <- Heqoi1. rewrite Hop21. rewrite Hop22. reflexivity.
           }
           { eapply ts_success.
             reflexivity. reflexivity. reflexivity.

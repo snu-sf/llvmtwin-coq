@@ -289,6 +289,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         if Ir.deref (Ir.Config.m c) p (Ir.ty_bytesz retty) then
           Some (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.load_val (Ir.Config.m c) p retty)))
         else Some sr_goes_wrong
+      | (Some Ir.poison) => Some sr_goes_wrong
       | _ => (* type check fail *)
         Some (sr_success Ir.e_none (update_reg_and_incrpc c r Ir.poison))
       end
@@ -300,6 +301,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
           Some (sr_success Ir.e_none
                            (incrpc (Ir.Config.update_m c (Ir.store_val (Ir.Config.m c) p v valty))))
         else Some sr_goes_wrong
+      | (Some Ir.poison, Some v) => Some sr_goes_wrong
       | (_, _) => (* type check fail *)
         Some (sr_success Ir.e_none (incrpc c))
       end
