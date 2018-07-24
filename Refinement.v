@@ -187,8 +187,6 @@ Inductive refines_step_res: step_res -> step_res -> Prop :=
                Lemmas about refinement.
  ***********************************************************)
 
-
-
 Theorem refines_value_refl:
   forall (v:Ir.val), refines_value v v = true.
 Proof.
@@ -197,6 +195,39 @@ Proof.
   - rewrite Nat.eqb_eq. auto.
   - rewrite Ir.ptr_eqb_refl. reflexivity.
   - reflexivity.
+Qed.
+
+Theorem refines_value_trans:
+  forall (v1 v2 v3:Ir.val)
+         (HREF1:refines_value v1 v2 = true)
+         (HREF2:refines_value v2 v3 = true),
+    refines_value v1 v3 = true.
+Proof.
+  intros.
+  unfold refines_value in *.
+  des_ifs.
+  rewrite PeanoNat.Nat.eqb_eq in *.
+  congruence.
+  unfold Ir.ptr_eqb in *.
+  des_ifs; try rewrite andb_true_iff in *;
+    repeat (rewrite PeanoNat.Nat.eqb_eq in *);
+    destruct HREF1; destruct HREF2;
+    try congruence.
+  split; congruence.
+  repeat (rewrite andb_true_iff in *);
+    repeat (rewrite PeanoNat.Nat.eqb_eq in *).
+  destruct H. destruct H. destruct H1.  destruct H1.
+  split; try congruence.
+  split; try congruence.
+  split; try congruence.
+  eapply list_inclb_trans. eapply H4. ss.
+  eapply list_inclb_trans. eapply H5. ss.
+  split; try ss.
+  repeat (rewrite andb_true_iff in *).
+  repeat (rewrite PeanoNat.Nat.eqb_eq in *).
+  intuition.
+  eapply list_inclb_trans. eapply H6. ss.
+  eapply list_inclb_trans. eapply H5. ss.
 Qed.
 
 Theorem refines_bit_refl:
@@ -213,6 +244,69 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma ptr_eqb_trans:
+  forall p1 p2 p3
+         (H1:Ir.ptr_eqb p1 p2 = true)
+         (H2:Ir.ptr_eqb p2 p3 = true),
+    Ir.ptr_eqb p1 p3 = true.
+Proof.
+  intros.
+  unfold Ir.ptr_eqb in *.
+  des_ifs; repeat (rewrite andb_true_iff in *);
+           repeat (rewrite PeanoNat.Nat.eqb_eq in *);
+           try (inv H1; inv H0; fail);
+           try (inv H2; inv H0; fail).
+  intuition.
+  { inv H1. inv H. inv H0.
+    inv H2. inv H. inv H0. 
+    split; try ss.
+    split. { split. congruence.
+             eapply list_inclb_trans. eapply H3. ss. }
+           { eapply list_inclb_trans. eapply H2. ss. }
+  }
+  { inv H1. inv H. inv H1.
+    inv H2. inv H. inv H2. 
+    split; try ss.
+    split. { split. congruence.
+             eapply list_inclb_trans. eapply H4. ss. }
+           { eapply list_inclb_trans. eapply H5. ss. }
+  }
+Qed.
+
+Theorem refines_bit_trans:
+  forall b1 b2 b3
+         (HREF1:refines_bit b1 b2 = true)
+         (HREF2:refines_bit b2 b3 = true),
+    refines_bit b1 b3 = true.
+Proof.
+  intros.
+  unfold refines_bit in *.
+  des_ifs.
+  unfold eqb in *. des_ifs.
+  rewrite andb_true_iff in *.
+  repeat (rewrite PeanoNat.Nat.eqb_eq in *).
+  intuition.
+  eapply ptr_eqb_trans. eassumption. ss.
+Qed.
+
+Ltac unfold_all_ands_H :=
+  repeat (match goal with
+  | [ H : _ /\ _ |- _ ] => destruct H
+  end).
+
+Theorem refines_byte_trans:
+  forall b1 b2 b3
+         (HREF1:refines_byte b1 b2 = true)
+         (HREF2:refines_byte b2 b3 = true),
+    refines_byte b1 b3 = true.
+Proof.
+  intros.
+  unfold refines_byte in *.
+  repeat (rewrite andb_true_iff in *).
+  unfold_all_ands_H.
+  repeat (split; try (eapply refines_bit_trans; try eassumption; assumption)).
+Qed.
+
 Theorem refines_memblock_refl:
   forall mb1,
     refines_memblock mb1 mb1.
@@ -225,6 +319,23 @@ Proof.
   repeat (rewrite andb_true_iff).
   repeat (rewrite refines_bit_refl).
   repeat (split; try reflexivity).
+Qed.
+
+Theorem refines_memblock_trans:
+  forall mb1 mb2 mb3
+         (HREF1:refines_memblock mb1 mb2)
+         (HREF1:refines_memblock mb2 mb3),
+    refines_memblock mb1 mb3.
+Proof.
+  intros.
+  inv HREF1. inv H0. inv H2. inv H3.
+  inv HREF0. inv H5. inv H7. inv H8.
+  inv H4. inv H9.
+  repeat (split;try congruence).
+  eapply Forall2_trans.
+  { intros. eapply refines_byte_trans. eassumption. ss.
+  }
+  eassumption. assumption.
 Qed.
 
 Theorem refines_memory_refl:
@@ -241,6 +352,25 @@ Proof.
   split; reflexivity.
 Qed.
     
+Theorem refines_memory_trans:
+  forall m1 m2 m3
+         (HREF1:refines_memory m1 m2)
+         (HREF1:refines_memory m2 m3),
+    refines_memory m1 m3.
+Proof.
+  intros.
+  destruct HREF1.
+  destruct HREF0.
+  unfold_all_ands_H.
+  repeat (split; try congruence).
+  eapply Forall2_trans.
+  { intros.
+    unfold_all_ands_H.
+    split. congruence. eapply refines_memblock_trans. eassumption. ss.
+  }
+  eassumption. assumption.
+Qed.
+
 Theorem refines_event_refl:
   forall (e:Ir.event), refines_event e e = true.
 Proof.
@@ -305,6 +435,35 @@ Proof.
     eapply refines_value_refl. }
 Qed.
 
+Theorem refines_regfile_trans:
+  forall st1 st2 st3
+         (HREF1:refines_regfile st1 st2)
+         (HREF2:refines_regfile st2 st3),
+    refines_regfile st1 st3.
+Proof.
+  intros.
+  unfold refines_regfile in *.
+  unfold_all_ands_H.
+  intros.
+  assert (H1 := HREF1 regid).
+  assert (H2 := HREF2 regid).
+  unfold_all_ands_H.
+
+  split.
+  { 
+    destruct H1. destruct H.
+    split.
+    { intros. apply H. apply H1. assumption. }
+    { intros. apply H3. apply H4. assumption. }
+  }
+  intros.
+  apply H2 in HGET.
+  destruct HGET. destruct H3.
+  apply H0 in H3. destruct H3. destruct H3.
+  eexists. split. eassumption.
+  eapply refines_value_trans. eassumption. ss.
+Qed.
+
 Theorem refines_stack_eq:
   forall st1 st2 (HEQ:Ir.Stack.eq st1 st2),
     refines_stack st1 st2.
@@ -327,6 +486,35 @@ Proof.
       destruct x. destruct y. simpl in *.
       inv H0. inv H5. split. congruence. split. congruence.
       apply refines_regfile_eq. assumption.
+    }
+  }
+Qed.
+
+Theorem refines_stack_trans:
+  forall st1 st2 st3
+         (HREF1:refines_stack st1 st2)
+         (HREF1:refines_stack st2 st3),
+    refines_stack st1 st3.
+Proof.
+  intros.
+  generalize dependent st2.
+  generalize dependent st3.
+  induction st1.
+  { intros. inv HREF1. assumption. }
+  { intros.
+    destruct st2. inv HREF1.
+    destruct st3. inv HREF0.
+    inv HREF1. inv HREF0.
+    unfold_all_ands_H.
+    constructor.
+    { split. congruence. split. congruence.
+      eapply refines_regfile_trans. eassumption. ss. }
+    { eapply Forall2_trans.
+      intros.
+      unfold_all_ands_H.
+      split. congruence. split. congruence.
+      eapply refines_regfile_trans. eassumption. ss.
+      eassumption. ss.
     }
   }
 Qed.

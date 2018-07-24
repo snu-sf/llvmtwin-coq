@@ -491,6 +491,26 @@ Proof.
     assumption. }
 Qed.
 
+Lemma Forall2_trans {X:Type}:
+  forall (l1 l2 l3:list X)
+         (f:X -> X -> Prop)
+         (HTRANS:forall x y z, f x y -> f y z -> f x z)
+         (HFORALL1:List.Forall2 f l1 l2)
+         (HFORALL2:List.Forall2 f l2 l3),
+    List.Forall2 f l1 l3.
+Proof.
+  intros.
+  generalize dependent l3.
+  induction HFORALL1.
+  { intros. destruct l3. constructor.
+    inv HFORALL2. }
+  { intros. destruct l3. inv HFORALL2.
+    inv HFORALL2.
+    constructor. eapply HTRANS. eassumption. ss.
+    eapply IHHFORALL1. assumption.
+  }
+Qed.
+
 Lemma forallb_In {X:Type}:
   forall (l:list X) (f:X -> bool) i
          (HFORALLB:List.forallb f l = true)
@@ -944,6 +964,50 @@ Proof.
         rewrite H. rewrite orb_true_r. reflexivity.
       * assumption.
     + exfalso. auto.
+Qed.
+
+Lemma list_inclb_trans_existsb {X:Type} {eq_dec:forall x y:X, {x = y}+{x<>y}}:
+  forall l1 l2 a
+    (HEX:List.existsb (fun y => if eq_dec a y then true else false) l1 = true)
+    (HINC:@list_inclb X eq_dec l1 l2 = true),
+  List.existsb (fun y => if eq_dec a y then true else false) l2 = true.
+Proof.
+  intros.
+  generalize dependent l2.
+  induction l1.
+  { intros. inv HEX. }
+  { intros. simpl in HEX.
+    simpl in HINC.
+    rewrite andb_true_iff in HINC.
+    destruct HINC.
+    destruct (eq_dec a a0) eqn:HEQ.
+    { subst a. assumption. }
+    { eapply IHl1. assumption. assumption. }
+  }
+Qed.
+
+Lemma list_inclb_trans {X:Type} {eq_dec:forall x y:X, {x = y}+{x<>y}}:
+  forall (l1 l2 l3:list X)
+         (H1:@list_inclb X eq_dec l1 l2 = true)
+         (H1:@list_inclb X eq_dec l2 l3 = true),
+    @list_inclb X eq_dec l1 l3 = true.
+Proof.
+  intros.
+  generalize dependent l3.
+  generalize dependent l2.
+  induction l1.
+  { intros.
+    destruct l2. assumption.
+    reflexivity. }
+  { intros.
+    simpl in H1.
+    rewrite andb_true_iff in H1. destruct H1.
+    simpl.
+    exploit IHl1. eapply H1. eapply H0. intros HH.
+    rewrite HH.
+    rewrite andb_true_r.
+    eapply list_inclb_trans_existsb. eassumption. assumption.
+  }
 Qed.
 
 

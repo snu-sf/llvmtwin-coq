@@ -10,6 +10,7 @@ all:
 	coqc WellTyped.v
 	coqc SmallStep.v SmallStepTest.v
 	coqc Refinement.v
-	coqc Reordering.v TwinExecution.v
-	coqc TwinExecutionProof.v
+	coqc SmallStepRefinement.v
+#	coqc Reordering.v TwinExecution.v
+#	coqc TwinExecutionProof.v
 	coqc GVN1.v

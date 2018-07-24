@@ -383,7 +383,7 @@ Proof.
       unfold Ir.SmallStep.twos_compl_add in H2.
       unfold Ir.SmallStep.twos_compl in H2.
       rewrite PTRSZ_MEMSZ in H2.
-      rewrite inbounds_mod in Heq2; try assumption.
+      rewrite Ir.MemBlock.inbounds_mod in Heq2; try assumption.
       rewrite PeanoNat.Nat.leb_le in H2.
       apply not_lt in Heq2.
       unfold Ir.MemBlock.inbounds in H1.
@@ -395,7 +395,7 @@ Proof.
           symmetry in Heq.
           eapply Ir.Memory.get_In in Heq. eassumption.
           reflexivity. }
-        assert (HH := blocksz_lt t0 H3).
+        assert (HH := Ir.MemBlock.blocksz_lt t0 H3).
         apply not_ge in HH.
         assumption. }
       rewrite Nat.mod_small in H2.
@@ -881,117 +881,6 @@ Qed.
 
 
 
-Lemma eq_incrpc2:
-  forall md1 md2 st i1 i2
-      (HINST1: Some i1 = Ir.Config.cur_inst md1 st)
-      (HINST2: Some i2 = Ir.Config.cur_inst md2 st),
-    Ir.Config.eq (Ir.SmallStep.incrpc md1 st) (Ir.SmallStep.incrpc md2 st).
-Proof.
-  intros.
-  unfold Ir.Config.cur_inst in HINST1.
-  unfold Ir.Config.cur_inst in HINST2.
-  split.
-  { unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      repeat (rewrite Ir.Config.m_update_pc);
-      unfold Ir.Config.update_rval; des_ifs.
-  }
-  split.
-  { unfold Ir.Config.cur_fdef_pc in HINST1.
-    unfold Ir.Config.cur_fdef_pc in HINST2.
-    des_ifs.
-    unfold Ir.IRFunction.get_inst in HINST1.
-    unfold Ir.IRFunction.get_inst in HINST2.
-    destruct p1; try congruence.
-    des_ifs.
-    unfold Ir.SmallStep.incrpc.
-    unfold Ir.Config.cur_fdef_pc.
-    rewrite Heq0.
-    rewrite Heq1.
-    rewrite Heq2.
-    rewrite Heq3.
-    unfold Ir.IRFunction.next_trivial_pc.
-    rewrite Heq5.
-    rewrite Heq.
-    rewrite Heq6.
-    rewrite Heq4.
-    apply Ir.Stack.eq_refl.
-  }
-  split.
-  { unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      unfold Ir.Config.update_pc; des_ifs.
-  }
-  { unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      unfold Ir.Config.update_pc; des_ifs.
-  }
-Qed.
-
-
-Lemma refines_eq_incrpc2:
-  forall md1 md2 st i1 i2
-      (HINST1: Some i1 = Ir.Config.cur_inst md1 st)
-      (HINST2: Some i2 = Ir.Config.cur_inst md2 st),
-    Ir.Refinement_refines_state
-      (Ir.SmallStep.incrpc md1 st) (Ir.SmallStep.incrpc md2 st).
-
-Lemma eq_update_reg_and_incrpc2:
-  forall md1 md2 st r v i1 i2
-      (HINST1: Some i1 = Ir.Config.cur_inst md1 st)
-      (HINST2: Some i2 = Ir.Config.cur_inst md2 st),
-    Ir.Config.eq
-      (Ir.SmallStep.update_reg_and_incrpc md1 st r v)
-      (Ir.SmallStep.update_reg_and_incrpc md2 st r v).
-Proof.
-  intros.
-  unfold Ir.Config.cur_inst in HINST1.
-  unfold Ir.Config.cur_inst in HINST2.
-  split.
-  { unfold Ir.SmallStep.update_reg_and_incrpc.
-    unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      repeat (rewrite Ir.Config.m_update_pc);
-      unfold Ir.Config.update_rval; des_ifs.
-  }
-  split.
-  { unfold Ir.Config.cur_fdef_pc in HINST1.
-    unfold Ir.Config.cur_fdef_pc in HINST2.
-    des_ifs.
-    unfold Ir.IRFunction.get_inst in HINST1.
-    unfold Ir.IRFunction.get_inst in HINST2.
-    destruct p1; try congruence.
-    des_ifs.
-    unfold Ir.SmallStep.update_reg_and_incrpc.
-    unfold Ir.SmallStep.incrpc.
-    rewrite Ir.Config.cur_fdef_pc_update_rval.
-    rewrite Ir.Config.cur_fdef_pc_update_rval.
-    unfold Ir.Config.cur_fdef_pc.
-    rewrite Heq0.
-    rewrite Heq1.
-    rewrite Heq2.
-    rewrite Heq3.
-    unfold Ir.IRFunction.next_trivial_pc.
-    rewrite Heq5.
-    rewrite Heq.
-    rewrite Heq6.
-    rewrite Heq4.
-    apply Ir.Stack.eq_refl.
-  }
-  split.
-  { unfold Ir.SmallStep.update_reg_and_incrpc.
-    unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      unfold Ir.Config.update_pc; unfold Ir.Config.update_rval;
-      des_ifs.
-  }
-  { unfold Ir.SmallStep.update_reg_and_incrpc.
-    unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      unfold Ir.Config.update_pc; unfold Ir.Config.update_rval;
-      des_ifs.
-  }
-Qed.
 
 
 
