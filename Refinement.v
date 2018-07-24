@@ -3,6 +3,7 @@ Require Import Bool.
 Require Import Omega.
 Require Import sflib.
 
+Require Import Common.
 Require Import Value.
 Require Import Memory.
 Require Import State.
@@ -126,7 +127,8 @@ Definition refines_memblock (mb_tgt mb_src:Ir.MemBlock.t) :=
   mb_tgt.(Ir.MemBlock.r) = mb_src.(Ir.MemBlock.r) /\
   mb_tgt.(Ir.MemBlock.n) = mb_src.(Ir.MemBlock.n) /\
   mb_tgt.(Ir.MemBlock.a) = mb_src.(Ir.MemBlock.a) /\
-  List.Forall2 refines_byte mb_tgt.(Ir.MemBlock.c) mb_src.(Ir.MemBlock.c) /\
+  List.Forall2 (fun b1 b2 => refines_byte b1 b2 = true)
+               mb_tgt.(Ir.MemBlock.c) mb_src.(Ir.MemBlock.c) /\
   mb_tgt.(Ir.MemBlock.P) = mb_src.(Ir.MemBlock.P).
 
 Definition refines_memory (m_tgt m_src:Ir.Memory.t) :=
@@ -176,7 +178,7 @@ Inductive refines_step_res: step_res -> step_res -> Prop :=
 | srref_success:
     forall e_tgt e_src s_tgt s_src
            (HREFE:refines_event e_tgt e_src)
-           (HREFS:Ir.Config.eq s_tgt s_src), (* Just checks equality. *)
+           (HREFS:refines_state s_tgt s_src), (* Just checks equality. *)
     refines_step_res (sr_success e_tgt s_tgt) (sr_success e_src s_src).
 
 
@@ -184,6 +186,8 @@ Inductive refines_step_res: step_res -> step_res -> Prop :=
 (***********************************************************
                Lemmas about refinement.
  ***********************************************************)
+
+
 
 Theorem refines_value_refl:
   forall (v:Ir.val), refines_value v v = true.
@@ -195,6 +199,48 @@ Proof.
   - reflexivity.
 Qed.
 
+Theorem refines_bit_refl:
+  forall b, refines_bit b b = true.
+Proof.
+  unfold refines_bit.
+  intros.
+  destruct b. destruct b; reflexivity.
+  unfold Ir.ptr_eqb.
+  destruct p; repeat (rewrite PeanoNat.Nat.eqb_refl); try reflexivity.
+  repeat (rewrite Common.list_inclb_refl).
+  destruct o. rewrite PeanoNat.Nat.eqb_refl. reflexivity.
+  reflexivity.
+  reflexivity.
+Qed.
+
+Theorem refines_memblock_refl:
+  forall mb1,
+    refines_memblock mb1 mb1.
+Proof.
+  intros.
+  repeat (split;try congruence).
+  apply Forall2_samelist.
+  intros.
+  unfold refines_byte.
+  repeat (rewrite andb_true_iff).
+  repeat (rewrite refines_bit_refl).
+  repeat (split; try reflexivity).
+Qed.
+
+Theorem refines_memory_refl:
+  forall (m1:Ir.Memory.t),
+    refines_memory m1 m1.
+Proof.
+  intros.
+  split.
+  { congruence. }
+  split.
+  { eapply Forall2_samelist.
+    intros. split. reflexivity. apply refines_memblock_refl.
+  }
+  split; reflexivity.
+Qed.
+    
 Theorem refines_event_refl:
   forall (e:Ir.event), refines_event e e = true.
 Proof.
@@ -228,6 +274,74 @@ Proof.
     rewrite List.firstn_all in *;
     rewrite refines_trace_refl;
     reflexivity.
+Qed.
+
+Lemma regfile_eq_empty_false:
+  forall st1 st,
+    ~ Ir.Regfile.eq (st::st1) [].
+Proof.
+  intros.
+  intros HEQ.
+  unfold Ir.Regfile.eq in HEQ.
+  destruct st.
+  assert (H := HEQ n).
+  unfold Ir.Regfile.get in H.
+  simpl in H. rewrite PeanoNat.Nat.eqb_refl in H. inv H.
+Qed.
+
+Theorem refines_regfile_eq:
+  forall st1 st2 (HEQ:Ir.Regfile.eq st1 st2),
+    refines_regfile st1 st2.
+Proof.
+  intros.
+  unfold Ir.Regfile.eq in HEQ.
+  unfold refines_regfile.
+  intros.
+  assert (HEQ' := HEQ regid).
+  split.
+  { split; intros; congruence. }
+  { intros.
+    eexists. rewrite HEQ' in HGET. split. eassumption.
+    eapply refines_value_refl. }
+Qed.
+
+Theorem refines_stack_eq:
+  forall st1 st2 (HEQ:Ir.Stack.eq st1 st2),
+    refines_stack st1 st2.
+Proof.
+  intros.
+  generalize dependent st1.
+  induction st2.
+  { intros. destruct st1. constructor.
+    inv HEQ. }
+  { intros.
+    destruct st1. inv HEQ.
+    inv HEQ.
+    inv H2. inv H0.
+    constructor.
+    { split.  congruence. split. congruence.
+      apply refines_regfile_eq. assumption. }
+    eapply Forall2_implies.
+    eapply H4.
+    { intros.
+      destruct x. destruct y. simpl in *.
+      inv H0. inv H5. split. congruence. split. congruence.
+      apply refines_regfile_eq. assumption.
+    }
+  }
+Qed.
+
+Theorem refines_state_eq:
+  forall st1 st2 (HEQ:Ir.Config.eq st1 st2),
+    refines_state st1 st2.
+Proof.
+  intros.
+  inv HEQ.
+  split.
+  { rewrite H. eapply refines_memory_refl. }
+  inv H0. split.
+  apply refines_stack_eq. assumption.
+  assumption.
 Qed.
 
 Theorem refines_refl:

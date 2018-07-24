@@ -50,6 +50,8 @@ Inductive physicalized_ptr: Ir.Memory.t -> Ir.val -> Ir.val -> Prop :=
       physicalized_ptr m p1' p2'.
 
 
+(***** Properties of physicalized_ptr ******)
+
 Lemma physicalized_ptr_nonlog:
   forall m p1 p2
          (HPP:physicalized_ptr m (Ir.ptr p1) (Ir.ptr p2)),
@@ -212,63 +214,6 @@ Proof.
   omega.
 Qed.
 
-Lemma inbounds_mod:
-  forall mb (HWF:Ir.MemBlock.wf mb) ofs
-         (HINB:Ir.MemBlock.inbounds ofs mb = true),
-    (Ir.MemBlock.addr mb + ofs) mod Ir.MEMSZ = Ir.MemBlock.addr mb + ofs.
-Proof.
-  intros.
-  rewrite Nat.mod_small. reflexivity.
-  inv HWF.
-  unfold Ir.MemBlock.inbounds in HINB.
-  rewrite PeanoNat.Nat.leb_le in HINB.
-  eapply Nat.le_lt_trans with (m := Ir.MemBlock.addr mb +Ir.MemBlock.n mb).
-  omega.
-  apply wf_inmem.
-  unfold Ir.MemBlock.addr.
-  destruct (Ir.MemBlock.P mb).
-  simpl in wf_twin. inv wf_twin.
-  simpl. left. reflexivity.
-Qed.
-
-(* Thanks to twin blocks, size of a block cannot equal to or be larger than a half of
-   memory size. *)
-Lemma blocksz_lt:
-  forall mb (HWF:Ir.MemBlock.wf mb),
-    ~ (Ir.MemBlock.n mb >= Nat.shiftl 1 (Ir.PTRSZ - 1)).
-Proof.
-  intros.
-  intros H.
-  inv HWF.
-  unfold Ir.MemBlock.P_ranges in wf_disj.
-  destruct (Ir.MemBlock.P mb).
-  simpl in wf_twin. inv wf_twin.
-  destruct l. simpl in wf_twin. inv wf_twin.
-  simpl in wf_disj.
-  rewrite andb_true_iff in wf_disj.
-  rewrite andb_true_iff in wf_disj.
-  rewrite andb_true_iff in wf_disj.
-  destruct wf_disj.
-  destruct H0. clear H1. clear H2.
-  unfold disjoint_range in H0.
-  rewrite orb_true_iff in H0.
-  rewrite PeanoNat.Nat.leb_le in H0.
-  rewrite PeanoNat.Nat.leb_le in H0.
-  assert (Ir.MEMSZ = (Nat.shiftl 1 (Ir.PTRSZ - 1)) +
-                     (Nat.shiftl 1 (Ir.PTRSZ - 1))).
-  { reflexivity. }
-  destruct H0.
-  { exploit wf_inmem.
-    simpl. right. left. reflexivity.
-    intros HH.
-    omega.
-  }
-  { exploit wf_inmem.
-    simpl. left. reflexivity.
-    intros HH. omega.
-  }
-Qed.  
-  
 Opaque Ir.MEMSZ.
 Opaque Ir.PTRSZ.
 
@@ -478,111 +423,7 @@ Proof.
 Qed.
       
 
-Lemma eq_incrpc2:
-  forall md1 md2 st i1 i2
-      (HINST1: Some i1 = Ir.Config.cur_inst md1 st)
-      (HINST2: Some i2 = Ir.Config.cur_inst md2 st),
-    Ir.Config.eq (Ir.SmallStep.incrpc md1 st) (Ir.SmallStep.incrpc md2 st).
-Proof.
-  intros.
-  unfold Ir.Config.cur_inst in HINST1.
-  unfold Ir.Config.cur_inst in HINST2.
-  split.
-  { unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      repeat (rewrite Ir.Config.m_update_pc);
-      unfold Ir.Config.update_rval; des_ifs.
-  }
-  split.
-  { unfold Ir.Config.cur_fdef_pc in HINST1.
-    unfold Ir.Config.cur_fdef_pc in HINST2.
-    des_ifs.
-    unfold Ir.IRFunction.get_inst in HINST1.
-    unfold Ir.IRFunction.get_inst in HINST2.
-    destruct p1; try congruence.
-    des_ifs.
-    unfold Ir.SmallStep.incrpc.
-    unfold Ir.Config.cur_fdef_pc.
-    rewrite Heq0.
-    rewrite Heq1.
-    rewrite Heq2.
-    rewrite Heq3.
-    unfold Ir.IRFunction.next_trivial_pc.
-    rewrite Heq5.
-    rewrite Heq.
-    rewrite Heq6.
-    rewrite Heq4.
-    apply Ir.Stack.eq_refl.
-  }
-  split.
-  { unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      unfold Ir.Config.update_pc; des_ifs.
-  }
-  { unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      unfold Ir.Config.update_pc; des_ifs.
-  }
-Qed.
-
-Lemma eq_update_reg_and_incrpc2:
-  forall md1 md2 st r v i1 i2
-      (HINST1: Some i1 = Ir.Config.cur_inst md1 st)
-      (HINST2: Some i2 = Ir.Config.cur_inst md2 st),
-    Ir.Config.eq
-      (Ir.SmallStep.update_reg_and_incrpc md1 st r v)
-      (Ir.SmallStep.update_reg_and_incrpc md2 st r v).
-Proof.
-  intros.
-  unfold Ir.Config.cur_inst in HINST1.
-  unfold Ir.Config.cur_inst in HINST2.
-  split.
-  { unfold Ir.SmallStep.update_reg_and_incrpc.
-    unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      repeat (rewrite Ir.Config.m_update_pc);
-      unfold Ir.Config.update_rval; des_ifs.
-  }
-  split.
-  { unfold Ir.Config.cur_fdef_pc in HINST1.
-    unfold Ir.Config.cur_fdef_pc in HINST2.
-    des_ifs.
-    unfold Ir.IRFunction.get_inst in HINST1.
-    unfold Ir.IRFunction.get_inst in HINST2.
-    destruct p1; try congruence.
-    des_ifs.
-    unfold Ir.SmallStep.update_reg_and_incrpc.
-    unfold Ir.SmallStep.incrpc.
-    rewrite Ir.Config.cur_fdef_pc_update_rval.
-    rewrite Ir.Config.cur_fdef_pc_update_rval.
-    unfold Ir.Config.cur_fdef_pc.
-    rewrite Heq0.
-    rewrite Heq1.
-    rewrite Heq2.
-    rewrite Heq3.
-    unfold Ir.IRFunction.next_trivial_pc.
-    rewrite Heq5.
-    rewrite Heq.
-    rewrite Heq6.
-    rewrite Heq4.
-    apply Ir.Stack.eq_refl.
-  }
-  split.
-  { unfold Ir.SmallStep.update_reg_and_incrpc.
-    unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      unfold Ir.Config.update_pc; unfold Ir.Config.update_rval;
-      des_ifs.
-  }
-  { unfold Ir.SmallStep.update_reg_and_incrpc.
-    unfold Ir.SmallStep.incrpc.
-    des_ifs;
-      unfold Ir.Config.update_pc; unfold Ir.Config.update_rval;
-      des_ifs.
-  }
-Qed.
-
-
+(**** lemmas regarding twos_compl_add and inbounds_abs *****)
 
 Lemma inbounds_added_abs_true:
   forall m b t0 n0 n ofs
@@ -821,6 +662,9 @@ Proof.
   eapply inbounds_added_abs_true; try eassumption.
 Qed.
 
+
+(***** A few lemmas about physicalized_ptr ******)
+
 Lemma physicalized_ptr_log_I:
   forall v1 v2 m
          (HPP:physicalized_ptr m v1 v2),
@@ -1033,6 +877,124 @@ Proof.
     inv HWF. assumption.
   }
 Qed.
+
+
+
+
+Lemma eq_incrpc2:
+  forall md1 md2 st i1 i2
+      (HINST1: Some i1 = Ir.Config.cur_inst md1 st)
+      (HINST2: Some i2 = Ir.Config.cur_inst md2 st),
+    Ir.Config.eq (Ir.SmallStep.incrpc md1 st) (Ir.SmallStep.incrpc md2 st).
+Proof.
+  intros.
+  unfold Ir.Config.cur_inst in HINST1.
+  unfold Ir.Config.cur_inst in HINST2.
+  split.
+  { unfold Ir.SmallStep.incrpc.
+    des_ifs;
+      repeat (rewrite Ir.Config.m_update_pc);
+      unfold Ir.Config.update_rval; des_ifs.
+  }
+  split.
+  { unfold Ir.Config.cur_fdef_pc in HINST1.
+    unfold Ir.Config.cur_fdef_pc in HINST2.
+    des_ifs.
+    unfold Ir.IRFunction.get_inst in HINST1.
+    unfold Ir.IRFunction.get_inst in HINST2.
+    destruct p1; try congruence.
+    des_ifs.
+    unfold Ir.SmallStep.incrpc.
+    unfold Ir.Config.cur_fdef_pc.
+    rewrite Heq0.
+    rewrite Heq1.
+    rewrite Heq2.
+    rewrite Heq3.
+    unfold Ir.IRFunction.next_trivial_pc.
+    rewrite Heq5.
+    rewrite Heq.
+    rewrite Heq6.
+    rewrite Heq4.
+    apply Ir.Stack.eq_refl.
+  }
+  split.
+  { unfold Ir.SmallStep.incrpc.
+    des_ifs;
+      unfold Ir.Config.update_pc; des_ifs.
+  }
+  { unfold Ir.SmallStep.incrpc.
+    des_ifs;
+      unfold Ir.Config.update_pc; des_ifs.
+  }
+Qed.
+
+
+Lemma refines_eq_incrpc2:
+  forall md1 md2 st i1 i2
+      (HINST1: Some i1 = Ir.Config.cur_inst md1 st)
+      (HINST2: Some i2 = Ir.Config.cur_inst md2 st),
+    Ir.Refinement_refines_state
+      (Ir.SmallStep.incrpc md1 st) (Ir.SmallStep.incrpc md2 st).
+
+Lemma eq_update_reg_and_incrpc2:
+  forall md1 md2 st r v i1 i2
+      (HINST1: Some i1 = Ir.Config.cur_inst md1 st)
+      (HINST2: Some i2 = Ir.Config.cur_inst md2 st),
+    Ir.Config.eq
+      (Ir.SmallStep.update_reg_and_incrpc md1 st r v)
+      (Ir.SmallStep.update_reg_and_incrpc md2 st r v).
+Proof.
+  intros.
+  unfold Ir.Config.cur_inst in HINST1.
+  unfold Ir.Config.cur_inst in HINST2.
+  split.
+  { unfold Ir.SmallStep.update_reg_and_incrpc.
+    unfold Ir.SmallStep.incrpc.
+    des_ifs;
+      repeat (rewrite Ir.Config.m_update_pc);
+      unfold Ir.Config.update_rval; des_ifs.
+  }
+  split.
+  { unfold Ir.Config.cur_fdef_pc in HINST1.
+    unfold Ir.Config.cur_fdef_pc in HINST2.
+    des_ifs.
+    unfold Ir.IRFunction.get_inst in HINST1.
+    unfold Ir.IRFunction.get_inst in HINST2.
+    destruct p1; try congruence.
+    des_ifs.
+    unfold Ir.SmallStep.update_reg_and_incrpc.
+    unfold Ir.SmallStep.incrpc.
+    rewrite Ir.Config.cur_fdef_pc_update_rval.
+    rewrite Ir.Config.cur_fdef_pc_update_rval.
+    unfold Ir.Config.cur_fdef_pc.
+    rewrite Heq0.
+    rewrite Heq1.
+    rewrite Heq2.
+    rewrite Heq3.
+    unfold Ir.IRFunction.next_trivial_pc.
+    rewrite Heq5.
+    rewrite Heq.
+    rewrite Heq6.
+    rewrite Heq4.
+    apply Ir.Stack.eq_refl.
+  }
+  split.
+  { unfold Ir.SmallStep.update_reg_and_incrpc.
+    unfold Ir.SmallStep.incrpc.
+    des_ifs;
+      unfold Ir.Config.update_pc; unfold Ir.Config.update_rval;
+      des_ifs.
+  }
+  { unfold Ir.SmallStep.update_reg_and_incrpc.
+    unfold Ir.SmallStep.incrpc.
+    des_ifs;
+      unfold Ir.Config.update_pc; unfold Ir.Config.update_rval;
+      des_ifs.
+  }
+Qed.
+
+
+
 
 Lemma load_val_get_deref:
   forall m ptr1 ptr2 retty
@@ -1506,6 +1468,46 @@ Proof.
     des_ifs. }
 Qed.
 
+
+(*****
+      Refinement on ptrtoint instruction.
+ *****)
+Theorem ptrtoint_refines:
+  forall md1 md2 (* md2 is an optimized program *)
+         st r opptr1 opptr2 retty v1 v2 sr1 sr2
+         (HWF1:Ir.Config.wf md1 st)
+         (HWF2:Ir.Config.wf md2 st) (* State st is wellformed on two modules *)
+         (* Two stores on a same state(including same PC) *)
+         (HINST1:Some (Ir.Inst.iptrtoint r opptr1 retty) = Ir.Config.cur_inst md1 st)
+         (HINST2:Some (Ir.Inst.iptrtoint r opptr2 retty) = Ir.Config.cur_inst md2 st)
+         (* Has a good relation between pointer operands *)
+         (HOP1:Ir.Config.get_val st opptr1 = Some v1)
+         (HOP2:Ir.Config.get_val st opptr2 = Some v2)
+         (HPP:physicalized_ptr (Ir.Config.m st) v1 v2)
+         (* And.. have a step. *)
+         (HSTEP1:Ir.SmallStep.sstep md1 st sr1)
+         (HSTEP2:Ir.SmallStep.sstep md2 st sr2),
+    Ir.Refinement.refines_step_res sr2 sr1. (* target refines source *)
+Proof.
+  intros.
+  inv HSTEP1.
+  { inv HSTEP2.
+    { inv HISTEP; try congruence.
+      unfold Ir.SmallStep.inst_det_step in HNEXT.
+      rewrite <- HINST1 in HNEXT.
+      rewrite HOP1 in HNEXT.
+      inv HISTEP0; try congruence.
+      unfold Ir.SmallStep.inst_det_step in HNEXT0.
+      rewrite <- HINST2 in HNEXT0.
+      rewrite HOP2 in HNEXT0.
+      inv HWF1.
+
+      clear wf_cid_to_f.
+      clear wf_cid_to_f2.
+      clear wf_stack.
+      clear wf_no_bogus_ptr.
+      clear wf_no_bogus_ptr_mem.
+      inv 
 
 End GVN.
 

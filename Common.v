@@ -465,6 +465,32 @@ Proof.
     + simpl in HFORALLB. simpl. rewrite <- HEQ. rewrite HGF. simpl. assumption.
 Qed.
 
+Lemma Forall2_samelist {X:Type}:
+  forall (l:list X) (f:X -> X -> Prop)
+         (HF:forall X, f X X),
+    List.Forall2 f l l.
+Proof.
+  induction l.
+  { intros. constructor. }
+  { intros.
+    constructor. apply HF. eapply IHl.
+    assumption.
+  }
+Qed.
+
+Lemma Forall2_implies {X Y:Type}:
+  forall (l1:list X) (l2:list Y) (f g:X -> Y -> Prop)
+         (HFORALL2:List.Forall2 f l1 l2)
+         (HIMPLIES:forall x y, f x y -> g x y),
+    List.Forall2 g l1 l2.
+Proof.
+  intros.
+  induction HFORALL2.
+  { constructor. }
+  { constructor. apply HIMPLIES. assumption.
+    assumption. }
+Qed.
+
 Lemma forallb_In {X:Type}:
   forall (l:list X) (f:X -> bool) i
          (HFORALLB:List.forallb f l = true)

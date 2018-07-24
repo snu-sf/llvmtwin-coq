@@ -769,6 +769,64 @@ Proof.
     assumption.
 Qed.
 
+Lemma inbounds_mod:
+  forall mb (HWF:Ir.MemBlock.wf mb) ofs
+         (HINB:Ir.MemBlock.inbounds ofs mb = true),
+    (Ir.MemBlock.addr mb + ofs) mod Ir.MEMSZ = Ir.MemBlock.addr mb + ofs.
+Proof.
+  intros.
+  rewrite Nat.mod_small. reflexivity.
+  inv HWF.
+  unfold Ir.MemBlock.inbounds in HINB.
+  rewrite PeanoNat.Nat.leb_le in HINB.
+  eapply Nat.le_lt_trans with (m := Ir.MemBlock.addr mb +Ir.MemBlock.n mb).
+  omega.
+  apply wf_inmem0.
+  unfold Ir.MemBlock.addr.
+  destruct (Ir.MemBlock.P mb).
+  simpl in wf_twin0. inv wf_twin0.
+  simpl. 
+  left. reflexivity.
+Qed.
+
+(* Thanks to twin blocks, size of a block cannot equal to or be larger than a half of
+   memory size. *)
+Lemma blocksz_lt:
+  forall mb (HWF:Ir.MemBlock.wf mb),
+    ~ (Ir.MemBlock.n mb >= Nat.shiftl 1 (Ir.PTRSZ - 1)).
+Proof.
+  intros.
+  intros H.
+  inv HWF.
+  unfold Ir.MemBlock.P_ranges in wf_disj0.
+  destruct (Ir.MemBlock.P mb).
+  simpl in wf_twin0. inv wf_twin0.
+  destruct l. simpl in wf_twin0. inv wf_twin0.
+  simpl in wf_disj0.
+  rewrite andb_true_iff in wf_disj0.
+  rewrite andb_true_iff in wf_disj0.
+  rewrite andb_true_iff in wf_disj0.
+  destruct wf_disj0.
+  destruct H0. clear H1. clear H2.
+  unfold disjoint_range in H0.
+  rewrite orb_true_iff in H0.
+  rewrite PeanoNat.Nat.leb_le in H0.
+  rewrite PeanoNat.Nat.leb_le in H0.
+  assert (Ir.MEMSZ = (Nat.shiftl 1 (Ir.PTRSZ - 1)) +
+                     (Nat.shiftl 1 (Ir.PTRSZ - 1))).
+  { reflexivity. }
+  destruct H0.
+  { exploit wf_inmem0.
+    simpl. right. left. reflexivity.
+    intros HH.
+    omega.
+  }
+  { exploit wf_inmem0.
+    simpl. left. reflexivity.
+    intros HH. omega.
+  }
+Qed.  
+  
 Lemma inbounds_abs_lt_MEMSZ:
   forall mb i
          (HWF:Ir.MemBlock.wf mb)
