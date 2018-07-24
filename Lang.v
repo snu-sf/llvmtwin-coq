@@ -46,6 +46,31 @@ Definition regop (o:op): list reg :=
   end.
 
 
+
+Lemma ty_bytesz_pos:
+  forall t, Ir.ty_bytesz t > 0.
+Proof.
+  intros.
+  unfold Ir.ty_bytesz.
+  destruct t.
+  { destruct n.
+    { simpl. omega. }
+    { unfold Ir.ty_bitsz.
+      assert (lt_gt:   forall n1 n2, n1 < n2 -> n2 > n1).
+      { intros. omega. }
+      apply lt_gt.
+      rewrite Nat.div_str_pos_iff.
+      omega.
+      omega.
+    }
+  }
+  { unfold Ir.ty_bitsz.
+    unfold Ir.PTRSZ. simpl. omega.
+  }
+Qed.
+
+
+
 (* PHI Node. *)
 Module PhiNode.
 

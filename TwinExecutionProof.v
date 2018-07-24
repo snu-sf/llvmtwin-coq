@@ -206,30 +206,6 @@ Ltac coalesce_op Hop1 Hop2 st2 HTWIN :=
   try apply HTWIN;
   rewrite Htmp in Htmp2; inv Htmp2; clear Htmp.
 
-Lemma lt_gt:
-  forall n1 n2, n1 < n2 -> n2 > n1.
-Proof. intros . omega. Qed.
-
-Lemma ty_bytesz_pos:
-  forall t, Ir.ty_bytesz t > 0.
-Proof.
-  intros.
-  unfold Ir.ty_bytesz.
-  destruct t.
-  { destruct n.
-    { simpl. omega. }
-    { unfold Ir.ty_bitsz.
-      apply lt_gt.
-      rewrite Nat.div_str_pos_iff.
-      omega.
-      omega.
-    }
-  }
-  { unfold Ir.ty_bitsz.
-    unfold Ir.PTRSZ. simpl. omega.
-  }
-Qed.
-
 
 
 Opaque Ir.MEMSZ.
@@ -507,7 +483,7 @@ Proof.
                 try apply HTWIN.
               rewrite Hop12 in Hop22. inv Hop22.
               eapply twin_state_store_val; try eassumption.
-              { apply ty_bytesz_pos. }
+              { apply Ir.ty_bytesz_pos. }
             }
           }
         }
@@ -2204,10 +2180,10 @@ Proof.
         unfold Ir.deref in Heq2. rewrite Heq4 in Heq2.
         (* false = true! *)
         congruence.
-        eapply ty_bytesz_pos.
+        eapply Ir.ty_bytesz_pos.
       }
       { inv HWF1. assumption. }
-      { eapply ty_bytesz_pos. }
+      { eapply Ir.ty_bytesz_pos. }
     }
     { (* store is not terminator *)
       apply Ir.Config.cur_inst_not_cur_terminator in HINST.
@@ -2253,10 +2229,10 @@ Proof.
         unfold Ir.deref in Heq1. rewrite Heq3 in Heq1.
         (* false = true! *)
         congruence.
-        eapply ty_bytesz_pos.
+        eapply Ir.ty_bytesz_pos.
       }
       { inv HWF1. assumption. }
-      { eapply ty_bytesz_pos. }
+      { eapply Ir.ty_bytesz_pos. }
     }
     { (* load is not terminator *)
       apply Ir.Config.cur_inst_not_cur_terminator in HINST.
