@@ -75,6 +75,7 @@ Inductive step_res :=
 
 (* Convert a pointer into nat. *)
 Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):nat :=
+  let sz := Nat.min Ir.PTRSZ sz in
   match p with
   | Ir.plog l o =>
     match Ir.log_to_phy m l o with
@@ -88,6 +89,7 @@ Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):nat :=
 
 (* Pointer subtraction. *)
 Definition psub p1 p2 m bsz :=
+  let bsz := Nat.min Ir.PTRSZ bsz in
   match (p1, p2) with
   | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     if Nat.eqb l1 l2 then

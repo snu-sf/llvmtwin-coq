@@ -1527,9 +1527,15 @@ Proof.
           eapply physicalized_ptr_log_get in HPP0; try reflexivity;
             try eassumption.
           destruct HPP0.
+          des_ifs; try (cc_thats_it).
           eapply physicalized_ptr_convert in HPP1; try reflexivity; try eassumption.
-          unfold Ir.SmallStep.p2N.
-          unfold Ir.log_to_phy. rewrite <- H.
+          unfold Ir.SmallStep.psub.
+          destruct p.
+          { destruct (b =? b0) eqn:HEQ.
+            { rewrite PeanoNat.Nat.eqb_eq in HEQ. subst b.
+              unfold Ir.SmallStep.p2N.
+              unfold Ir.log_to_phy.
+              des_ifs. 
           rewrite HPP1.
           constructor. constructor. thats_it.
         }
