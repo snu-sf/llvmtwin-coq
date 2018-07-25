@@ -284,7 +284,7 @@ Structure wf (c:t) := mk_wf
     wf_no_bogus_ptr:
       forall op l ofs
              (HGETVAL:get_val c op = Some (Ir.ptr (Ir.plog l ofs))),
-        l < c.(m).(Ir.Memory.fresh_bid);
+        exists mb, Ir.Memory.get c.(m) l = Some mb;
     (* wf_no_bogus_logofs: regfile has no pointer value which has
        log ofs larger than MEMSZ. *)
     wf_no_bogus_logofs:

@@ -830,8 +830,8 @@ Proof.
   assert (HL:l = Ir.Memory.fresh_bid (Ir.Config.m st)).
   { unfold Ir.Memory.new in HNEW. inv HNEW. reflexivity. }
   erewrite Ir.Memory.get_new; try eassumption. reflexivity.
-Qed. 
-
+  inv HGV0. eapply Ir.Memory.get_fresh_bid; eassumption.
+Qed.
 
 Lemma psub_always_succeeds:
   forall st (md:Ir.IRModule.t) r retty ptrty op1 op2
@@ -2812,7 +2812,8 @@ Proof.
   { eassumption. }
   { eassumption. }
   { eassumption. }
-  { destruct HWF. apply wf_no_bogus_ptr in HGV. assumption. }
+  { destruct HWF. apply wf_no_bogus_ptr in HGV. inv HGV.
+    eapply Ir.Memory.get_fresh_bid; eassumption. }
 Qed.
 
 Theorem reorder_malloc_gep:
@@ -4365,11 +4366,12 @@ Proof.
           try reflexivity;
           try (destruct HWF; eassumption);
           try (try rewrite m_update_m; eassumption).
-        destruct HWF. apply wf_no_bogus_ptr in HGV2. assumption.
+        destruct HWF. apply wf_no_bogus_ptr in HGV2. inv HGV2.
+        eapply Ir.Memory.get_fresh_bid; eassumption.
       }
       { reflexivity. }
-      destruct HWF. apply wf_no_bogus_ptr in HGV1. assumption.
-      
+      destruct HWF. apply wf_no_bogus_ptr in HGV1.
+      inv HGV1. eapply Ir.Memory.get_fresh_bid; eassumption.
     }
     { reflexivity. }
   }
@@ -4409,10 +4411,12 @@ Proof.
           try reflexivity;
           try (destruct HWF; eassumption);
           try (try rewrite m_update_m; eassumption).
-        destruct HWF. apply wf_no_bogus_ptr in HGV2. assumption.
+        destruct HWF. apply wf_no_bogus_ptr in HGV2.
+        inv HGV2. eapply Ir.Memory.get_fresh_bid; eassumption.
       }
       { reflexivity. }
-      destruct HWF. apply wf_no_bogus_ptr in HGV1. assumption.
+      destruct HWF. apply wf_no_bogus_ptr in HGV1.
+      inv HGV1. eapply Ir.Memory.get_fresh_bid; eassumption.
     }
     { erewrite p2N_new_invariant; try eassumption. reflexivity. }
   }
@@ -6379,8 +6383,10 @@ Proof.
         try (destruct HWF; eassumption);
         try (try rewrite m_update_m; eassumption).
       destruct (Ir.Memory.get (Ir.Config.m st) b) eqn:HGETB.
-      { destruct HWF. apply wf_no_bogus_ptr in HGV1. assumption. }
-      { destruct HWF. apply wf_no_bogus_ptr in HGV1. assumption. }
+      { destruct HWF. apply wf_no_bogus_ptr in HGV1. inv HGV1.
+        eapply Ir.Memory.get_fresh_bid; eassumption. }
+      { destruct HWF. apply wf_no_bogus_ptr in HGV1. inv HGV1.
+        eapply Ir.Memory.get_fresh_bid; eassumption. }
     }
     { reflexivity. }
   }
@@ -6416,7 +6422,8 @@ Proof.
           try reflexivity;
           try (destruct HWF; eassumption);
           try (try rewrite m_update_m; eassumption).
-        destruct HWF. apply wf_no_bogus_ptr in HGV1. assumption.
+        destruct HWF. apply wf_no_bogus_ptr in HGV1. inv HGV1.
+        eapply Ir.Memory.get_fresh_bid; eassumption.
       }
       { unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond in HNONDET.
         rewrite Heqb in HNONDET. inv HNONDET.

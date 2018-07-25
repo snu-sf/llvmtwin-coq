@@ -733,7 +733,7 @@ Theorem update_rval_wf:
          (HWF:Ir.Config.wf md c)
          (HC':c' = Ir.Config.update_rval c r v)
          (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
-             l < c.(Ir.Config.m).(Ir.Memory.fresh_bid))
+             exists mb, Ir.Memory.get (Ir.Config.m c) l = Some mb)
          (HNOBOGUSLOGOFS:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
              o < Ir.MEMSZ)
          (HNOBOGUSPHYOFS:forall o I cid (HPTR:v = Ir.ptr (Ir.pphy o I cid)),
@@ -811,7 +811,7 @@ Theorem update_reg_and_incrpc_wf:
          (HWF:Ir.Config.wf md c)
          (HC':c' = update_reg_and_incrpc c r v)
          (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
-             l < c.(Ir.Config.m).(Ir.Memory.fresh_bid))
+             exists mb, Ir.Memory.get (Ir.Config.m c) l = Some mb)
          (HNOBOGUSLOGOFS:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
              o < Ir.MEMSZ)
          (HNOBOGUSPHYOFS:forall o I cid (HPTR:v = Ir.ptr (Ir.pphy o I cid)),
@@ -821,7 +821,7 @@ Proof.
   intros.
   unfold update_reg_and_incrpc in HC'.
   assert (Ir.Config.wf md (Ir.Config.update_rval c r v)).
-  { eapply update_rval_wf. eassumption. reflexivity. eassumption.
+  { eapply update_rval_wf. eassumption. reflexivity.  eassumption.
     eassumption. eassumption. }
   rewrite HC'.
   eapply incrpc_wf.

@@ -3352,3 +3352,72 @@ Proof.
   eapply H.
   apply le_plus_r.
 Qed.
+
+Lemma mod_inj_l:
+  forall a b r,
+    a = b -> a mod r = b mod r.
+Proof. intros. congruence. Qed.
+
+Lemma mod_mul_eq:
+  forall a1 a2 b c (H1:b <> 0) (H2:c <> 0)
+         (HEQ:a1 mod (b * c) = a2 mod (b * c)),
+    a1 mod b = a2 mod b.
+Proof.
+  intros.
+  assert (b * c <> 0).
+  { destruct b; destruct c; try congruence. simpl. intros H. congruence. }
+  assert (Ha1 := Nat.div_mod a1 (b * c) H).
+  assert (Ha2 := Nat.div_mod a2 (b * c) H).
+  rewrite HEQ in Ha1.
+  rewrite Ha2, Ha1.
+  rewrite Nat.add_mod; try omega.
+  rewrite Nat.mul_mod; try omega.
+  rewrite Nat.mul_mod with (a := b) (b := c); try congruence.
+  rewrite Nat.mod_same; try congruence.
+  rewrite Nat.mod_0_l; try omega.
+  rewrite Nat.mod_0_l; try omega. simpl.
+  rewrite Nat.add_mod; try omega.
+  rewrite Nat.mul_mod; try omega.
+  rewrite Nat.mul_mod with (a := b) (b := c); try congruence.
+  rewrite Nat.mod_same; try omega. simpl.
+  rewrite Nat.mod_0_l; try omega. simpl.
+  rewrite Nat.mod_0_l; try omega. simpl.
+  reflexivity.
+Qed.  
+
+Lemma double_2_pow:
+  forall n, Nat.double (2 ^ n) = 2 ^ (1 + n).
+Proof.
+  intros.
+  unfold Nat.double.
+  simpl. omega.
+Qed.
+
+Lemma shiftl_2_nonzero:
+  forall n, Nat.shiftl 2 n <> 0.
+Proof.
+  intros HH.
+  rewrite Nat.shiftl_eq_0_iff.
+  omega.
+Qed.
+
+Lemma shiftl_2_decompose:
+  forall n1 n2 (HPOS1: 0 < n1) (HPOS2:0 < n2) (H:n1 < n2),
+    Nat.shiftl 2 (n2 - 1) =
+    Nat.shiftl 2 (n1 - 1) * Nat.shiftl 2 (n2 - n1 - 1).
+Proof.
+  intros.
+  assert (2 = Nat.shiftl 1 1). reflexivity.
+  rewrite H0.
+  repeat (rewrite Nat.shiftl_shiftl).
+  destruct n1; destruct n2; try omega.
+  simpl.
+  repeat (rewrite Nat.sub_0_r).
+  repeat (rewrite Nat.shiftl_1_l).
+  repeat (rewrite double_2_pow).
+  rewrite <- Nat.pow_add_r.
+  assert (1 + n2 = 1 + n1 + (1 + (n2 - n1 - 1))).
+  { simpl.  omega. }
+  rewrite <- H1. reflexivity.
+Qed.
+
