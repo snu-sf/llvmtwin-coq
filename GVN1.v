@@ -1462,6 +1462,63 @@ Qed.
 (*****
       Refinement on psub instruction.
  *****)
+
+Lemma twos_compl_MEMSZ_PTRSZ:
+  forall a,
+    Ir.SmallStep.twos_compl (a mod Ir.MEMSZ) Ir.PTRSZ =
+    a mod Ir.MEMSZ.
+Proof.
+  intros.
+  unfold Ir.SmallStep.twos_compl.
+  rewrite PTRSZ_MEMSZ.
+  rewrite Nat.mod_mod.
+  reflexivity.
+  assert (H := Ir.MEMSZ_pos).
+  omega.
+Qed.
+
+Lemma twos_compl_sub_common:
+  forall x y a n,
+    Ir.SmallStep.twos_compl_sub (a + x) (a + y) n =
+    Ir.SmallStep.twos_compl_sub x y n.
+Proof.
+  intros.
+  unfold Ir.SmallStep.twos_compl_sub.
+  unfold Ir.SmallStep.twos_compl.
+  rewrite Nat.add_shuffle0 with (m := x).
+  assert ((a + Nat.shiftl 2 (n - 1) + x - (a + y)) =
+          (x + Nat.shiftl 2 (n - 1) - y)).
+  { omega. }
+  rewrite H. reflexivity.
+Qed.
+
+Lemma mod_mul_eq:
+  forall a1 a2 b c (H1:b <> 0) (H2:c <> 0)
+         (HEQ:a1 mod (b * c) = a2 mod (b * c)),
+    a1 mod b = a2 mod b.
+Proof.
+  intros.
+  assert (b * c <> 0).
+  { destruct b; destruct c; try congruence. simpl. intros H. congruence. }
+  assert (Ha1 := Nat.div_mod a1 (b * c) H).
+  assert (Ha2 := Nat.div_mod a2 (b * c) H).
+  rewrite HEQ in Ha1.
+  rewrite Ha2, Ha1.
+  rewrite Nat.add_mod; try omega.
+  rewrite Nat.mul_mod; try omega.
+  rewrite Nat.mul_mod with (a := b) (b := c); try congruence.
+  rewrite Nat.mod_same; try congruence.
+  rewrite Nat.mod_0_l; try omega.
+  rewrite Nat.mod_0_l; try omega. simpl.
+  rewrite Nat.add_mod; try omega.
+  rewrite Nat.mul_mod; try omega.
+  rewrite Nat.mul_mod with (a := b) (b := c); try congruence.
+  rewrite Nat.mod_same; try omega. simpl.
+  rewrite Nat.mod_0_l; try omega. simpl.
+  rewrite Nat.mod_0_l; try omega. simpl.
+  reflexivity.
+Qed.  
+
 Theorem psub_refines:
   forall md1 md2 (* md2 is an optimized program *)
          st r opptr11 opptr12 opptr2 retty ptrty v1 v2 sr1 sr2
@@ -1535,7 +1592,160 @@ Proof.
             { rewrite PeanoNat.Nat.eqb_eq in HEQ. subst b.
               unfold Ir.SmallStep.p2N.
               unfold Ir.log_to_phy.
-              des_ifs. 
+              rewrite <- H.
+              rewrite <- HPP1.
+              rewrite Nat.min_id.
+
+              rewrite twos_compl_MEMSZ_PTRSZ.
+              assert (HN1: n1 = n1 mod Ir.MEMSZ).
+              { rewrite Nat.mod_small. reflexivity.
+                eapply wf_no_bogus_logofs. eassumption. }
+              assert (HN2: n2 = n2 mod Ir.MEMSZ).
+              { rewrite Nat.mod_small. reflexivity.
+                eapply wf_no_bogus_logofs. eassumption. }
+              rewrite HN1 at 2.
+              rewrite HN2 at 2.
+
+Lemma double_2_pow:
+  forall n, Nat.double (2 ^ n) = 2 ^ (1 + n).
+Proof.
+  intros.
+  unfold Nat.double.
+  simpl. omega.
+Qed.
+
+Lemma shiftl_2_nonzero:
+  forall n, Nat.shiftl 2 n <> 0.
+Proof.
+  intros HH.
+  rewrite Nat.shiftl_eq_0_iff.
+  omega.
+Qed.
+
+Lemma shiftl_2_decompose:
+  forall n1 n2 (HPOS1: 0 < n1) (HPOS2:0 < n2) (H:n1 < n2),
+    Nat.shiftl 2 (n2 - 1) =
+    Nat.shiftl 2 (n1 - 1) * Nat.shiftl 2 (n2 - n1 - 1).
+Proof.
+  intros.
+  assert (2 = Nat.shiftl 1 1). reflexivity.
+  rewrite H0.
+  repeat (rewrite Nat.shiftl_shiftl).
+  destruct n1; destruct n2; try omega.
+  simpl.
+  repeat (rewrite Nat.sub_0_r).
+  repeat (rewrite Nat.shiftl_1_l).
+  repeat (rewrite double_2_pow).
+  rewrite <- Nat.pow_add_r.
+  assert (1 + n2 = 1 + n1 + (1 + (n2 - n1 - 1))).
+  { simpl.  omega. }
+  rewrite <- H1. reflexivity.
+Qed.
+
+
+Lemma twos_compl_sub_min_eq:
+  forall x1 y1 x2 y2 n1 n2
+         (HPOS1:0 < n1) (HPOS2:0 < n2)
+         (HLE:n1 <= n2)
+         (HY1:Nat.shiftl 2 (n2 - 1) > y1)
+         (HY2:Nat.shiftl 2 (n2 - 1) > y2)
+         (HEQ:Ir.SmallStep.twos_compl_sub x1 y1 n2 =
+              Ir.SmallStep.twos_compl_sub x2 y2 n2),
+    Ir.SmallStep.twos_compl_sub x1 y1 n1 =
+    Ir.SmallStep.twos_compl_sub x2 y2 n1.
+Proof.
+  intros.
+  inv HLE. assumption.
+  remember (S m) as n2.
+  unfold Ir.SmallStep.twos_compl_sub in *.
+  unfold Ir.SmallStep.twos_compl in *.
+  assert (Nat.shiftl 2 (n2 - 1) =
+          Nat.shiftl 2 (n1 - 1) * Nat.shiftl 2 (n2 - n1 - 1)).
+  { assert (2 = Nat.shiftl 1 1). reflexivity.
+    rewrite H0.
+    SearchAbout Nat.shiftl.
+    repeat (rewrite Nat.shiftl_shiftl).
+    destruct n1; destruct n2; try omega.
+    simpl.
+    repeat (rewrite Nat.sub_0_r).
+    repeat (rewrite Nat.shiftl_1_l).
+    repeat (rewrite double_2_pow).
+    rewrite <- Nat.pow_add_r.
+    assert (1 + n2 = 1 + n1 + (1 + (n2 - n1 - 1))).
+    { simpl.  omega. }
+    rewrite <- H1. reflexivity. }
+  eapply mod_mul_eq with (c := Nat.shiftl 2 (n2 - n1 - 1)).
+  apply shiftl_2_nonzero.
+  apply shiftl_2_nonzero.
+  rewrite <- H0.
+  SearchAbout (_ + _ - _).
+  rewrite Nat.add_sub_swap.
+  apply shiftl_2_nonzero.
+
+  destruct (n1 <=? n2) eqn:HLE.
+  { rewrite PeanoNat.Nat.leb_le in HLE.
+    rewrite Nat.min_l in *; try omega. }
+  { rewrite PeanoNat.Nat.leb_gt in HLE.
+    
+    rewrite Nat.min_r in *; try omega.
+    intros HH.
+    rewrite Nat.shiftl_eq_0_iff in HH. congruence.
+    intros HH.
+    rewrite Nat.shiftl_eq_0_iff in HH. congruence.
+    
+  }
+  { 
+    rewrite Nat.add_mod.
+    subst m.
+    SearchAbout (_ - _
+    
+  rewrite Nat.add_shuffle0 with (m := x).
+  assert ((a + Nat.shiftl 2 (n - 1) + x - (a + y)) =
+          (x + Nat.shiftl 2 (n - 1) - y)).
+  { omega. }
+  rewrite H. reflexivity.
+Qed.
+
+
+Lemma twos_compl_mod_l:
+  forall x y m n1 n2
+         (HM:m = Nat.shiftl 1 (n1 - 1)),
+    Ir.SmallStep.twos_compl_sub (x mod m) (y mod m) (Nat.min n1 n2) =
+    Ir.SmallStep.twos_compl_sub x y (Nat.min n1 n2).
+Proof.
+  intros.
+  unfold Ir.SmallStep.twos_compl_sub.
+  unfold Ir.SmallStep.twos_compl.
+  destruct (n1 <=? n2) eqn:HLE.
+  { rewrite PeanoNat.Nat.leb_le in HLE.
+    rewrite Nat.min_l; try omega.
+    rewrite Nat.add_mod.
+    subst m.
+    SearchAbout (_ - _
+    
+  rewrite Nat.add_shuffle0 with (m := x).
+  assert ((a + Nat.shiftl 2 (n - 1) + x - (a + y)) =
+          (x + Nat.shiftl 2 (n - 1) - y)).
+  { omega. }
+  rewrite H. reflexivity.
+Qed.
+
+
+(*
+(Ir.SmallStep.twos_compl_sub
+  ((Ir.MemBlock.addr t + n1) mod Ir.MEMSZ)
+  (Ir.SmallStep.twos_compl ((Ir.MemBlock.addr t + n2) mod Ir.MEMSZ)
+                   (Nat.min Ir.PTRSZ (Nat.min Ir.PTRSZ n)))
+  (Nat.min Ir.PTRSZ n))
+
+(Ir.SmallStep.twos_compl_sub
+  n1
+  n2
+  (Nat.min Ir.PTRSZ n))
+
+*)
+              unfold Ir.SmallStep.twos_compl.
+              destruct (
           rewrite HPP1.
           constructor. constructor. thats_it.
         }

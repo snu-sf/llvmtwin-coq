@@ -102,6 +102,21 @@ Proof.
   rewrite PeanoNat.Nat.eqb_refl. reflexivity.
 Qed.
 
+Lemma get_update2:
+  forall rf r1 r2 v (HDIFF:r1 <> r2),
+    Ir.Regfile.get (Ir.Regfile.update rf r2 v) r1 =
+    Ir.Regfile.get rf r1.
+Proof.
+  intros.
+  unfold Ir.Regfile.get.
+  unfold Ir.Regfile.update.
+  unfold list_find_key.
+  simpl.
+  apply not_eq_sym in HDIFF.
+  rewrite <- PeanoNat.Nat.eqb_neq in HDIFF.
+  rewrite HDIFF. reflexivity.
+Qed.
+
 End Regfile.
 
 
@@ -270,6 +285,18 @@ Structure wf (c:t) := mk_wf
       forall op l ofs
              (HGETVAL:get_val c op = Some (Ir.ptr (Ir.plog l ofs))),
         l < c.(m).(Ir.Memory.fresh_bid);
+    (* wf_no_bogus_logofs: regfile has no pointer value which has
+       log ofs larger than MEMSZ. *)
+    wf_no_bogus_logofs:
+      forall op l ofs
+             (HGETVAL:get_val c op = Some (Ir.ptr (Ir.plog l ofs))),
+        ofs < Ir.MEMSZ;
+    (* wf_no_bogus_phyofs: regfile has no pointer value which has
+       phy ofs larger than MEMSZ. *)
+    wf_no_bogus_phyofs:
+      forall op ofs I cid
+             (HGETVAL:get_val c op = Some (Ir.ptr (Ir.pphy ofs I cid))),
+        ofs < Ir.MEMSZ;
     (* wf_no_bogus_ptr_mem: memory has no pointer value which has
        bogus block id. *)
     wf_no_bogus_ptr_mem:

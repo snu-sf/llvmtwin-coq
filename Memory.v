@@ -45,6 +45,18 @@ Inductive ptrval :=
 Definition NULL := pphy 0 nil None.
 
 
+Lemma MEMSZ_pos:
+  0 < Ir.MEMSZ.
+Proof.
+  unfold Ir.MEMSZ.
+  destruct (0 =? Nat.shiftl 1 Ir.PTRSZ) eqn:H.
+  { rewrite PeanoNat.Nat.eqb_eq in H.
+    symmetry in H.
+    rewrite Nat.shiftl_eq_0_iff in H. congruence. }
+  { rewrite PeanoNat.Nat.eqb_neq in H. omega. }
+Qed.
+
+
 (* Are two pointers equivalent? *)
 Definition ptr_eqb (p1 p2:ptrval): bool :=
   match (p1, p2) with

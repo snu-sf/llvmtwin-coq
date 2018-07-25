@@ -875,6 +875,7 @@ Proof.
   inv HNEXT.
   unfold Ir.SmallStep.psub.
   rewrite PeanoNat.Nat.eqb_refl.
+  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
   des_ifs.
 Qed.
 
@@ -906,7 +907,8 @@ Proof.
   unfold Ir.SmallStep.twos_compl_sub.
   unfold Ir.SmallStep.twos_compl.
   rewrite PeanoNat.Nat.eqb_refl.
-  reflexivity.
+  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
+  des_ifs.
 Qed.
 
 (****************************************************
@@ -935,7 +937,9 @@ Proof.
   inv HNEXT.
   unfold Ir.SmallStep.psub.
   rewrite <- PeanoNat.Nat.eqb_neq in HDIFFBLK.
-  rewrite HDIFFBLK. des_ifs.
+  rewrite HDIFFBLK.
+  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
+  des_ifs.
 Qed.
 
 (****************************************************
@@ -970,7 +974,8 @@ Proof.
   unfold Ir.log_to_phy.
   rewrite HBLK.
   rewrite HADDR.
-  reflexivity.
+  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
+  des_ifs.
 Qed.
 
 (****************************************************
@@ -1006,7 +1011,8 @@ Proof.
   unfold Ir.log_to_phy.
   rewrite HBLK.
   rewrite HADDR.
-  reflexivity.
+  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
+  des_ifs.
 Qed.
 
 (****************************************************
@@ -1036,7 +1042,8 @@ Proof.
   unfold Ir.SmallStep.twos_compl_sub.
   unfold Ir.SmallStep.twos_compl.
   unfold Ir.SmallStep.p2N.
-  reflexivity.
+  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
+  des_ifs.
 Qed.
 
 

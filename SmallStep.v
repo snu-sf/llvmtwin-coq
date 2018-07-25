@@ -87,24 +87,32 @@ Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):nat :=
     twos_compl o sz
   end.
 
+(* Raw definition of PTRSZ makes coqtop loop infinitely. *)
+(* why should I do this? ... *)
+
+Definition master_key : unit.
+Proof. apply tt. Qed.
+
+Definition locked A := let 'tt := master_key in fun x : A => x.
+Definition OPAQUED_PTRSZ := locked nat Ir.PTRSZ.
+
 (* Pointer subtraction. *)
 Definition psub p1 p2 m bsz :=
-  let bsz := Nat.min Ir.PTRSZ bsz in
   match (p1, p2) with
   | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     if Nat.eqb l1 l2 then
       (* psub on two same block *)
-      Ir.num (twos_compl_sub o1 o2 bsz)
+      Ir.num (twos_compl (twos_compl_sub o1 o2 OPAQUED_PTRSZ) bsz)
     else
       (* psub on two different blocks *)
       Ir.poison
   (* In all other cases, returns concrete number *)
   | (Ir.pphy o1 _ _, Ir.plog _ _) =>
-    Ir.num (twos_compl_sub o1 (p2N p2 m bsz) bsz)
+    Ir.num (twos_compl (twos_compl_sub o1 (p2N p2 m OPAQUED_PTRSZ) OPAQUED_PTRSZ) bsz)
   | (Ir.plog _ _, Ir.pphy o2 _ _) =>
-    Ir.num (twos_compl_sub (p2N p1 m bsz) o2 bsz)
+    Ir.num (twos_compl (twos_compl_sub (p2N p1 m OPAQUED_PTRSZ) o2 OPAQUED_PTRSZ) bsz)
   | (Ir.pphy o1 _ _, Ir.pphy o2 _ _) =>
-    Ir.num (twos_compl_sub o1 o2 bsz)
+    Ir.num (twos_compl (twos_compl_sub o1 o2 OPAQUED_PTRSZ) bsz)
   end.
 
 (* getelementptr with/without inbounds tag. *)
@@ -708,18 +716,28 @@ Proof.
         unfold Ir.Config.get_rval in HGETVAL. simpl in HGETVAL.
         unfold Ir.Config.get_val. unfold Ir.Config.get_rval.
         rewrite <- Heqs'. assumption.
+      * intros. eapply wf_no_bogus_logofs with (op := op). rewrite <- HGETVAL.
+        unfold Ir.Config.get_val. unfold Ir.Config.get_rval. des_ifs.
+      * intros. eapply wf_no_bogus_phyofs with (op := op). rewrite <- HGETVAL.
+        unfold Ir.Config.get_val. unfold Ir.Config.get_rval. des_ifs.
       * simpl. intros. eapply wf_no_bogus_ptr_mem.
         eassumption.
     + congruence.
   - congruence.
 Qed.
 
+
+
 Theorem update_rval_wf:
   forall c c' r v
          (HWF:Ir.Config.wf md c)
          (HC':c' = Ir.Config.update_rval c r v)
          (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
-             l < c.(Ir.Config.m).(Ir.Memory.fresh_bid)),
+             l < c.(Ir.Config.m).(Ir.Memory.fresh_bid))
+         (HNOBOGUSLOGOFS:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
+             o < Ir.MEMSZ)
+         (HNOBOGUSPHYOFS:forall o I cid (HPTR:v = Ir.ptr (Ir.pphy o I cid)),
+             o < Ir.MEMSZ),
     Ir.Config.wf md c'.
 Proof.
   intros.
@@ -760,6 +778,31 @@ Proof.
           unfold Ir.Config.get_rval. rewrite Hs. unfold Ir.Regfile.get.
           assumption.
         }
+    - (* no-bogus-logofs *)
+      intros.
+      unfold Ir.Config.get_val in HGETVAL. des_ifs. apply Ir.MEMSZ_pos.
+      destruct (Nat.eqb r r0) eqn:HEQ.
+      { rewrite PeanoNat.Nat.eqb_eq in HEQ. subst r.
+        unfold Ir.Config.get_rval in HGETVAL. simpl in HGETVAL.
+        rewrite Ir.Regfile.get_update in HGETVAL. inv HGETVAL.
+        eapply HNOBOGUSLOGOFS. reflexivity. }
+      { eapply wf_no_bogus_logofs with (op := Ir.opreg r0).
+        rewrite <- HGETVAL. unfold Ir.Config.get_val.
+        unfold Ir.Config.get_rval. simpl. des_ifs.
+        rewrite PeanoNat.Nat.eqb_neq in HEQ.
+        rewrite Ir.Regfile.get_update2; try congruence. }
+    - (* no-bogus-phyofs *) intros.
+      unfold Ir.Config.get_val in HGETVAL. des_ifs. apply Ir.MEMSZ_pos.
+      destruct (Nat.eqb r r0) eqn:HEQ.
+      { rewrite PeanoNat.Nat.eqb_eq in HEQ. subst r.
+        unfold Ir.Config.get_rval in HGETVAL. simpl in HGETVAL.
+        rewrite Ir.Regfile.get_update in HGETVAL. inv HGETVAL.
+        eapply HNOBOGUSPHYOFS. reflexivity. }
+      { eapply wf_no_bogus_phyofs with (op := Ir.opreg r0).
+        rewrite <- HGETVAL. unfold Ir.Config.get_val.
+        unfold Ir.Config.get_rval. simpl. des_ifs.
+        rewrite PeanoNat.Nat.eqb_neq in HEQ.
+        rewrite Ir.Regfile.get_update2; try congruence. }
   }
 Qed.
 
@@ -768,17 +811,23 @@ Theorem update_reg_and_incrpc_wf:
          (HWF:Ir.Config.wf md c)
          (HC':c' = update_reg_and_incrpc c r v)
          (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
-             l < c.(Ir.Config.m).(Ir.Memory.fresh_bid)),
+             l < c.(Ir.Config.m).(Ir.Memory.fresh_bid))
+         (HNOBOGUSLOGOFS:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
+             o < Ir.MEMSZ)
+         (HNOBOGUSPHYOFS:forall o I cid (HPTR:v = Ir.ptr (Ir.pphy o I cid)),
+             o < Ir.MEMSZ),
     Ir.Config.wf md c'.
 Proof.
   intros.
   unfold update_reg_and_incrpc in HC'.
   assert (Ir.Config.wf md (Ir.Config.update_rval c r v)).
-  { eapply update_rval_wf. eassumption. reflexivity. eassumption. }
+  { eapply update_rval_wf. eassumption. reflexivity. eassumption.
+    eassumption. eassumption. }
   rewrite HC'.
   eapply incrpc_wf.
   eapply H. reflexivity.
 Qed.
+
 
 Theorem t_step_wf:
   forall c c' e
@@ -828,6 +877,12 @@ Proof.
     { simpl. intros.
       rewrite Ir.Config.m_update_pc. rewrite Ir.Config.get_val_update_pc in HGETVAL.
       eapply wf_no_bogus_ptr. eassumption. }
+    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
+      eapply wf_no_bogus_logofs;
+                                                      eassumption. }
+    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
+      eapply wf_no_bogus_phyofs;
+                                                      eassumption. }
   }
   { unfold br in HSTEP.
     des_ifs.
@@ -867,6 +922,12 @@ Proof.
     { simpl. intros.
       rewrite Ir.Config.m_update_pc. rewrite Ir.Config.get_val_update_pc in HGETVAL.
       eapply wf_no_bogus_ptr. eassumption. }
+    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
+      eapply wf_no_bogus_logofs;
+                                                      eassumption. }
+    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
+      eapply wf_no_bogus_phyofs;
+                                                      eassumption. }
   }
   { unfold br in HSTEP.
     des_ifs.
@@ -906,6 +967,12 @@ Proof.
     { simpl. intros.
       rewrite Ir.Config.m_update_pc. rewrite Ir.Config.get_val_update_pc in HGETVAL.
       eapply wf_no_bogus_ptr. eassumption. }
+    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
+      eapply wf_no_bogus_logofs;
+                                                      eassumption. }
+    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
+      eapply wf_no_bogus_phyofs;
+                                                      eassumption. }
   }
 Qed.
 
