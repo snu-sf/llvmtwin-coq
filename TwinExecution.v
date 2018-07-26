@@ -1417,43 +1417,6 @@ Proof.
                 split. reflexivity.
                 repeat (split; unfold Ir.MemBlock.set_bytes; simpl; try congruence).
               }
-              { rewrite twin_state_deref_eq with (st2 := st2) (blkid := blkid) in HDEREF.
-                unfold Ir.store_val in HWF2'.
-                unfold Ir.store_bytes in HWF2'.
-                rewrite HWELLTYPED in HWF2'.
-                rewrite PeanoNat.Nat.eqb_eq in HWELLTYPED.
-                unfold Ir.deref in HDEREF.
-                rewrite HWELLTYPED in HDEREF.
-                destruct (Ir.get_deref (Ir.Config.m st2) (Ir.plog blkid ofs)
-                         (length (Ir.Byte.ofint (N.of_nat n0) n))) eqn:HDEREF'; try congruence.
-                unfold Ir.get_deref in HDEREF'. (* get_Deref log is the log. *)
-                rewrite <- HH1 in HDEREF'.
-                des_ifs.
-                repeat (split; try assumption).
-              }
-              { unfold Ir.store_val in HWF1'.
-                unfold Ir.store_bytes in HWF1'.
-                rewrite HWELLTYPED in HWF1'.
-                rewrite PeanoNat.Nat.eqb_eq in HWELLTYPED.
-                unfold Ir.deref in HDEREF.
-                rewrite HWELLTYPED in HDEREF.
-                destruct (Ir.get_deref (Ir.Config.m st1) (Ir.plog blkid ofs)
-                                       (length (Ir.Byte.ofint (N.of_nat n0) n)))
-                         eqn:HDEREF'; try congruence.
-                unfold Ir.get_deref in HDEREF'. (* get_Deref log is the log. *)
-                rewrite <- HH0 in HDEREF'.
-                unfold Ir.MemBlock.alive in HDEREF'.
-                rewrite HH3 in HDEREF'. rewrite HR in HDEREF'.
-                unfold Ir.MemBlock.inbounds in HDEREF'.
-                rewrite HH4 in HDEREF'. rewrite HINB1 in HDEREF'.
-                dup HINB2.
-                apply Nat.ltb_ge in HINB2.
-                rewrite <- Nat.leb_le in HINB2.
-                rewrite HINB2 in HDEREF'.
-                inv HDEREF'.
-                rewrite HH4 in HWF1'. rewrite HINB0 in HWF1'.
-                assumption.
-              }
             }
             { (* okay, the inbounds condition is false. *)
               eexists. eexists.
@@ -1508,7 +1471,6 @@ Proof.
               { erewrite Ir.Memory.get_set_diff with (bid' := l) (mb := mb1)
                 (m := Ir.Config.m st1); try congruence.
                 { inv HWF1. assumption. }
-                { apply store_val_wf_unfold_int; try congruence. }
                 { reflexivity. }
               }
               rewrite HGET1.
@@ -1520,7 +1482,6 @@ Proof.
               { erewrite Ir.Memory.get_set_diff with (bid' := l) (mb := mb2)
                 (m := Ir.Config.m st2); try congruence.
                 { inv HWF2. assumption. }
-                { apply store_val_wf_unfold_int; try congruence. }
                 { reflexivity. }
               }
               rewrite HGET2.
@@ -1609,18 +1570,6 @@ Proof.
               split. reflexivity.
               repeat (split; unfold Ir.MemBlock.set_bytes; simpl; try congruence).
             }
-            { eapply store_val_wf_unfold_ptr; try congruence.
-              { rewrite HPLEN in HDEREF.
-                unfold Ir.Byte.ofptr. unfold Ir.PTRSZ. simpl.
-                rewrite twin_state_deref_eq with (st2 := st2)
-                                                 (blkid := blkid) in HDEREF;
-                  try assumption.
-              }
-              { eassumption. }
-            }
-            { eapply store_val_wf_unfold_ptr; try congruence.
-              { eassumption. }
-            }
           }
           { unfold Ir.Byte.ofptr in HINB.
             unfold Ir.PTRSZ in HINB.
@@ -1667,7 +1616,6 @@ Proof.
             { erewrite Ir.Memory.get_set_diff with (bid' := b) (mb := mb1)
                 (m := Ir.Config.m st1); try congruence.
               { inv HWF1. assumption. }
-              { eapply store_val_wf_unfold_ptr; try congruence. eassumption. }
               { reflexivity. }
             }
             assert (HGET2:Ir.Memory.get
@@ -1678,7 +1626,6 @@ Proof.
             { erewrite Ir.Memory.get_set_diff with (bid' := b) (mb := mb2)
                 (m := Ir.Config.m st2); try congruence.
               { inv HWF2. assumption. }
-              { eapply store_val_wf_unfold_ptr; try congruence. eassumption. }
               { reflexivity. }
             }
             rewrite HGET1, HGET2.
@@ -1725,14 +1672,7 @@ Proof.
         { rewrite Ir.Memory.get_set_diff_short; try assumption.
           rewrite Ir.Memory.get_set_diff_short; try assumption.
           { inv HWF2. assumption. }
-          { apply store_val_wf_unfold_int; try assumption.
-            rewrite <- HWELLTYPED.
-            rewrite twin_state_deref_eq with (st2 := st2) (blkid := b) in HDEREF.
-            assumption.
-            assumption. }
           { inv HWF1. assumption. }
-          { apply store_val_wf_unfold_int; try assumption.
-            rewrite <- HWELLTYPED. assumption. }
         }
       }
       { (* the dereferenced lbock isn't blkid! *)
@@ -1750,26 +1690,14 @@ Proof.
           rewrite Ir.Memory.get_set_id_short with (mb0 := t); try assumption.
           reflexivity.
           { inv HWF2. assumption. }
-          { apply store_val_wf_unfold_int; try congruence.
-            rewrite <- HWELLTYPED.
-            rewrite twin_state_deref_eq with (st2 := st2) (blkid := blkid) in HDEREF.
-            assumption.
-            assumption. }
           { inv HWF1. assumption. }
-          { apply store_val_wf_unfold_int; try congruence. }
         }
         { rewrite PeanoNat.Nat.eqb_neq in HBID'.
           rewrite Ir.Memory.get_set_diff_short; try assumption.
           rewrite Ir.Memory.get_set_diff_short; try assumption.
           { inv HWF2. assumption. }
-          { apply store_val_wf_unfold_int; try congruence.
-            rewrite <- HWELLTYPED.
-            rewrite twin_state_deref_eq with (st2 := st2) (blkid := blkid) in HDEREF.
-            assumption.
-            assumption. }
           { congruence. }
           { inv HWF1. assumption. }
-          { apply store_val_wf_unfold_int; try congruence. }
           { congruence. }
         }
       }
@@ -1800,13 +1728,7 @@ Proof.
         { rewrite Ir.Memory.get_set_diff_short; try assumption.
           rewrite Ir.Memory.get_set_diff_short; try assumption.
           { inv HWF2. assumption. }
-          { eapply store_val_wf_unfold_ptr; try assumption.
-            rewrite <- HWELLTYPED.
-            rewrite twin_state_deref_eq with (st2 := st2) (blkid := b) in HDEREF.
-            assumption.
-            assumption. }
           { inv HWF1. assumption. }
-          { eapply store_val_wf_unfold_ptr; try assumption. }
         }
       }
       { (* the dereferenced block isn't blkid! *)
@@ -1824,37 +1746,19 @@ Proof.
           rewrite Ir.Memory.get_set_id_short with (mb0 := t0); try assumption.
           reflexivity.
           { inv HWF2. assumption. }
-          { eapply store_val_wf_unfold_ptr; try congruence.
-            rewrite <- HWELLTYPED.
-            rewrite twin_state_deref_eq with (st2 := st2) (blkid := blkid) in HDEREF.
-            assumption.
-            assumption.
-            eassumption. }
           { inv HWF1. assumption. }
-          { eapply store_val_wf_unfold_ptr; try congruence.
-            rewrite <- HWELLTYPED. assumption.
-          eassumption. }
         }
         { rewrite PeanoNat.Nat.eqb_neq in HBID'.
           rewrite Ir.Memory.get_set_diff_short; try assumption.
           rewrite Ir.Memory.get_set_diff_short; try assumption.
           { inv HWF2. assumption. }
-          { eapply store_val_wf_unfold_ptr; try congruence.
-            rewrite <- HWELLTYPED.
-            rewrite twin_state_deref_eq with (st2 := st2) (blkid := blkid) in HDEREF.
-            assumption.
-            assumption. eassumption. }
           { congruence. }
           { inv HWF1. assumption. }
-          { eapply store_val_wf_unfold_ptr; try congruence.
-          rewrite <- HWELLTYPED. assumption.
-          eassumption. }
           { congruence. }
         }
       }
     }
   }
-  Unshelve. assumption. assumption.
 Qed.
 
 
@@ -1919,15 +1823,6 @@ Proof.
           eassumption. reflexivity.
         }
         { rewrite Ir.Memory.get_incr_time_id. rewrite HH0. reflexivity. }
-        { eapply Ir.Memory.free_wf with (m := Ir.Config.m st1).
-          eassumption.
-          unfold Ir.Memory.free.
-          rewrite <- HH0. rewrite HH2.
-          rewrite <- HH3 in HR.
-          unfold Ir.MemBlock.set_lifetime_end.
-          unfold Ir.MemBlock.alive. rewrite HR.
-          rewrite HH2. reflexivity.
-        }
       }
       split.
       { rewrite Ir.Reordering.m_update_m.
@@ -1936,16 +1831,6 @@ Proof.
         { inv HWF2. eapply Ir.Memory.incr_time_wf. eassumption.
           reflexivity. }
         { rewrite HH1. reflexivity. }
-        { inv HWF2.
-          eapply Ir.Memory.free_wf with (m := Ir.Config.m st2).
-          eassumption.
-          unfold Ir.Memory.free.
-          rewrite <- HH1. rewrite <- HH2.
-          unfold Ir.MemBlock.set_lifetime_end.
-          unfold Ir.MemBlock.alive. rewrite HR.
-          rewrite HH3, HH2, HBT2.
-          reflexivity.
-        }
       }
       repeat (split; simpl; try congruence).
     }
@@ -1965,30 +1850,10 @@ Proof.
       { inv HWF2.
         eapply Ir.Memory.incr_time_wf.
         eapply wf_m. reflexivity. }
-      { inv HWF2.
-        eapply Ir.Memory.free_wf with (m := Ir.Config.m st2).
-        eassumption.
-        unfold Ir.Memory.free.
-        rewrite <- HH1. rewrite <- HH2.
-        unfold Ir.MemBlock.set_lifetime_end.
-        unfold Ir.MemBlock.alive. rewrite HR.
-        rewrite HH3, HH2, HBT2.
-        reflexivity.
-      }
       { assumption. }
       { inv HWF1.
         eapply Ir.Memory.incr_time_wf.
         eassumption. reflexivity.
-      }
-      { inv HWF1.
-        eapply Ir.Memory.free_wf with (m := Ir.Config.m st1).
-        eassumption.
-        unfold Ir.Memory.free.
-        rewrite <- HH0. rewrite HH2.
-        rewrite <- HH3 in HR.
-        unfold Ir.MemBlock.set_lifetime_end.
-        unfold Ir.MemBlock.alive. rewrite HR.
-        rewrite HH2. reflexivity.
       }
       { assumption. }
     }
@@ -2033,11 +1898,6 @@ Proof.
         { inv HWF1.
           eapply Ir.Memory.incr_time_wf. eassumption.
           reflexivity. }
-        { inv HWF1.
-          eapply Ir.Memory.free_wf. eapply wf_m.
-          unfold Ir.Memory.free. rewrite HGET1.
-          rewrite HBT. unfold Ir.MemBlock.set_lifetime_end.
-          rewrite HALIVE. congruence. }
         { congruence. }
       }
       split.
@@ -2045,11 +1905,6 @@ Proof.
         { inv HWF2.
           eapply Ir.Memory.incr_time_wf. eassumption.
           reflexivity. }
-        { inv HWF2.
-          eapply Ir.Memory.free_wf. eapply wf_m.
-          unfold Ir.Memory.free. rewrite <- HH.
-          rewrite HBT. unfold Ir.MemBlock.set_lifetime_end.
-          rewrite HALIVE. congruence. }
         { congruence. }
       }
       repeat (split; try congruence).
@@ -2067,28 +1922,10 @@ Proof.
           eapply Ir.Memory.incr_time_wf.
           eassumption. reflexivity. }
         { rewrite Ir.Memory.get_incr_time_id. rewrite HH. reflexivity. }
-        { inv HWF2.
-          eapply Ir.Memory.free_wf.
-          { eassumption. }
-          { unfold Ir.Memory.free. rewrite <- HH.
-            unfold Ir.MemBlock.set_lifetime_end.
-            rewrite HBT, HALIVE.
-            congruence.
-          }
-        }
         { inv HWF1.
           eapply Ir.Memory.incr_time_wf.
           eassumption. reflexivity. }
         { rewrite Ir.Memory.get_incr_time_id. rewrite HGET1. reflexivity. }
-        { inv HWF1.
-          eapply Ir.Memory.free_wf.
-          { eassumption. }
-          { unfold Ir.Memory.free. rewrite HGET1.
-            unfold Ir.MemBlock.set_lifetime_end.
-            rewrite HBT, HALIVE.
-            congruence.
-          }
-        }
       }
       { (* freeing block isn't bid. *)
         rewrite PeanoNat.Nat.eqb_neq in HBID'.
@@ -2102,25 +1939,9 @@ Proof.
         congruence.
         { inv HWF2.
           eapply Ir.Memory.incr_time_wf; eauto. }
-        { inv HWF2.
-          eapply Ir.Memory.free_wf; eauto.
-          unfold Ir.Memory.free.
-          rewrite <- HH.
-          rewrite HBT.
-          unfold Ir.MemBlock.set_lifetime_end.
-          rewrite HALIVE.
-          congruence. }
         { congruence. }
         { inv HWF1.
           eapply Ir.Memory.incr_time_wf; eauto. }
-        { inv HWF1.
-          eapply Ir.Memory.free_wf; eauto.
-          unfold Ir.Memory.free.
-          rewrite HGET1.
-          rewrite HBT.
-          unfold Ir.MemBlock.set_lifetime_end.
-          rewrite HALIVE.
-          congruence. }
         { congruence. }
       }
     }

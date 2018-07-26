@@ -695,6 +695,12 @@ Definition alive (mb:t): bool :=
 Definition alive_before (the_time:nat) (mb:t): bool :=
   Nat.ltb mb.(r).(fst) the_time.
 
+Definition lifetime_to_range (cur_time:nat) (mb:t): nat * nat :=
+  (mb.(r).(fst),
+   match mb.(r).(snd) with
+   | None => cur_time | Some r => r
+   end - mb.(r).(fst)).
+
 (* 0 <= ofs <= block size of mb? *)
 Definition inbounds (ofs:nat) (mb:t): bool :=
   Nat.leb ofs mb.(n).
@@ -1004,6 +1010,18 @@ Proof.
   { reflexivity. }
 Qed.
 
+Lemma addr_P_In:
+  forall mb (HWF:Ir.MemBlock.wf mb),
+    List.In (Ir.MemBlock.addr mb) (Ir.MemBlock.P mb).
+Proof.
+  intros.
+  inv HWF.
+  unfold Ir.MemBlock.addr.
+  destruct (Ir.MemBlock.P mb).
+  simpl in wf_twin0. unfold Ir.TWINCNT in wf_twin0. congruence.
+  simpl. left. reflexivity.
+Qed.
+
 End MemBlock.
 
 
@@ -1062,18 +1080,6 @@ Definition zeroofs_block (m:t) (abs_ofs:nat)
     end
   end.
 
-(* Well-formedness of memory. *)
-Structure wf (m:t) :=
-  {
-    wf_blocks: forall i p (HAS:List.In (i, p) m.(blocks)), MemBlock.wf p;
-    wf_uniqueid: List.NoDup (list_keys m.(blocks));
-    wf_newid: List.forallb (fun bid => Nat.ltb bid m.(fresh_bid))
-                           (list_keys m.(blocks)) = true;
-    wf_disjoint: disjoint_ranges (alive_P_ranges m) = true;
-    wf_blocktime: forall i p (HAS:List.In (i, p) m.(blocks)),
-        p.(MemBlock.r).(fst) < (mt m)
-  }.
-
 
 (* Add a new memory block. *)
 Definition new (m:t) (t:blockty) (n:nat) (a:nat) (c:list Byte.t) (P:list nat)
@@ -1129,6 +1135,44 @@ Definition calltime (m:t) (cid:callid): option time :=
   | nil => None
   | h::t => h.(snd)
   end.
+
+
+
+(* Well-formedness of memory. *)
+Structure wf (m:t) :=
+  {
+    (* all blocks in memory are well-formed. *)
+    wf_blocks: forall i p (HAS:List.In (i, p) m.(blocks)), MemBlock.wf p;
+    (* each block has unique id. *)
+    wf_uniqueid: List.NoDup (list_keys m.(blocks));
+    (* all existing blocks have id smaller than fresh_bid. *)
+    wf_newid: List.forallb (fun bid => Nat.ltb bid m.(fresh_bid))
+                           (list_keys m.(blocks)) = true;
+    (* all alive blocks have disjoint addresses. *)
+    wf_disjoint: disjoint_ranges (alive_P_ranges m) = true;
+    (* two blocks which have overlapping life times have
+       disjoint addresses. generalizd version of wf_disjoint. *)
+    wf_disjoint2:
+      forall l1 l2 mb1 mb2
+             (HGET1:Some mb1 = get m l1)
+             (HGET2:Some mb2 = get m l2)
+             (HNEQ:l1 <> l2)
+             (HOVERLAP:disjoint_range
+                         (MemBlock.lifetime_to_range m.(mt) mb1)
+                         (MemBlock.lifetime_to_range m.(mt) mb2)
+                         = false),
+        disjoint_ranges ((MemBlock.P_ranges mb1)++MemBlock.P_ranges mb2) = true;
+    (* all blocks are created before memory time. *)
+    wf_blocktime_beg: forall i p (HAS:List.In (i, p) m.(blocks)),
+        p.(MemBlock.r).(fst) < (mt m);
+    (* all blocks' freed time is larger than created time. *)
+    wf_blocktime_end:
+          forall i p e
+                 (HAS:List.In (i, p) m.(blocks))
+                 (HEND:Some e = p.(MemBlock.r).(snd)),
+            p.(MemBlock.r).(fst) < e /\ e < (mt m)
+  }.
+
 
 
 
@@ -1227,7 +1271,6 @@ Qed.
 Lemma get_set_id:
   forall m bid mb' m' mb
          (HWF:Ir.Memory.wf m)
-         (HWF':Ir.Memory.wf m')
          (HGET:Ir.Memory.get m bid = Some mb)
          (HSET:m' = Ir.Memory.set m bid mb'),
     Ir.Memory.get m' bid = Some mb'.
@@ -1246,7 +1289,10 @@ Proof.
   assert (List.length res < 2).
   { apply list_find_key_NoDup with (l := Ir.Memory.blocks m') (key := bid).
     destruct m'. inversion HSET. rewrite <- H1.
-    destruct HWF'. simpl in *. rewrite H2 in wf_uniqueid0.  assumption. assumption. }
+    destruct HWF. simpl in *.
+    assert (NoDup(list_keys blocks0)).
+    { rewrite H2. erewrite list_set_keys_eq; try reflexivity. assumption. }
+    rewrite H2 in H0. assumption. assumption. }
   assert (List.In (bid, mb') res).
   { rewrite Heqres. eapply list_find_key_In. eassumption. }
   destruct res. inversion H1.
@@ -1261,7 +1307,6 @@ Qed.
 Lemma get_set_id_none:
   forall m bid mb' m'
          (HWF:Ir.Memory.wf m)
-         (HWF':Ir.Memory.wf m')
          (HGET:Ir.Memory.get m bid = None)
          (HSET:m' = Ir.Memory.set m bid mb'),
     Ir.Memory.get m' bid = None.
@@ -1276,19 +1321,17 @@ Qed.
 Lemma get_set_id_short:
   forall m bid mb' mb0
          (HWF:Ir.Memory.wf m)
-         (HGET:Ir.Memory.get m bid = Some mb0)
-         (HWF':Ir.Memory.wf (Ir.Memory.set m bid mb')),
+         (HGET:Ir.Memory.get m bid = Some mb0),
     Ir.Memory.get (Ir.Memory.set m bid mb') bid = Some mb'.
 Proof.
   intros.
   erewrite Ir.Memory.get_set_id with (mb := mb0).
-  reflexivity. eapply HWF. assumption. assumption. reflexivity.
+  reflexivity. eapply HWF. assumption. reflexivity.
 Qed.
 
 Lemma get_set_diff:
   forall m bid mb' m' mb bid'
          (HWF:Ir.Memory.wf m)
-         (HWF':Ir.Memory.wf m')
          (HGET:Ir.Memory.get m bid = Some mb)
          (HSET:m' = Ir.Memory.set m bid' mb')
          (HDIFF:bid <> bid'),
@@ -1307,7 +1350,6 @@ Qed.
 Lemma get_set_diff_short:
   forall m bid mb' bid'
          (HWF:Ir.Memory.wf m)
-         (HWF':Ir.Memory.wf (Ir.Memory.set m bid' mb'))
          (HDIFF:bid <> bid'),
     Ir.Memory.get (Ir.Memory.set m bid' mb') bid =
     Ir.Memory.get m bid.
@@ -1619,11 +1661,135 @@ Proof.
   congruence.
 Qed.
 
+Lemma alive_P_ranges_alive_lsubseq:
+  forall m mb l (HGET:Some mb = get m l)
+    (HALIVE:Ir.MemBlock.alive mb = true),
+          lsubseq (alive_P_ranges m) (MemBlock.P_ranges mb).
+Proof.
+  intros.
+  unfold alive_P_ranges.
+  assert (MemBlock.P_ranges mb =
+          concat (map (fun b => MemBlock.P_ranges (snd b))
+              (filter (fun xb => MemBlock.alive (snd xb)) [(l, mb)]))).
+  { simpl. rewrite HALIVE. simpl. rewrite app_nil_r. reflexivity. }
+  rewrite H.
+  apply lsubseq_concat.
+  unfold alive_blocks.
+  eapply lsubseq_map; try reflexivity.
+  eapply lsubseq_filter2; try reflexivity.
+  rewrite lsubseq_In2.
+  eapply get_In in HGET; try reflexivity. assumption.
+Qed.
+
 
 (**********************************************
       Preservation of wellformedness,
       and a few lemmas that use it
  **********************************************)
+
+Lemma disjoint_range_lifetime_to_range_inv:
+  forall mb1 l1 mb2 l2 m
+         (HWF:wf m)
+         (HGET1:Some mb1 = get m l1)
+         (HGET2:Some mb2 = get m l2)
+         (HOVERLAP:
+            disjoint_range (MemBlock.lifetime_to_range (S (mt m)) mb1)
+                           (MemBlock.lifetime_to_range (S (mt m)) mb2) = false),
+    disjoint_range (MemBlock.lifetime_to_range (mt m) mb1)
+                   (MemBlock.lifetime_to_range (mt m) mb2) = false.
+Proof.
+  intros.
+  inv HWF.
+  assert (HGET1' := HGET1).
+  eapply get_In in HGET1; try reflexivity.
+  eapply get_In in HGET1'; try reflexivity.
+  assert (HGET2' := HGET2).
+  eapply get_In in HGET2; try reflexivity.
+  eapply get_In in HGET2'; try reflexivity.
+  apply wf_blocktime_beg0 in HGET1.
+  apply wf_blocktime_beg0 in HGET2.
+  unfold MemBlock.lifetime_to_range in HOVERLAP.
+  unfold disjoint_range in HOVERLAP.
+  rewrite orb_false_iff in HOVERLAP.
+  destruct HOVERLAP.
+  destruct (snd (MemBlock.r mb1)) eqn:HR1.
+  { exploit wf_blocktime_end0.
+    eapply HGET1'. rewrite HR1. reflexivity. intros HH1.
+    destruct (snd (MemBlock.r mb2)) eqn:HR2.
+    { exploit wf_blocktime_end0.
+      eapply HGET2'. rewrite HR2. reflexivity. intros HH2.
+      unfold disjoint_range.
+      unfold MemBlock.lifetime_to_range.
+      rewrite HR1, HR2. rewrite H, H0. reflexivity. }
+    { unfold disjoint_range.
+      unfold MemBlock.lifetime_to_range.
+      rewrite HR1, HR2. rewrite H.
+      assert (fst (MemBlock.r mb2) + (mt m - fst (MemBlock.r mb2)) > fst (MemBlock.r mb1)).
+      { rewrite Nat.leb_gt in H0. omega. }
+      apply gt_not_le in H1.
+      rewrite <- Nat.leb_nle in H1. rewrite H1. reflexivity.
+    }
+  }
+  {
+    destruct (snd (MemBlock.r mb2)) eqn:HR2.
+    { exploit wf_blocktime_end0.
+      eapply HGET2'. rewrite HR2. reflexivity. intros HH2.
+      unfold disjoint_range.
+      unfold MemBlock.lifetime_to_range.
+      rewrite HR1, HR2.
+      rewrite H0.
+      assert (fst (MemBlock.r mb1) + (mt m - fst (MemBlock.r mb1)) > fst (MemBlock.r mb2)).
+      { rewrite Nat.leb_gt in H. omega. }
+      apply gt_not_le in H1. rewrite <- Nat.leb_nle in H1. rewrite H1. reflexivity. }
+    { unfold disjoint_range.
+      unfold MemBlock.lifetime_to_range.
+      rewrite HR1, HR2.
+      assert (fst (MemBlock.r mb2) + (mt m - fst (MemBlock.r mb2)) > fst (MemBlock.r mb1)).
+      { rewrite Nat.leb_gt in H0. omega. }
+      apply gt_not_le in H1.
+      rewrite <- Nat.leb_nle in H1. rewrite H1.
+      assert (fst (MemBlock.r mb1) + (mt m - fst (MemBlock.r mb1)) > fst (MemBlock.r mb2)).
+      { rewrite Nat.leb_gt in H. omega. }
+      apply gt_not_le in H2. rewrite <- Nat.leb_nle in H2. rewrite H2. reflexivity.
+    }
+  }
+Qed.
+
+Lemma disjoint_range_lifetime_to_range_freed_inv:
+  forall mb1 l1 mb2 l2 m mb1'
+         (HWF:wf m)
+         (HGET1:Some mb1 = get m l1)
+         (HGET2:Some mb2 = get m l2)
+         (HFREE:MemBlock.set_lifetime_end mb1 (mt m) = Some mb1')
+         (HOVERLAP:
+            disjoint_range (MemBlock.lifetime_to_range (S (mt m)) mb1')
+                           (MemBlock.lifetime_to_range (S (mt m)) mb2) = false),
+    disjoint_range (MemBlock.lifetime_to_range (mt m) mb1)
+                   (MemBlock.lifetime_to_range (mt m) mb2) = false.
+Proof.
+  intros.
+  unfold MemBlock.set_lifetime_end in HFREE.
+  des_ifs.
+  unfold MemBlock.lifetime_to_range in *.
+  simpl in *.
+  (* okay, we should get wellformedness of lifetime as well. *)
+  inv HWF.
+  dup HGET1. eapply get_In in HGET0; try reflexivity.
+    eapply get_In in HGET1; try reflexivity.
+    eapply wf_blocktime_beg0 in HGET0.
+  dup HGET2. eapply get_In in HGET3; try reflexivity.
+    eapply get_In in HGET2; try reflexivity.
+    eapply wf_blocktime_beg0 in HGET2.
+  (* mb1 was alive. *)
+  unfold MemBlock.alive in Heq.
+
+  unfold disjoint_range in *.
+  rewrite orb_false_iff in *.
+  destruct HOVERLAP.
+  repeat (rewrite Nat.leb_gt in *).
+  des_ifs.
+  split. omega. omega.
+Qed.
 
 Theorem new_wf:
   forall m (HWF:wf m) t n a c P m' mb
@@ -1637,15 +1803,18 @@ Proof.
   inversion HNEW. clear HNEW.
   inversion HWF.
   split; simpl.
-  - intros. destruct HAS.
+  - (* blocks' wf *)
+    intros. destruct HAS.
     + inversion H. clear H. apply HWF0.
     + eapply wf_blocks0. eassumption.
-  - rewrite NoDup_cons_iff. split; try assumption.
+  - (* no block id dup *)
+    rewrite NoDup_cons_iff. split; try assumption.
     intros HIN.
     rewrite forallb_forall in wf_newid0.
     apply wf_newid0 in HIN.
     rewrite Nat.ltb_lt in HIN. omega.
-  - assert (fresh_bid m <? S (fresh_bid m) = true).
+  - (* fresh_bid is larger than any other key *)
+    assert (fresh_bid m <? S (fresh_bid m) = true).
     { rewrite Nat.ltb_lt. omega. }
     rewrite H. simpl.
     rewrite forallb_forall. rewrite <- Forall_forall.
@@ -1655,7 +1824,8 @@ Proof.
     rewrite Nat.ltb_lt in H2.
     rewrite Nat.ltb_lt. omega.
     assumption.
-  - unfold allocatable in HDISJ.
+  - (* disjointness of fresh blocks *)
+    unfold allocatable in HDISJ.
     apply disjoint_lsubseq_disjoint
       with (rs := map (fun x : nat => (x, n)) P ++ alive_P_ranges m).
     assumption.
@@ -1666,11 +1836,115 @@ Proof.
       unfold alive_blocks. reflexivity.
     }
     rewrite <- H. rewrite <- H0. apply lsubseq_refl.
-  - intros.
+  - (* disjointness, general version *)
+    intros.
+    destruct (l1 =? fresh_bid m) eqn:HEQ1;
+      destruct (l2 =? fresh_bid m) eqn:HEQ2.
+    { rewrite PeanoNat.Nat.eqb_eq in *. des_ifs. }
+    { rewrite PeanoNat.Nat.eqb_eq in HEQ1. subst l1.
+      (* mb1 is the new block. *)
+      unfold get in HGET1. simpl in HGET1.
+      rewrite Nat.eqb_refl in HGET1. simpl in HGET1.
+      inv HGET1.
+      (* mb2 is the old block. *)
+      assert (HGET2':Some mb2 = get m l2).
+      { rewrite HGET2. unfold get. simpl.
+        rewrite Nat.eqb_sym in HEQ2. rewrite HEQ2. reflexivity. }
+      clear HGET2.
+      (* we're going to use lsubseq relation from HDISJ. *)
+      unfold MemBlock.lifetime_to_range in HOVERLAP.
+      simpl in HOVERLAP.
+      unfold allocatable in HDISJ.
+      unfold MemBlock.P_ranges at 1. simpl.
+      eapply disjoint_lsubseq_disjoint. eapply HDISJ.
+      (* okay.. let's show the lsubseq relation. *)
+      eapply lsubseq_append.
+      { apply lsubseq_refl. }
+      { eapply alive_P_ranges_alive_lsubseq.
+        eassumption.
+        eapply get_In in HGET2'; try reflexivity.
+        (* is it already free, or .. ?*)
+        destruct (snd (MemBlock.r mb2)) eqn:HR.
+        { (* yes, it was freed! *)
+          eapply wf_blocktime_end0 in HGET2'.
+          2: rewrite HR. 2: reflexivity.
+          unfold disjoint_range in HOVERLAP.
+          rewrite orb_false_iff in HOVERLAP.
+          repeat (rewrite Nat.leb_gt in HOVERLAP).
+          destruct HOVERLAP. omega.
+        }
+        { (* nop. *)
+          unfold MemBlock.alive. des_ifs. }
+      }
+    }
+    { rewrite PeanoNat.Nat.eqb_eq in HEQ2. subst l2.
+      (* mb2 is the new block. *)
+      unfold get in HGET2. simpl in HGET2.
+      rewrite Nat.eqb_refl in HGET2. simpl in HGET2.
+      inv HGET2.
+      (* mb1 is the old block. *)
+      assert (HGET1':Some mb1 = get m l1).
+      { rewrite HGET1. unfold get. simpl.
+        rewrite Nat.eqb_sym in HEQ1. rewrite HEQ1. reflexivity. }
+      clear HGET1.
+      (* we're going to use lsubseq relation from HDISJ. *)
+      unfold MemBlock.lifetime_to_range in HOVERLAP.
+      simpl in HOVERLAP.
+      unfold allocatable in HDISJ.
+      unfold MemBlock.P_ranges at 2. simpl.
+      rewrite disjoint_ranges_app_comm.
+      eapply disjoint_lsubseq_disjoint. eapply HDISJ.
+      (* okay.. let's show the lsubseq relation. *)
+      eapply lsubseq_append.
+      { apply lsubseq_refl. }
+      { eapply alive_P_ranges_alive_lsubseq.
+        eassumption.
+        eapply get_In in HGET1'; try reflexivity.
+        (* is it already free, or .. ?*)
+        destruct (snd (MemBlock.r mb1)) eqn:HR.
+        { (* yes, it was freed! *)
+          eapply wf_blocktime_end0 in HGET1'.
+          2: rewrite HR. 2: reflexivity.
+          unfold disjoint_range in HOVERLAP.
+          rewrite orb_false_iff in HOVERLAP.
+          repeat (rewrite Nat.leb_gt in HOVERLAP).
+          destruct HOVERLAP. omega.
+        }
+        { (* nop. *)
+          unfold MemBlock.alive. des_ifs. }
+      }
+    }
+    { (* both are old. *)
+      assert (HGET1':Some mb1 = get m l1).
+      { rewrite HGET1. unfold get. simpl.
+        rewrite Nat.eqb_sym in HEQ1. rewrite HEQ1. reflexivity. }
+      clear HGET1.
+      assert (HGET2':Some mb2 = get m l2).
+      { rewrite HGET2. unfold get. simpl.
+        rewrite Nat.eqb_sym in HEQ2. rewrite HEQ2. reflexivity. }
+      clear HGET2.
+      eapply wf_disjoint3; try eassumption.
+      (* lifetime_to_range.. *)
+      dup HGET1'.
+      eapply get_In in HGET1'0; try reflexivity.
+        eapply wf_blocktime_beg0 in HGET1'0.
+      dup HGET2'.
+      eapply get_In in HGET2'0; try reflexivity.
+        eapply wf_blocktime_beg0 in HGET2'0.
+      eapply disjoint_range_lifetime_to_range_inv;try eassumption.
+    }
+  - (*wf blocktime beg *)
+    intros.
     destruct HAS.
     + inversion H. simpl. omega.
     + apply Nat.lt_trans with (m := mt m).
-      eapply wf_blocktime0. eapply H. omega.
+      eapply wf_blocktime_beg0. eapply H. omega.
+  - (* wf blocktime end *)
+    intros.
+    destruct HAS.
+    + inv H. inv HEND.
+    + exploit wf_blocktime_end0; try eassumption.
+      intros HH. omega.
 Qed.
 
 Theorem incr_time_wf:
@@ -1679,15 +1953,27 @@ Theorem incr_time_wf:
     wf m'.
 Proof.
   intros.
-  unfold incr_time in HFREE.
+  unfold incr_time in HFREE. dup HWF.
   destruct HWF.
   split; try (rewrite HFREE; simpl; assumption).
-  rewrite HFREE.
-  simpl.
-  intros.
-  apply lt_trans with (m := mt m).
-  eapply wf_blocktime0; eassumption.
-  omega.
+  { (* disointness, general *)
+    rewrite HFREE.
+    simpl.
+    intros.
+    eapply disjoint_range_lifetime_to_range_inv in HOVERLAP; try eassumption.
+    eapply wf_disjoint3. eapply HGET1. eapply HGET2. assumption.
+      assumption.
+  }
+  { (* wf_blocktime_beg *)
+    rewrite HFREE. simpl. intros.
+    apply lt_trans with (m := mt m).
+    eapply wf_blocktime_beg0; eassumption.
+    omega.
+  }
+  { (* wf_blocktime_end *)
+    rewrite HFREE. simpl. intros.
+    exploit wf_blocktime_end0; try eassumption. intros HH. omega.
+  }
 Qed.
 
 Theorem free_wf:
@@ -1719,7 +2005,7 @@ Proof.
       intros.
       inversion FREED.
       replace tfst with (fst (MemBlock.r blk)).
-      eapply wf_blocktime0. eapply get_In. rewrite <- Hget. reflexivity. reflexivity.
+      eapply wf_blocktime_beg0. eapply get_In. rewrite <- Hget. reflexivity. reflexivity.
       rewrite Hrblk. reflexivity.
   }
   inversion HFREE.
@@ -1789,7 +2075,89 @@ Proof.
     eapply disjoint_lsubseq_disjoint.
     eapply wf_disjoint0.
     assumption.
-  - simpl. intros.
+  - (* disjointness,general *)
+    simpl. intros.
+    destruct (l1 =? bid) eqn:H1.
+    { (* the freedblock. *)
+      rewrite PeanoNat.Nat.eqb_eq in H1. subst l1.
+      unfold get in HGET1. unfold set in HGET1. simpl in HGET1.
+      rewrite list_find_key_set_samekey in HGET1.
+      inv HGET1.
+      (* l2 is not the block. *)
+      assert (HGET2': Some mb2 = get m l2).
+      { unfold get in HGET2. unfold set in HGET2. simpl in HGET2.
+        rewrite list_find_key_set_diffkey in HGET2; try congruence.
+        unfold get. assumption. }
+      clear HGET2.
+      (* okay, bid and l2 was already disjoint. *)
+      (* MemBlock.set_lifetime_end blk (mt m) = Some blk' *)
+      eapply disjoint_range_lifetime_to_range_freed_inv in HOVERLAP.
+      3: rewrite Hget; reflexivity.
+      3: eapply HGET2'.
+      assert (HP:MemBlock.P_ranges blk' = MemBlock.P_ranges blk).
+      { unfold MemBlock.P_ranges.
+        unfold MemBlock.set_lifetime_end in Hlf.
+        des_ifs. }
+      rewrite HP.
+      eapply wf_disjoint3.
+      { rewrite Hget. reflexivity. }
+      { eapply HGET2'. }
+      { omega. }
+      { assumption. }
+      { assumption. }
+      { assumption. }
+      { assumption. }
+      { symmetry in Hget. eapply get_In in Hget.
+        eapply list_keys_In in Hget. eassumption. reflexivity. }
+    }
+    { (* no, it was unrelated block *)
+      assert (HGET1': Some mb1 = get m l1).
+      { rewrite HGET1. unfold get. unfold set. simpl.
+        rewrite list_find_key_set_diffkey. reflexivity.
+        rewrite PeanoNat.Nat.eqb_neq in H1. assumption. }
+      clear HGET1.
+
+      destruct (l2 =? bid) eqn:H2.
+      { (* l2 is the freed block. *)
+        rewrite PeanoNat.Nat.eqb_eq in H2. subst l2.
+        unfold get in HGET2. unfold set in HGET2. simpl in HGET2.
+        rewrite list_find_key_set_samekey in HGET2.
+        inv HGET2.
+        (* okay, bid and l2 was already disjoint. *)
+        (* MemBlock.set_lifetime_end blk (mt m) = Some blk' *)
+        rewrite disjoint_range_symm in HOVERLAP.
+        eapply disjoint_range_lifetime_to_range_freed_inv in HOVERLAP.
+        3: rewrite Hget; reflexivity.
+        3: eapply HGET1'.
+        assert (HP:MemBlock.P_ranges blk' = MemBlock.P_ranges blk).
+        { unfold MemBlock.P_ranges.
+          unfold MemBlock.set_lifetime_end in Hlf.
+          des_ifs. }
+        rewrite HP.
+        eapply wf_disjoint3.
+        { rewrite HGET1'. reflexivity. }
+        { rewrite Hget. reflexivity. }
+        { omega. }
+        { rewrite disjoint_range_symm. assumption. }
+        { assumption. }
+        { assumption. }
+        { assumption. }
+        { symmetry in Hget. eapply get_In in Hget.
+          eapply list_keys_In in Hget. eassumption. reflexivity. }
+      }
+      {
+        assert (HGET2': Some mb2 = get m l2).
+        { rewrite HGET2. unfold get. unfold set. simpl.
+          rewrite list_find_key_set_diffkey. reflexivity.
+          rewrite PeanoNat.Nat.eqb_neq in H2. assumption. }
+        clear HGET2.
+        eapply wf_disjoint3; try eassumption.
+        eapply disjoint_range_lifetime_to_range_inv in HOVERLAP;
+          eassumption.
+      }
+    }
+  - (* block lifetime beg *)
+    simpl. intros.
     destruct (i =? bid) eqn:Hbid.
     { rewrite Nat.eqb_eq in Hbid.
       rewrite Hbid in HAS.
@@ -1803,7 +2171,7 @@ Proof.
         inversion Hlf. simpl. reflexivity. inversion Hlf. }
       rewrite HR.
       apply Nat.lt_trans with (m := mt m).
-      - eapply wf_blocktime0. eapply get_In. rewrite <- Hget. reflexivity.
+      - eapply wf_blocktime_beg0. eapply get_In. rewrite <- Hget. reflexivity.
         reflexivity.
       - omega.
     }
@@ -1811,7 +2179,38 @@ Proof.
       assert (In (i, p) (blocks m)).
       { eapply list_set_In_not_In. eapply HAS. rewrite Nat.eqb_neq in Hbid.
         assumption. }
-      eapply wf_blocktime0. eassumption. omega.
+      eapply wf_blocktime_beg0. eassumption. omega.
+    }
+  - (* block lifetime end *)
+    simpl. intros.
+    destruct (i =? bid) eqn:Hbid.
+    { rewrite Nat.eqb_eq in Hbid. subst i.
+      assert (p = blk').
+      { eapply list_set_NoDup_In_unique.
+        eassumption. assumption. }
+      subst p.
+      assert (HR:fst (MemBlock.r blk') = fst (MemBlock.r blk)).
+      { unfold MemBlock.set_lifetime_end in Hlf.
+        destruct (MemBlock.alive blk).
+        inversion Hlf. simpl. reflexivity. inversion Hlf. }
+      rewrite HR in *.
+      unfold MemBlock.set_lifetime_end in Hlf.
+      rewrite Halive in Hlf.
+      inversion Hlf. rewrite <- H1 in HEND. simpl in HEND. inversion HEND.
+      subst e.
+      symmetry in Hget. eapply get_In in Hget; try reflexivity.
+      unfold MemBlock.alive in Halive.
+      des_ifs.
+      eapply wf_blocktime_beg0 in Hget. omega.
+    }
+    { 
+      assert (In (i, p) (blocks m)).
+      { eapply list_set_In_not_In. eapply HAS. rewrite Nat.eqb_neq in Hbid.
+        assumption. }
+      symmetry in Hget. eapply get_In in Hget;try reflexivity.
+      eapply wf_blocktime_end0 in H.
+      2: eassumption.
+      omega.
     }
 Qed.
 
@@ -1821,7 +2220,7 @@ Lemma wf_newblk_inv:
          (HWF: wf (mk mt (newblk::blocks) calltime fresh_cid)),
     wf (mk mt blocks calltime fresh_cid).
 Proof.
-  intros.
+  intros. dup HWF.
   destruct HWF.
   split.
   - intros.
@@ -1841,7 +2240,17 @@ Proof.
       assumption.
     + assumption.
   - simpl in *. intros.
-    eapply wf_blocktime0. right. eassumption.
+    eapply wf_disjoint3 with (l1 := l1) (l2 := l2); try assumption.
+    { eapply get_In in HGET1; try reflexivity.
+      apply In_get. assumption.
+      simpl in *. right. assumption. }
+    { eapply get_In in HGET2; try reflexivity.
+      apply In_get. assumption.
+      simpl in *. right. assumption. }
+  - simpl in *. intros.
+    eapply wf_blocktime_beg0. right. eassumption.
+  - simpl in *. intros.
+    eapply wf_blocktime_end0. right. eassumption. assumption.
 Qed.
 
 Lemma get_free:
@@ -1908,7 +2317,6 @@ Proof.
     erewrite Ir.Memory.get_set_id with (bid := l) (m := Ir.Memory.incr_time m).
     { eexists. reflexivity. }
     { eapply Ir.Memory.incr_time_wf. eapply HWF. reflexivity. }
-    { eassumption. }
     { rewrite Ir.Memory.get_incr_time_id. symmetry in HGET. eassumption. }
     { reflexivity. }
   }
@@ -1916,7 +2324,6 @@ Proof.
     erewrite Ir.Memory.get_set_diff with (bid := l) (bid' := l0) (m := Ir.Memory.incr_time m).
     { eexists. reflexivity. }
     { eapply Ir.Memory.incr_time_wf. eapply HWF. reflexivity. }
-    { eassumption. }
     { rewrite Ir.Memory.get_incr_time_id. symmetry in HGET. eassumption. }
     { reflexivity. }
     { omega. }

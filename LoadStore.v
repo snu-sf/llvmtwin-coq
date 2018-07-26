@@ -1149,6 +1149,60 @@ Proof.
   reflexivity.
 Qed.
 
+
+Lemma r_set_bytes:
+  forall mb ofs bs,
+    Ir.MemBlock.r (Ir.MemBlock.set_bytes mb ofs bs) = Ir.MemBlock.r mb.
+Proof.
+  intros.
+  unfold Ir.MemBlock.set_bytes. reflexivity.
+Qed.
+
+Lemma P_ranges_set_bytes:
+  forall mb ofs bs,
+    Ir.MemBlock.P_ranges (Ir.MemBlock.set_bytes mb ofs bs) = Ir.MemBlock.P_ranges mb.
+Proof.
+  intros.
+  unfold Ir.MemBlock.set_bytes. reflexivity.
+Qed.
+
+Lemma lifetime_to_range_set_bytes:
+  forall m bid1 mb1 bid2 mb2 mb2' ofs bs o
+         (HWF:Ir.Memory.wf m)
+         (HGET1:Some mb1 = Ir.Memory.get m bid1)
+         (HGET2:Some mb2 = Ir.Memory.get
+                 (Ir.Memory.set m bid1 (Ir.MemBlock.set_bytes mb1 ofs bs)) bid2)
+         (HGET2':Some mb2' = Ir.Memory.get m bid2),
+    Ir.MemBlock.lifetime_to_range o mb2 =
+    Ir.MemBlock.lifetime_to_range o mb2'.
+Proof.
+  intros.
+  unfold Ir.MemBlock.lifetime_to_range.
+  destruct (bid1 =? bid2) eqn:HEQ.
+  { rewrite  Nat.eqb_eq in HEQ. subst bid1.
+    erewrite Ir.Memory.get_set_id_short in HGET2.
+    3: rewrite <- HGET1; reflexivity.
+    inv HGET2. rewrite <- HGET1 in HGET2'. inv HGET2'.
+    rewrite r_set_bytes. reflexivity. assumption.
+  }
+  {
+    rewrite Ir.Memory.get_set_diff_short in HGET2.
+    rewrite <- HGET2 in HGET2'. inv HGET2'.
+    reflexivity.
+    assumption. rewrite Nat.eqb_neq in HEQ. congruence.
+  }
+Qed.
+
+Lemma mt_set:
+  forall m a b,
+    Ir.Memory.mt (Ir.Memory.set m a b)= Ir.Memory.mt m.
+Proof.
+  intros.
+  unfold Ir.Memory.set.
+  simpl. reflexivity.
+Qed.
+  
+
 Lemma set_bytes_wf:
   forall m bid mb ofs bs thety
          (HSZ:Ir.ty_bytesz thety > 0)
@@ -1204,7 +1258,53 @@ Proof.
     rewrite alive_P_ranges_set_bytes; try assumption.
     split; assumption.
   }
-  { inv HWF.
+  { intros.
+    destruct (l1 =? bid) eqn:HEQ1.
+    { rewrite Nat.eqb_eq in HEQ1. subst l1.
+      symmetry in HGET.
+      erewrite Ir.Memory.get_set_id_short in HGET1; try eassumption.
+      destruct (l2 =? bid) eqn:HEQ2.
+      { rewrite Nat.eqb_eq in HEQ2. congruence. }
+      { rewrite Nat.eqb_neq in HEQ2.
+        rewrite Ir.Memory.get_set_diff_short in HGET2; try assumption; try omega.
+        rewrite mt_set in HOVERLAP.
+        symmetry in HGET.
+        erewrite lifetime_to_range_set_bytes with
+            (bid1:= bid) (mb2 := mb1) (mb2' := mb) in HOVERLAP; try eassumption.
+        2: erewrite Ir.Memory.get_set_id_short; try eassumption;
+          rewrite <- HGET; try reflexivity.
+        inv HWF.
+        inv HGET1.
+        rewrite P_ranges_set_bytes.
+        eapply wf_disjoint2; try eassumption.
+      }
+    }
+    { rewrite Nat.eqb_neq in HEQ1.
+      erewrite Ir.Memory.get_set_diff_short in HGET1; try eassumption; try congruence.
+      destruct (l2 =? bid) eqn:HEQ2.
+      { rewrite Nat.eqb_eq in HEQ2. subst l2.
+        erewrite Ir.Memory.get_set_id_short in HGET2; try eassumption.
+        2: rewrite <- HGET; reflexivity.
+        rewrite mt_set in HOVERLAP.
+        erewrite lifetime_to_range_set_bytes with
+            (bid1 := bid) (mb2 := mb2) (mb2' := mb) in HOVERLAP; try eassumption.
+        2: erewrite Ir.Memory.get_set_id_short; try eassumption;
+          rewrite <- HGET; try reflexivity.
+        inv HGET2.
+        rewrite P_ranges_set_bytes.
+        inv HWF.
+        eapply wf_disjoint2; eassumption.
+      }
+      { rewrite Nat.eqb_neq in HEQ2.
+        erewrite Ir.Memory.get_set_diff_short in HGET2; try eassumption; try congruence.
+        rewrite mt_set in HOVERLAP.
+        inv HWF.
+        eapply wf_disjoint2; eassumption.
+      }
+    }
+  }
+  { (* lifetime beg *)
+    inv HWF.
     simpl.
     intros.
     destruct (i =? bid) eqn:HBID.
@@ -1212,15 +1312,36 @@ Proof.
       subst i.
       apply list_set_NoDup_In_unique in HAS; try assumption.
       rewrite HAS. unfold Ir.MemBlock.set_bytes.
-      simpl. eapply wf_blocktime.
+      simpl. eapply wf_blocktime_beg.
       eapply Ir.Memory.get_In in HGET. eapply HGET.
       reflexivity.
     }
     { rewrite PeanoNat.Nat.eqb_neq in HBID.
       apply list_set_In_not_In in HAS.
-      { eapply wf_blocktime. eassumption. }
+      { eapply wf_blocktime_beg. eassumption. }
       { eassumption. }
     }
+  }
+  { (* lifetime end. *)
+    inv HWF.
+    simpl.
+    intros.
+    destruct (i =? bid) eqn:HBID.
+    { rewrite PeanoNat.Nat.eqb_eq in HBID.
+      subst i.
+      apply list_set_NoDup_In_unique in HAS; try assumption.
+      rewrite HAS. unfold Ir.MemBlock.set_bytes.
+      simpl. eapply wf_blocktime_end.
+      eapply Ir.Memory.get_In in HGET. eapply HGET.
+      reflexivity. rewrite HAS in HEND. rewrite r_set_bytes in HEND.
+      assumption.
+    }
+    { rewrite PeanoNat.Nat.eqb_neq in HBID.
+      apply list_set_In_not_In in HAS.
+      { eapply wf_blocktime_end. eassumption.
+        assumption. }
+      { eassumption. }
+    }    
   }
 Qed.
 

@@ -1746,7 +1746,7 @@ Proof.
   apply Ir.Memory.get_In with (blks := Ir.Memory.blocks (Ir.Config.m st1)) in HGET0;
     try reflexivity.
   apply wf_blocks in HGET0.
-  clear wf_uniqueid wf_newid wf_disjoint wf_blocktime.
+  clear wf_uniqueid wf_newid wf_disjoint wf_blocktime_beg wf_blocktime_end.
   inv HGET0.
   remember (List.hd (0, 0) (Ir.MemBlock.P_ranges mb1)) as P1.
   remember (List.hd (0, 0) (Ir.MemBlock.P_ranges mb2)) as P2.
@@ -1985,7 +1985,7 @@ Proof.
   apply Ir.Memory.get_In with (blks := Ir.Memory.blocks (Ir.Config.m st1)) in HGET0;
     try reflexivity.
   apply wf_blocks in HGET0.
-  clear wf_uniqueid wf_newid wf_disjoint wf_blocktime.
+  clear wf_uniqueid wf_newid wf_disjoint wf_blocktime_beg wf_blocktime_end.
   inv HGET0.
   remember (List.hd (0, 0) (Ir.MemBlock.P_ranges mb1)) as P1.
   remember (List.hd (0, 0) (Ir.MemBlock.P_ranges mb2)) as P2.

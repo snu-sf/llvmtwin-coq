@@ -1179,6 +1179,30 @@ Proof.
     assumption.
 Qed.    
 
+Lemma lsubseq_append: forall {X:Type} (l1 l2 l3 l4:list X)
+                             (H1:lsubseq l1 l2)
+                             (H2:lsubseq l3 l4),
+    lsubseq (l1++l3) (l2++l4).
+Proof.
+  intros.
+  induction H1.
+  - simpl.
+    induction l. assumption.
+    simpl. constructor. assumption.
+  - simpl. constructor. assumption.
+  - simpl. constructor. assumption.
+Qed.
+
+Lemma lsubseq_append2: forall {X:Type} (l0 l1 l2:list X)
+                             (H1:lsubseq l1 l2),
+    lsubseq (l0++l1) (l2).
+Proof.
+  intros.
+  induction l0.
+  - simpl. assumption.
+  - simpl. constructor. assumption.
+Qed.
+
 Lemma lsubseq_In:
   forall {X:Type} (l l':list X) (x:X)
          (HIN:List.In x l')
@@ -1193,6 +1217,28 @@ Proof.
     + rewrite H. simpl. auto.
     + simpl. right. apply IHHLSS. assumption.
   - simpl. right. apply IHHLSS. assumption.
+Qed.
+
+Lemma lsubseq_In2 {X:Type}:
+  forall (l:list X) (a:X),
+    lsubseq l [a] <->  List.In a l.
+Proof.
+  intros.
+  split.
+  {
+    intros HLSS.
+    remember ([a]) as l'.
+    generalize dependent a.
+    induction HLSS.
+    { intros. congruence. }
+    { intros. inv Heql'. simpl. left. reflexivity. }
+    { intros. simpl. right. apply IHHLSS. assumption. }
+  }
+  { intros.
+    induction l.
+    inv H. simpl in H. inv H. constructor. constructor.
+    constructor. apply IHl. assumption.
+  }
 Qed.
 
 Lemma lsubseq_combine_map {X Y:Type}:
@@ -1227,6 +1273,39 @@ Proof.
     erewrite IHHLSS. reflexivity.
     congruence. assumption. eapply H0. assumption.
     inversion HMAP. reflexivity.
+  }
+Qed.
+
+Lemma lsubseq_concat {X:Type}:
+  forall (l1 l2:list (list X))
+         (HLSS:lsubseq l1 l2),
+    lsubseq (List.concat l1) (List.concat l2).
+Proof.
+  intros.
+  induction HLSS.
+  { simpl. constructor. }
+  { simpl. apply lsubseq_append. apply lsubseq_refl. ss. }
+  { simpl. apply lsubseq_append2. ss. }
+Qed.
+
+Lemma lsubseq_concat_In {X:Type}:
+  forall (ls:list (list X)) (l2:list X)
+         (HIN:List.In l2 ls),
+    lsubseq (List.concat ls) l2.
+Proof.
+  intros.
+  generalize dependent l2.
+  induction ls.
+  { intros. inv HIN. }
+  { intros.
+    simpl in HIN.
+    inv HIN.
+    { simpl.
+      rewrite app_nil_end with (l := l2) at 2.
+      apply lsubseq_append.
+      apply lsubseq_refl. constructor. }
+    { simpl. apply lsubseq_append2.
+      eauto. }
   }
 Qed.
 
@@ -1348,30 +1427,6 @@ Proof.
     { inv HF1. constructor. eapply IHHLSS; try reflexivity. }
     { constructor. eapply IHHLSS; try eassumption. }
   }
-Qed.
-
-Lemma lsubseq_append: forall {X:Type} (l1 l2 l3 l4:list X)
-                             (H1:lsubseq l1 l2)
-                             (H2:lsubseq l3 l4),
-    lsubseq (l1++l3) (l2++l4).
-Proof.
-  intros.
-  induction H1.
-  - simpl.
-    induction l. assumption.
-    simpl. constructor. assumption.
-  - simpl. constructor. assumption.
-  - simpl. constructor. assumption.
-Qed.
-
-Lemma lsubseq_append2: forall {X:Type} (l0 l1 l2:list X)
-                             (H1:lsubseq l1 l2),
-    lsubseq (l0++l1) (l2).
-Proof.
-  intros.
-  induction l0.
-  - simpl. assumption.
-  - simpl. constructor. assumption.
 Qed.
 
 Lemma lsubseq_combine:
@@ -2081,6 +2136,19 @@ Proof.
   omega.
 Qed.
 
+Lemma list_find_key_set_samekey {X:Type}:
+  forall (l : list (nat * X)) (v : X) k
+      (HNODUP:List.NoDup (list_keys l))
+      (HIN:List.In k (list_keys l)),
+    list_find_key (list_set l k v) k = [(k, v)].
+Proof.
+  intros.
+  eapply list_set_In with (v0 := v) in HIN; try reflexivity.
+  erewrite <- list_set_keys_eq with (key := k) (x := v) in HNODUP; try reflexivity.
+  eapply list_find_key_spec.
+  assumption. assumption.
+Qed.
+
 
 
 (*******************************************
@@ -2317,6 +2385,15 @@ Proof.
   destruct HNEMP. rewrite PeanoNat.Nat.ltb_lt in H.
   rewrite disjoint_same2; try omega.
   simpl. rewrite andb_false_r. reflexivity.
+Qed.
+
+Lemma disjoint_ranges_app_comm:
+  forall (l1 l2:list (nat * nat)),
+    disjoint_ranges (l1 ++ l2) = disjoint_ranges (l2 ++ l1).
+Proof.
+  intros.
+  eapply disjoint_ranges_Permutation.
+  apply Permutation_app2.
 Qed.
 
 (* Lemma: no_empty_range still holds for appended lists *)
@@ -3420,4 +3497,9 @@ Proof.
   { simpl.  omega. }
   rewrite <- H1. reflexivity.
 Qed.
+
+Lemma mod_add_eq:
+  forall a b c d (HD:d > 0),
+  ((a + b) mod d =? (a + c) mod d) = ((b mod d) =? (c mod d)).
+Admitted.
 

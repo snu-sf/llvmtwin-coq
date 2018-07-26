@@ -5545,7 +5545,6 @@ Proof.
                   simpl. reflexivity.
                   { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
                   { eassumption. }
-                  { rewrite Ir.Memory.get_incr_time_id. eassumption. }
                   { reflexivity. }
                 }
                 { rewrite Ir.Memory.get_set_diff with (m := Ir.Memory.incr_time (Ir.Config.m st))
@@ -5566,7 +5565,8 @@ Proof.
                   destruct o.
                   { simpl. destruct wf_m.
                     assert (fst (Ir.MemBlock.r blk0') < Ir.Memory.mt (Ir.Config.m st)).
-                    { eapply wf_blocktime. symmetry in Hgetb1. eapply Ir.Memory.get_In in Hgetb1.
+                    { eapply wf_blocktime_beg. symmetry in Hgetb1.
+                      eapply Ir.Memory.get_In in Hgetb1.
                       eapply Hgetb1. reflexivity. }
                     rewrite Hrblk0' in H0.
                     simpl in H0.
@@ -5577,7 +5577,8 @@ Proof.
                   }
                   { simpl. destruct wf_m.
                     assert (fst (Ir.MemBlock.r blk0') < Ir.Memory.mt (Ir.Config.m st)).
-                    { eapply wf_blocktime. symmetry in Hgetb1. eapply Ir.Memory.get_In in Hgetb1.
+                    { eapply wf_blocktime_beg. symmetry in Hgetb1.
+                      eapply Ir.Memory.get_In in Hgetb1.
                       eapply Hgetb1. reflexivity. }
                     rewrite Hrblk0' in H0.
                     simpl in H0.
@@ -5588,14 +5589,12 @@ Proof.
                   }
                   { eapply Ir.Memory.incr_time_wf. apply wf_m. reflexivity. }
                   { eassumption. }
-                  { erewrite Ir.Memory.get_incr_time_id. assumption. }
                   { reflexivity. }
                   { rewrite PeanoNat.Nat.eqb_neq in HBB0. omega. }
                 }
               }
               { eapply Ir.Memory.incr_time_wf. apply wf_m. reflexivity. }
               { eassumption. }
-              { erewrite Ir.Memory.get_incr_time_id. assumption. }
               { inv HFREE. reflexivity. }
             }
             { (* okay, freed block l is different from b. *)
@@ -5644,7 +5643,8 @@ Proof.
                     (* blk' has (_, Some) *)
                     destruct wf_m.
                     assert (fst (Ir.MemBlock.r blk') < Ir.Memory.mt (Ir.Config.m st)).
-                    { eapply wf_blocktime. symmetry in Hgetb. eapply Ir.Memory.get_In in Hgetb.
+                    { eapply wf_blocktime_beg. symmetry in Hgetb.
+                      eapply Ir.Memory.get_In in Hgetb.
                       eapply Hgetb. reflexivity. }
                     rewrite Hrblk' in H0.
                     simpl in H0.
@@ -5656,7 +5656,8 @@ Proof.
                   { (* blk' has (_, None) lifetime *)
                     destruct wf_m.
                     assert (fst (Ir.MemBlock.r blk') < Ir.Memory.mt (Ir.Config.m st)).
-                    { eapply wf_blocktime. symmetry in Hgetb. eapply Ir.Memory.get_In in Hgetb.
+                    { eapply wf_blocktime_beg. symmetry in Hgetb.
+                      eapply Ir.Memory.get_In in Hgetb.
                       eapply Hgetb. reflexivity. }
                     rewrite Hrblk' in H0.
                     simpl in H0.
@@ -5667,11 +5668,9 @@ Proof.
                   } 
                   { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
                   { assumption. }
-                  { rewrite Ir.Memory.get_incr_time_id. assumption. }
                   { reflexivity. }
                   { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
                   { assumption. }
-                  { rewrite Ir.Memory.get_incr_time_id. assumption. }
                   { reflexivity. }
                   { rewrite PeanoNat.Nat.eqb_neq in HLB. congruence. }
                 }
@@ -5698,12 +5697,10 @@ Proof.
                 reflexivity.
                 { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
                 { assumption. }
-                { rewrite Ir.Memory.get_incr_time_id. assumption. }
                 { reflexivity. }
                 { congruence. }
                 { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }
                 { assumption. }
-                { rewrite Ir.Memory.get_incr_time_id. assumption. }
                 { reflexivity. }
                 { congruence. }
               }

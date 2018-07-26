@@ -1766,23 +1766,6 @@ Qed.
 (*****
       Refinement on icmp eq instruction.
  *****)
-Lemma mod_add_eq:
-  forall a b c d (HD:d > 0),
-  ((a + b) mod d =? (a + c) mod d) = ((b mod d) =? (c mod d)).
-Admitted.
-
-Lemma addr_P_In:
-  forall mb (HWF:Ir.MemBlock.wf mb),
-    List.In (Ir.MemBlock.addr mb) (Ir.MemBlock.P mb).
-Proof.
-  intros.
-  inv HWF.
-  unfold Ir.MemBlock.addr.
-  destruct (Ir.MemBlock.P mb).
-  simpl in wf_twin. unfold Ir.TWINCNT in wf_twin. congruence.
-  simpl. left. reflexivity.
-Qed.
-
 Lemma physicalized_ptr_icmp_eq_nondet:
   forall md st b0 b1 mb1 mb2 n0 n1 n l o
          (HWF:Ir.Config.wf md st)
