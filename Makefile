@@ -8,9 +8,11 @@ all:
 	coqc State.v
 	coqc Behaviors.v
 	coqc WellTyped.v
-	coqc SmallStep.v SmallStepTest.v
+	coqc SmallStep.v
+	coqc SmallStepTest.v
 	coqc Refinement.v
 	coqc SmallStepRefinement.v
-#	coqc Reordering.v TwinExecution.v
-#	coqc TwinExecutionProof.v
+	coqc Reordering.v
+	coqc TwinExecution.v
+	coqc TwinExecutionProof.v
 	coqc GVN1.v

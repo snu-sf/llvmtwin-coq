@@ -56,6 +56,17 @@ Proof.
   { rewrite PeanoNat.Nat.eqb_neq in H. omega. }
 Qed.
 
+Lemma MEMSZ_nonzero:
+Ir.MEMSZ <> 0.
+Proof.
+  unfold Ir.MEMSZ.
+  unfold Ir.PTRSZ.
+  intros HH. simpl in HH.
+  repeat (rewrite Nat.double_twice in HH).
+  omega.
+Qed.
+
+
 
 (* Are two pointers equivalent? *)
 Definition ptr_eqb (p1 p2:ptrval): bool :=
@@ -867,6 +878,22 @@ Proof.
   destruct (Ir.MemBlock.P mb).
   simpl in wf_twin0. unfold Ir.TWINCNT in wf_twin0. congruence.
   simpl. left. reflexivity.
+Qed.
+
+Lemma n_pos:
+  forall mb (HWF:Ir.MemBlock.wf mb),
+    Ir.MemBlock.n mb > 0.
+Proof.
+  intros.
+  inv HWF.
+  unfold Ir.MemBlock.P_ranges in wf_poslen0.
+  unfold no_empty_range in wf_poslen0.
+  destruct (Ir.MemBlock.P mb).
+  simpl in wf_twin0. inv wf_twin0.
+  simpl in wf_poslen0.
+  rewrite andb_true_iff in wf_poslen0.
+  destruct wf_poslen0. rewrite PeanoNat.Nat.ltb_lt in H.
+  omega.
 Qed.
 
 Lemma bytes_length:
@@ -3686,6 +3713,50 @@ Proof.
     assumption.
   }
 Qed.
+
+Lemma zeroofs_block_addr:
+  forall mb bid m (HGET:Ir.Memory.get m bid = Some mb)
+         (HWF:Ir.Memory.wf m)
+         (HALIVE:Ir.MemBlock.alive mb = true),
+    Ir.Memory.zeroofs_block m (Ir.MemBlock.addr mb) = Some (bid, mb).
+Proof.
+  intros.
+  unfold Ir.Memory.zeroofs_block.
+  remember (Ir.Memory.inbounds_blocks2 m
+    [Ir.MemBlock.addr mb; Ir.MemBlock.addr mb + 1]) as blks.
+  symmetry in Heqblks.
+  dup Heqblks.
+  assert (List.In (bid, mb) blks).
+  { rewrite <- Heqblks0.
+    eapply Ir.Memory.inbounds_blocks2_In3.
+    congruence. omega.
+    unfold Ir.MemBlock.inbounds_abs.
+    rewrite andb_true_iff.
+    unfold in_range.
+    unfold Ir.MemBlock.P0_range.
+    simpl.
+    rewrite Nat.leb_refl.
+    assert (1 <= Ir.MemBlock.n mb).
+    { eapply Ir.MemBlock.n_pos. inv HWF.
+      exploit wf_blocks0.
+      symmetry in HGET.
+      eapply Ir.Memory.get_In in HGET. eassumption. reflexivity.
+      eauto. }
+    simpl.
+    repeat (rewrite andb_true_iff).
+    repeat (rewrite PeanoNat.Nat.leb_le).
+    omega.
+    assumption.
+  }
+  eapply Ir.Memory.inbounds_blocks2_singleton in Heqblks.
+  destruct blks. inv H.
+  destruct blks.
+  inv H. simpl. rewrite PeanoNat.Nat.eqb_refl. reflexivity.
+  inv H0. simpl in Heqblks. omega.
+  assumption.
+  omega.
+Qed.
+
 
 
 End Memory.

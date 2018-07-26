@@ -184,12 +184,14 @@ Definition icmp_eq_ptr_nondet_cond (p1 p2:Ir.ptrval) (m:Ir.Memory.t): bool :=
        (* n < o2 *)
        (mb2.(Ir.MemBlock.n) <? o2) ||
        (* even if offsets are inbounds, comparison result is nondeterministic
-          if lifetimes are disjoint. *)
+          if lifetimes are disjoint.
+          Note that using <= is fine because no two blocks can have
+          same birth time or end time. *)
        (match (mb1.(Ir.MemBlock.r), mb2.(Ir.MemBlock.r)) with
         | ((b1, None), (b2, None)) => false
-        | ((b1, None), (b2, Some e2)) => e2 <? b1
-        | ((b1, Some e1), (b2, None)) => e1 <? b2
-        | ((b1, Some e1), (b2, Some e2)) => (e1 <? b2) || (e2 <? b1)
+        | ((b1, None), (b2, Some e2)) => e2 <=? b1
+        | ((b1, Some e1), (b2, None)) => e1 <=? b2
+        | ((b1, Some e1), (b2, Some e2)) => (e1 <=? b2) || (e2 <=? b1)
         end))
     | (_, _) => false
     end

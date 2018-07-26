@@ -5570,9 +5570,9 @@ Proof.
                       eapply Hgetb1. reflexivity. }
                     rewrite Hrblk0' in H0.
                     simpl in H0.
-                    assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
+                    assert (~ Ir.Memory.mt (Ir.Config.m st) <= t1).
                     { intros HH. omega. }
-                    rewrite <- Nat.ltb_nlt in H1.
+                    rewrite <- Nat.leb_nle in H1.
                     rewrite H1. simpl. reflexivity.
                   }
                   { simpl. destruct wf_m.
@@ -5582,9 +5582,9 @@ Proof.
                       eapply Hgetb1. reflexivity. }
                     rewrite Hrblk0' in H0.
                     simpl in H0.
-                    assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
+                    assert (~ Ir.Memory.mt (Ir.Config.m st) <= t1).
                     { intros HH. omega. }
-                    rewrite <- Nat.ltb_nlt in H1.
+                    rewrite <- Nat.leb_nle in H1.
                     rewrite H1. simpl. reflexivity.
                   }
                   { eapply Ir.Memory.incr_time_wf. apply wf_m. reflexivity. }
@@ -5648,9 +5648,9 @@ Proof.
                       eapply Hgetb. reflexivity. }
                     rewrite Hrblk' in H0.
                     simpl in H0.
-                    assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
+                    assert (~ Ir.Memory.mt (Ir.Config.m st) <= t1).
                     { intros HH. omega. }
-                    rewrite <- Nat.ltb_nlt in H1.
+                    rewrite <- Nat.leb_nle in H1.
                     rewrite H1. simpl. rewrite orb_false_r. reflexivity.
                   }
                   { (* blk' has (_, None) lifetime *)
@@ -5661,9 +5661,9 @@ Proof.
                       eapply Hgetb. reflexivity. }
                     rewrite Hrblk' in H0.
                     simpl in H0.
-                    assert (~ Ir.Memory.mt (Ir.Config.m st) < t1).
+                    assert (~ Ir.Memory.mt (Ir.Config.m st) <= t1).
                     { intros HH. omega. }
-                    rewrite <- Nat.ltb_nlt in H1.
+                    rewrite <- Nat.leb_nle in H1.
                     rewrite H1. simpl. rewrite orb_false_r. reflexivity.
                   } 
                   { eapply Ir.Memory.incr_time_wf. eapply wf_m. reflexivity. }

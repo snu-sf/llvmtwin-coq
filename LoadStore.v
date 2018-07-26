@@ -1393,6 +1393,10 @@ Proof.
   }
 Qed.
 
+
+
+(*************** load_val / store_val / free equality *************)
+
 Lemma fresh_bid_store_val:
   forall m p v t,
     Ir.Memory.fresh_bid (Ir.store_val m p v t) =
@@ -1403,6 +1407,150 @@ Proof.
   unfold Ir.Memory.set.
   des_ifs.
 Qed.
+
+Lemma load_val_get_deref:
+  forall m ptr1 ptr2 retty
+         (HEQ:Ir.get_deref m ptr1 (Ir.ty_bytesz retty) =
+              Ir.get_deref m ptr2 (Ir.ty_bytesz retty)),
+    Ir.load_val m ptr1 retty = Ir.load_val m ptr2 retty.
+Proof.
+  intros.
+  unfold Ir.load_val.
+  unfold Ir.load_bytes.
+  rewrite HEQ.
+  reflexivity.
+Qed.
+
+Lemma store_val_get_deref:
+  forall m ptr1 ptr2 v valty
+         (HEQ:Ir.get_deref m ptr1 (Ir.ty_bytesz valty) =
+              Ir.get_deref m ptr2 (Ir.ty_bytesz valty)),
+    Ir.store_val m ptr1 v valty = Ir.store_val m ptr2 v valty.
+Proof.
+  intros.
+  unfold Ir.store_val.
+  unfold Ir.store_bytes.
+  destruct valty; destruct v; try reflexivity.
+  {
+    destruct (Ir.ty_bytesz (Ir.ity n) =? length (Ir.Byte.ofint
+                                                 (BinNatDef.N.of_nat n0) n))
+    eqn:HH;
+      try reflexivity.
+    rewrite PeanoNat.Nat.eqb_eq in HH.
+    rewrite HH in *.
+    rewrite HEQ. reflexivity. }
+  {
+    destruct (Ir.ty_bytesz (Ir.ptrty valty) =? length (Ir.Byte.ofptr p)) eqn:HH;
+      try reflexivity.
+    rewrite PeanoNat.Nat.eqb_eq in HH.
+    rewrite HH in *.
+    rewrite HEQ. reflexivity. }
+Qed.
+
+Lemma free_get_deref:
+  forall m (HWF:Ir.Memory.wf m)
+         ptr bid blk (HDEREF:Ir.get_deref m ptr 1 = [(bid, blk, 0)]),
+    Ir.SmallStep.free ptr m = Ir.Memory.free m bid.
+Proof.
+  intros.
+  unfold Ir.SmallStep.free.
+  destruct ptr.
+  { dup HDEREF.
+    unfold Ir.get_deref in HDEREF0.
+    des_ifs. }
+  { dup HDEREF.
+    eapply Ir.get_deref_phy_singleton in HDEREF0; try omega; try assumption.
+    inv HDEREF0; try congruence.
+    inv H. inv H0. inv H1.
+    destruct x. destruct p. inv H.
+    simpl in H0.
+    rewrite Nat.add_0_r in *.
+    unfold Ir.deref.
+    rewrite HDEREF.
+    simpl.
+    erewrite Ir.Memory.zeroofs_block_addr. reflexivity.
+    assumption. assumption.
+    eapply Ir.get_deref_inv in HDEREF.
+    rewrite andb_true_iff in HDEREF. destruct HDEREF.
+    rewrite andb_true_iff in H. destruct H. assumption.
+    omega.
+    assumption. assumption.
+  }
+Qed.
+
+Lemma free_get_deref2:
+  forall m (HWF:Ir.Memory.wf m) n
+         ptr bid blk (HDEREF:Ir.get_deref m ptr 1 = [(bid, blk, S n)]),
+    Ir.SmallStep.free ptr m = None.
+Proof.
+  intros.
+  unfold Ir.SmallStep.free.
+  destruct ptr; try reflexivity.
+  { eapply Ir.get_deref_log with (blk := blk) in HDEREF.
+    inv HDEREF. inv H. reflexivity.
+    inv H.
+    unfold Ir.get_deref in HDEREF. des_ifs.
+  }
+  { unfold Ir.Memory.zeroofs_block.
+    dup HDEREF.
+    eapply Ir.get_deref_inv in HDEREF; try assumption; try omega.
+    { rewrite andb_true_iff in HDEREF.
+      rewrite andb_true_iff in HDEREF.
+      destruct HDEREF. destruct H.
+      eapply Ir.get_deref_phy_singleton in HDEREF0; try assumption; try omega.
+      inv HDEREF0; try ss. inv H2. inv H3. inv H2.
+      simpl in H4. inv H4.
+      erewrite Ir.MemBlock.inbounds_inbounds_abs in H1; try reflexivity.
+      erewrite Ir.MemBlock.inbounds_inbounds_abs in H0; try reflexivity.
+      assert (Ir.Memory.inbounds_blocks2 m
+           [Ir.MemBlock.addr blk + S n; Ir.MemBlock.addr blk + S n + 1]
+              = [(bid, blk)]).
+      { eapply Ir.Memory.inbounds_blocks2_singleton3.
+        assumption.
+        congruence.
+        assumption.
+        omega.
+        rewrite Nat.add_comm. assumption.
+        simpl in H0. rewrite Nat.add_comm with (m := S n).
+        simpl. rewrite Nat.add_shuffle0. assumption.
+      }
+      rewrite H3. simpl.
+      assert ((Ir.MemBlock.addr blk =? Ir.MemBlock.addr blk + S n) = false).
+      { rewrite PeanoNat.Nat.eqb_neq. omega. }
+      rewrite H4. reflexivity.
+    }
+    {
+      eapply Ir.get_deref_phy_singleton in HDEREF0; try assumption; try omega.
+      inv HDEREF0. inv H. inv H0. inv H1. inv H.
+      simpl in H0. congruence. congruence. }
+  }
+Qed.
+
+Lemma free_get_deref3:
+  forall m (HWF:Ir.Memory.wf m)
+         ptr (HDEREF:Ir.get_deref m ptr 1 = []),
+    Ir.SmallStep.free ptr m = None.
+Proof.
+  intros.
+  unfold Ir.SmallStep.free.
+  destruct ptr.
+  { dup HDEREF.
+    unfold Ir.get_deref in HDEREF0.
+    des_ifs. unfold Ir.Memory.free. rewrite Heq.
+    des_ifs.
+    simpl in Heq0. unfold Ir.MemBlock.inbounds in Heq0.
+    rewrite PeanoNat.Nat.leb_nle in Heq0.
+    exfalso. eapply Heq0. eapply Ir.MemBlock.n_pos.
+    { inv HWF. eapply wf_blocks.
+      symmetry in Heq. eapply Ir.Memory.get_In in Heq; try reflexivity.
+      eassumption. }
+    unfold Ir.Memory.free. des_ifs.
+  }
+  { unfold Ir.deref.
+    rewrite HDEREF. des_ifs.
+}
+Qed.
+
 
 
 End Ir.

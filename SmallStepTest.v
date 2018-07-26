@@ -306,7 +306,7 @@ Theorem icmp_eq_ptr_diffblock_nondet1:
          (HBLK2:Ir.Memory.get (Ir.Config.m st) l2 = Some mb2)
          (HALIVE1:Ir.MemBlock.r mb1 = (beg1, Some end1)) (* blocks' life times *)
          (HALIVE2:Ir.MemBlock.r mb2 = (beg2, Some end2))
-         (HDISJ: end1 < beg2 \/ end2 < beg1) (* life times are disjoint. *)
+         (HDISJ: end1 <= beg2 \/ end2 <= beg1) (* life times are disjoint. *)
          (HINST:Ir.SmallStep.inst_step md st sr)
          (HNONEMPTYSTACK:Ir.Config.s st <> []), (* register file should exist *)
     exists sr2,
@@ -314,13 +314,6 @@ Theorem icmp_eq_ptr_diffblock_nondet1:
       sr <> sr2.
 Proof.
   intros.
-  (*assert (HNEQ1: o1 <> Ir.MemBlock.n mb1). omega.
-  rewrite <- PeanoNat.Nat.eqb_neq in HNEQ1.
-  assert (HNEQ2: o2 <> Ir.MemBlock.n mb2). omega.
-  rewrite <- PeanoNat.Nat.eqb_neq in HNEQ2.
-  apply PeanoNat.Nat.lt_asymm in HOFS1.
-  apply PeanoNat.Nat.lt_asymm in HOFS2.
-  rewrite <- PeanoNat.Nat.ltb_nlt in HOFS1, HOFS2.*)
   rewrite <- PeanoNat.Nat.eqb_neq in HDIFFBLK.
 
   assert (HNONDET:Ir.SmallStep.icmp_eq_ptr_nondet_cond (Ir.plog l1 o1) 
@@ -329,7 +322,7 @@ Proof.
     rewrite HBLK1, HBLK2, HDIFFBLK.
     simpl.
     rewrite HALIVE1, HALIVE2.
-    inv HDISJ; rewrite <- PeanoNat.Nat.ltb_lt in H; rewrite H.
+    inv HDISJ; rewrite <- PeanoNat.Nat.leb_le in H; rewrite H.
     simpl. repeat (rewrite orb_true_r). reflexivity.
     simpl. repeat (rewrite orb_true_r). reflexivity.
   }

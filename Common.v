@@ -3503,3 +3503,9 @@ Lemma mod_add_eq:
   ((a + b) mod d =? (a + c) mod d) = ((b mod d) =? (c mod d)).
 Admitted.
 
+
+Lemma andb_inj_r:
+  forall b1 b2 b3 (H:b2 = b3),
+    b1 && b2 = b1 && b3.
+Proof. intros. subst. reflexivity. Qed.
+
