@@ -762,7 +762,19 @@ Proof.
   des_ifs.
 Qed.
 
-Theorem cur_inst_not_cur_terminator:
+Lemma get_rval_update_rval_id:
+  forall st r v
+         (HSTACK:s st <> nil),
+    get_rval (update_rval st r v) r = Some v.
+Proof.
+  intros.
+  unfold get_rval.
+  unfold update_rval.
+  des_ifs. simpl in Heq. inv Heq.
+  rewrite Ir.Regfile.get_update. reflexivity.
+Qed.
+
+Lemma cur_inst_not_cur_terminator:
   forall i st
          (HCUR:Some i = cur_inst st),
     None = cur_terminator st.
@@ -779,7 +791,7 @@ Proof.
   omega.
 Qed.
 
-Theorem cur_inst_not_cur_phi:
+Lemma cur_inst_not_cur_phi:
   forall i st
          (HCUR:Some i = cur_inst st),
     None = cur_phi st.

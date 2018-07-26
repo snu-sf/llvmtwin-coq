@@ -8,7 +8,7 @@ Require Import Basics.
 Require Import sflib.
 Require Import Omega.
 Require Import Sorting.Permutation.
-
+Require Import Lia.
 
 (* Some helpful lemmas regarding List *)
 
@@ -3497,6 +3497,130 @@ Proof.
   { simpl.  omega. }
   rewrite <- H1. reflexivity.
 Qed.
+
+(*** Special thanks to Youngju Song (@alxest)!! *****)
+Section ABCDD.
+
+  Variable K: nat.
+  Hypothesis NONZERO: K <> 0.
+
+  Lemma eqm_add_eqm
+        a b ctx
+        (EQM: a mod K = b mod K)
+    :
+      (a + ctx) mod K = (b + ctx) mod K
+  .
+  Proof.
+    rewrite <- Nat.add_mod_idemp_l; ss. symmetry.
+    rewrite <- Nat.add_mod_idemp_l; ss. congruence.
+  Qed.
+
+  Lemma eqm_iff
+        min
+        a b
+    :
+      <<EQM: a mod K = b mod K>> <->
+      <<EQM: exists p q, a + K * p = b + K * q /\ min <= p /\ min <= q>>
+  .
+  Proof.
+    split; i; des.
+    - remember (a mod K) as x.
+      symmetry in H. symmetry in Heqx.
+      destruct x; ss.
+      { rewrite Nat.mod_divides in *; ss. des.
+        exists (min + c), (min + c0).
+        esplits; try lia.
+      }
+      rewrite Nat.mod_eq in *; ss.
+      apply Nat.add_sub_eq_nz in H; ss.
+      apply Nat.add_sub_eq_nz in Heqx; ss.
+      rewrite <- H. rewrite <- Heqx.
+      exists (min + (b / K)), (min + (a / K)).
+      esplits; try lia.
+    - red.
+      destruct (le_lt_dec p q).
+      + assert(a = b + K * q - K * p) by lia.
+        rewrite <- Nat.add_sub_assoc in *; cycle 1.
+        { apply Nat.mul_le_mono_l. lia. }
+        rewrite <- Nat.mul_sub_distr_l in *.
+        rewrite H2.
+        replace (b + K * (q - p)) with ((q - p) * K + b) by lia.
+        erewrite eqm_add_eqm with (b := 0); cycle 1.
+        { rewrite Nat.mod_mul; ss. rewrite Nat.mod_0_l; ss. }
+        f_equal.
+      + assert(b = a + K * p - K * q) by lia.
+        rewrite <- Nat.add_sub_assoc in *; cycle 1.
+        { apply Nat.mul_le_mono_l. lia. }
+        rewrite <- Nat.mul_sub_distr_l in *.
+        rewrite H2.
+        replace (a + K * (p - q)) with ((p - q) * K + a) by lia.
+        erewrite eqm_add_eqm with (b := 0); cycle 1.
+        { rewrite Nat.mod_mul; ss. rewrite Nat.mod_0_l; ss. }
+        f_equal.
+  Qed.
+
+  Lemma eqm_sub_eqm
+        l0 l1 r0 r1 delta
+        (EQML: l0 mod K = (delta + l1) mod K)
+        (EQMR: r0 mod K = (delta + r1) mod K)
+        (BOUND0: r0 < K <= l0)
+        (BOUND1: r1 < K <= l1)
+    :
+      (l0 - r0) mod K = (l1 - r1) mod K
+  .
+  Proof.
+    apply (eqm_iff 0) in EQMR. des.
+    apply (eqm_iff (r0 + r1 + p + q)) in EQML. des.
+    eapply (eqm_iff 0).
+    exists (p0 - p), (q0 - q).
+    esplits; try lia.
+    assert(l0 + K * p0 - (r0 + K * p) = delta + l1 + K * q0 - (delta + r1 + K * q)) by lia.
+    rewrite Nat.sub_add_distr in *.
+    replace (l0 + K * p0 - r0 - K * p) with (l0 - r0 + K * p0 - K * p) in H by lia.
+
+    rewrite ! Nat.mul_sub_distr_l in *.
+
+    rewrite Nat.add_sub_assoc; cycle 1.
+    { apply Nat.mul_le_mono_l. lia. }
+    rewrite H.
+    rewrite ! Nat.sub_add_distr.
+    replace (delta + l1 + K * q0 - delta - r1 - K * q) with
+        (l1 + K * q0 - r1 - K * q) by lia.
+    replace (l1 + K * q0 - r1 - K * q) with
+        (l1 - r1 + K * q0 - K * q) by lia.
+    rewrite Nat.add_sub_assoc; cycle 1.
+    { apply Nat.mul_le_mono_l. lia. }
+    ss.
+  Qed.
+
+  (* a precious lemma. *)
+  Theorem addm_subm_eq
+          a y x
+    :
+      (((a + x) mod K) + K - ((a + y) mod K)) mod K =
+      ((x mod K) + K - (y mod K)) mod K
+  .
+  Proof.
+    assert(BDD0: (a + y) mod K < K).
+    { eapply Nat.mod_upper_bound; ss. }
+    assert(BDD1: y mod K < K).
+    { eapply Nat.mod_upper_bound; ss. }
+
+    eapply eqm_sub_eqm with (delta := a).
+    - rewrite Nat.add_assoc.
+      erewrite eqm_add_eqm with (a := (a + x) mod K); cycle 1.
+      { apply Nat.mod_mod; ss. }
+      replace (a + x mod K + K) with (x mod K + (a + K)) by lia.
+      erewrite eqm_add_eqm with (a := x mod K); cycle 1.
+      { apply Nat.mod_mod; ss. }
+      f_equal. lia.
+    - rewrite Nat.add_mod_idemp_r; ss.
+      rewrite Nat.mod_mod; ss.
+    - lia.
+    - lia.
+  Qed.
+
+End ABCDD.
 
 Lemma mod_add_eq:
   forall a b c d (HD:d > 0),
