@@ -55,7 +55,7 @@ This is a Coq formalization of OOPSLA'18 LLVM memory model.
 - Reordering of interested instructions: [Reordering.v](Reordering.v) 
     - This proves that ptrtoint/inttoptr/getelementptr/icmp eq/icmp ule/psub can be freely reordered with respect to malloc/free.
     
-- Correctness of GVN on pointer equality (sec. 5): [GVN1.v](GVN1.v)
+- Correctness of GVN on pointer equality (sec. 5): [GVN1.v](GVN1.v), [GVN2.v](GVN2.v)
     - [GVN1.v](GVN1.v): Proves that replacing p with q is valid if q is NULL or the result of an integer-to-pointer cast.
         - It defines a notion of `physicalized_ptr p q`, meaning that either (informally) `q = (int*)(uintptr_t)p` holds, or `p = gep [inbounds] p0` and `q = gep [inbounds] q0` that satisfies `physicalized_ptr p0 q0`.
         - Theorem `physicalized_ptr_spec` shows that if `icmp eq p, q` evaluates to true, and q is a vanilla physical pointer,  then `physicalized_ptr p q` holds.
