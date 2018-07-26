@@ -16,3 +16,4 @@ all:
 	coqc TwinExecution.v
 	coqc TwinExecutionProof.v
 	coqc GVN1.v
+	coqc GVN2.v
