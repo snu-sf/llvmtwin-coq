@@ -16,7 +16,7 @@ Require Import Reordering.
 
 Module Ir.
 
-Module GVN.
+Module GVN1.
 
 
 (* Some cute lemmas *)
@@ -2941,7 +2941,15 @@ Proof.
   { hey_terminator2 HINST2 HTSTEP. }
 Qed.
 
+(*****
+      Refinement on getelementptr is not needed because
+      physicalized_ptr already contains it. :)
+      In the same context refinement on bitcast is also not
+      needed because it returns identical value if
+      the input is a pointer value.
+ *****)
 
-End GVN.
+
+End GVN1.
 
 End Ir.
