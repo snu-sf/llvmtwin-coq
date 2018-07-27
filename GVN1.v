@@ -10,6 +10,8 @@ Require Import Memory.
 Require Import State.
 Require Import LoadStore.
 Require Import SmallStep.
+Require Import SmallStepAux.
+Require Import SmallStepWf.
 Require Import Refinement.
 Require Import SmallStepRefinement.
 Require Import Reordering.
@@ -150,12 +152,12 @@ Proof.
       destruct p1 eqn:HP1.
       { (* it's log. *)
         dup HOP1.
-        inv HWF. symmetry in HOP0. apply wf_no_bogus_ptr in HOP0.
-        inv HOP0.
+        inv HWF. symmetry in HOP0. apply wf_ptr in HOP0.
+        inv HOP0. exploit H. ss. intros HH. destruct HH as [HH1 HH2]. inv HH2.
         inv HNEXT. unfold Ir.ptr_to_phy.
         destruct (Ir.log_to_phy (Ir.Config.m st) b n) eqn:HLTP.
-        { unfold Ir.log_to_phy in *. rewrite H in HLTP.
-          inv HLTP. rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+        { unfold Ir.log_to_phy in *. rewrite H1 in HLTP.
+          inv HLTP. rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
           unfold Ir.Config.get_val in HTRUE.
           rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
           inv HTRUE. des_ifs.
@@ -172,7 +174,7 @@ Proof.
       }
       { (* it's phy. *)
         inv HNEXT.
-        rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+        rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
         unfold Ir.Config.get_val in HTRUE.
         rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
         inv HTRUE.
@@ -186,7 +188,8 @@ Proof.
         f_equal. f_equal; try reflexivity.
         symmetry. apply Nat.mod_small.
         inv HWF.
-        symmetry in HOP2. apply wf_no_bogus_phyofs in HOP2. assumption.
+        symmetry in HOP2. apply wf_ptr in HOP2.
+        inv HOP2. exploit H1. ss. eauto.
         unfold Ir.Config.get_rval in HTRUE. unfold Ir.Config.update_rval in HTRUE.
         des_ifs. congruence.
       }
@@ -233,7 +236,7 @@ Proof.
     rewrite <- HINST in HNEXT.
     rewrite <- HOP1 in HNEXT.
     inv HNEXT.
-    rewrite Ir.Reordering.get_val_update_reg_and_incrpc.
+    rewrite Ir.SmallStep.get_val_update_reg_and_incrpc.
     unfold Ir.Config.get_val.
     rewrite Ir.Config.get_rval_update_rval_id. reflexivity.
     { unfold Ir.Config.cur_inst in HINST.
@@ -1147,8 +1150,8 @@ Proof.
       clear wf_cid_to_f.
       clear wf_cid_to_f2.
       clear wf_stack.
-      clear wf_no_bogus_ptr.
-      clear wf_no_bogus_ptr_mem.
+      clear wf_ptr.
+      clear wf_ptr_mem.
 
       dup HPP.
       eapply physicalized_ptr_valty in HPP.
@@ -1225,8 +1228,8 @@ Proof.
       clear wf_cid_to_f.
       clear wf_cid_to_f2.
       clear wf_stack.
-      clear wf_no_bogus_ptr.
-      clear wf_no_bogus_ptr_mem.
+      clear wf_ptr.
+      clear wf_ptr_mem.
 
       dup HPP.
       eapply physicalized_ptr_valty in HPP.
@@ -1419,8 +1422,8 @@ Proof.
       clear wf_cid_to_f.
       clear wf_cid_to_f2.
       clear wf_stack.
-      clear wf_no_bogus_ptr.
-      clear wf_no_bogus_ptr_mem.
+      clear wf_ptr.
+      clear wf_ptr_mem.
 
       dup HPP.
       eapply physicalized_ptr_valty in HPP; try assumption.
@@ -1507,8 +1510,8 @@ Proof.
       clear wf_cid_to_f.
       clear wf_cid_to_f2.
       clear wf_stack.
-      clear wf_no_bogus_ptr.
-      clear wf_no_bogus_ptr_mem.
+      clear wf_ptr.
+      clear wf_ptr_mem.
       inv HNEXT. inv HNEXT0.
       destruct retty; try
        (constructor; constructor; thats_it).
@@ -1591,8 +1594,7 @@ Proof.
       clear wf_cid_to_f.
       clear wf_cid_to_f2.
       clear wf_stack.
-      clear wf_no_bogus_ptr.
-      clear wf_no_bogus_ptr_mem.
+      clear wf_ptr_mem.
       inv HNEXT. inv HNEXT0.
       destruct retty; try
        (constructor; constructor; thats_it).
@@ -1632,10 +1634,10 @@ Proof.
               rewrite <- HPP1.
               assert (HN1: n1 = n1 mod Ir.MEMSZ).
               { rewrite Nat.mod_small. reflexivity.
-                eapply wf_no_bogus_logofs. eassumption. }
+                eapply wf_ptr in HOP1. inv HOP1. exploit H0. ss. intros HH. intuition. }
               assert (HN2: n2 = n2 mod Ir.MEMSZ).
               { rewrite Nat.mod_small. reflexivity.
-                eapply wf_no_bogus_logofs. eassumption. }
+                eapply wf_ptr in Heq. inv Heq. exploit H0. ss. intros HH. intuition. }
               rewrite HN1 at 2.
               rewrite HN2 at 2.
               rewrite twos_compl_sub_common_MEMSZ_PTRSZ.
@@ -1705,8 +1707,7 @@ Proof.
       clear wf_cid_to_f.
       clear wf_cid_to_f2.
       clear wf_stack.
-      clear wf_no_bogus_ptr.
-      clear wf_no_bogus_ptr_mem.
+      clear wf_ptr_mem.
       inv HNEXT. inv HNEXT0.
       destruct retty; try
        (constructor; constructor; thats_it).
@@ -1746,10 +1747,12 @@ Proof.
               rewrite <- HPP1.
               assert (HN1: n1 = n1 mod Ir.MEMSZ).
               { rewrite Nat.mod_small. reflexivity.
-                eapply wf_no_bogus_logofs. eassumption. }
+                eapply wf_ptr in HOP1. inv HOP1. exploit H0.
+                ss. intros HH. intuition. }
               assert (HN2: n2 = n2 mod Ir.MEMSZ).
               { rewrite Nat.mod_small. reflexivity.
-                eapply wf_no_bogus_logofs. eassumption. }
+                eapply wf_ptr in Heq. inv Heq. exploit H0.
+                ss. intros HH. intuition. }
               rewrite HN1 at 2.
               rewrite HN2 at 2.
               rewrite twos_compl_sub_common_MEMSZ_PTRSZ.
@@ -1915,6 +1918,30 @@ Proof.
 Qed.
 
 
+Lemma log_ofs_lt_MEMSZ:
+  forall st opptr b1 n1
+         (Hwf_ptr:forall (op : Ir.op) (p : Ir.ptrval),
+           Ir.Config.get_val st op = Some (Ir.ptr p) -> Ir.Config.ptr_wf p (Ir.Config.m st))
+         (Hop:Ir.Config.get_val st opptr = Some (Ir.ptr (Ir.plog b1 n1))),
+    n1 < Ir.MEMSZ.
+Proof.
+  intros.
+  apply Hwf_ptr in Hop. inv Hop. exploit H. ss. intros.
+  intuition.
+Qed.
+
+Lemma phy_ofs_lt_MEMSZ:
+  forall st opptr o I cid
+         (Hwf_ptr:forall (op : Ir.op) (p : Ir.ptrval),
+           Ir.Config.get_val st op = Some (Ir.ptr p) -> Ir.Config.ptr_wf p (Ir.Config.m st))
+         (Hop:Ir.Config.get_val st opptr = Some (Ir.ptr (Ir.pphy o I cid))),
+    o < Ir.MEMSZ.
+Proof.
+  intros.
+  apply Hwf_ptr in Hop. inv Hop. exploit H0. ss. intros.
+  omega.
+Qed.
+
 Theorem icmp_eq_refines_l:
   forall md1 md2 (* md2 is an optimized program *)
          st r opptr11 opptr12 opptr2 ptrty v1 v2 sr2
@@ -1998,8 +2025,8 @@ Proof.
                   dup HOP1.
                   (* convert p2N into (addr + ofs). *)
                   inv HWF1.
-                  apply wf_no_bogus_ptr in HOP1.
-                  inv HOP1.
+                  apply wf_ptr in HOP1.
+                  inv HOP1. exploit H. ss. intros HH. inv HH. inv H2.
                   eapply physicalized_ptr_convert with (mb := x)
                     in HPP0; try reflexivity; try congruence.
                   rewrite p2N_addr with (mb := x) in Heq0.
@@ -2009,11 +2036,10 @@ Proof.
                   assert (n0 =? n1 = (n0 mod Ir.MEMSZ =? n1 mod Ir.MEMSZ)).
                   { rewrite <- Nat.mod_small with (a := n0) (b := Ir.MEMSZ) at 1.
                     rewrite <- Nat.mod_small with (a := n1) (b := Ir.MEMSZ) at 1.
-                    reflexivity.
-                    eapply wf_no_bogus_logofs. eassumption.
-                    eapply wf_no_bogus_logofs. eassumption.
+                    reflexivity. eapply log_ofs_lt_MEMSZ; eassumption.
+                    eapply log_ofs_lt_MEMSZ; eassumption.
                   }
-                  rewrite H0.
+                  rewrite H2.
                   rewrite mod_add_eq.
                   thats_it.
                   apply Ir.MEMSZ_pos. congruence.
@@ -2046,13 +2072,15 @@ Proof.
                     rewrite HNONDET. reflexivity. }
                   { (* okay.. icmp eq phy log should be false. *)
                     inv HWF1.
-                    eapply wf_no_bogus_ptr in HOP1. inv HOP1.
-                    eapply wf_no_bogus_ptr in Heq. inv Heq.
+                    eapply wf_ptr in HOP1. inv HOP1.
+                    exploit H. ss. intros HH. inv HH. inv H2.
+                    eapply wf_ptr in Heq. inv Heq.
+                    exploit H2. ss. intros HH. inv HH. inv H6.
                     eapply physicalized_ptr_icmp_eq_nondet in HNONDET; try eassumption.
                     { rewrite Heq0 in HNONDET. inv HNONDET.
                       constructor. constructor. thats_it. }
-                    { rewrite H. reflexivity. }
-                    { rewrite H0. reflexivity. }
+                    { rewrite H3. reflexivity. }
+                    { rewrite H7. reflexivity. }
                   }
                 }
               }
@@ -2065,17 +2093,18 @@ Proof.
                 unfold Ir.SmallStep.icmp_eq_ptr.
                 reflexivity.
               }
-              { inv HWF1. eapply wf_no_bogus_ptr in HOP1. destruct HOP1.
+              { inv HWF1. eapply wf_ptr in HOP1. destruct HOP1.
+                exploit H. ss. intros HH. inv HH. inv H2.
                 eapply physicalized_ptr_convert in HPP1; try reflexivity.
-                2: rewrite H; reflexivity.
+                2: rewrite H3; reflexivity.
                 unfold Ir.SmallStep.icmp_eq_ptr in Heq0.
                 inv Heq0. unfold Ir.SmallStep.p2N. unfold Ir.log_to_phy.
-                rewrite H. rewrite Nat.min_id.
+                rewrite H3. rewrite Nat.min_id.
                 rewrite twos_compl_MEMSZ_PTRSZ.
                 assert (n1 = n1 mod Ir.MEMSZ).
-                { symmetry. apply Nat.mod_small. eapply wf_no_bogus_phyofs.
-                  eassumption. }
-                rewrite H0. rewrite twos_compl_MEMSZ_PTRSZ.
+                { symmetry. apply Nat.mod_small.
+                  eapply phy_ofs_lt_MEMSZ; eassumption. }
+                rewrite H2. rewrite twos_compl_MEMSZ_PTRSZ.
                 constructor. constructor. thats_it.
               }
             }
@@ -2199,11 +2228,11 @@ Proof.
   try (rewrite icmp_eq_ptr_nondet_cond_sym in Heq0; congruence).
   unfold Ir.SmallStep.p2N.
   assert (n = n mod Ir.MEMSZ).
-  { inv HWF. symmetry in HOP1. apply wf_no_bogus_phyofs in HOP1.
-    symmetry. apply Nat.mod_small. assumption. }
+  { inv HWF. symmetry in HOP1. symmetry. apply Nat.mod_small.
+    eapply phy_ofs_lt_MEMSZ; eassumption. }
   assert (n0 = n0 mod Ir.MEMSZ).
-  { inv HWF. symmetry in HOP0. apply wf_no_bogus_phyofs in HOP0.
-    symmetry. apply Nat.mod_small. assumption. }
+  { inv HWF. symmetry in HOP0. symmetry. apply Nat.mod_small.
+    eapply phy_ofs_lt_MEMSZ; eassumption. }
   rewrite H.
   rewrite H0.
   rewrite Nat.eqb_sym.
@@ -2297,8 +2326,8 @@ Proof.
                   dup HOP1.
                   (* convert p2N into (addr + ofs). *)
                   inv HWF1.
-                  apply wf_no_bogus_ptr in HOP1.
-                  inv HOP1.
+                  apply wf_ptr in HOP1.
+                  inv HOP1. exploit H. ss. intros HH. inv HH. inv H2.
                   eapply physicalized_ptr_convert with (mb := x)
                     in HPP0; try reflexivity; try congruence.
                   rewrite p2N_addr with (mb := x) in Heq0.
@@ -2309,10 +2338,10 @@ Proof.
                   { rewrite <- Nat.mod_small with (a := n0) (b := Ir.MEMSZ) at 1.
                     rewrite <- Nat.mod_small with (a := n1) (b := Ir.MEMSZ) at 1.
                     reflexivity.
-                    eapply wf_no_bogus_logofs. eassumption.
-                    eapply wf_no_bogus_logofs. eassumption.
+                    eapply log_ofs_lt_MEMSZ; eassumption.
+                    eapply log_ofs_lt_MEMSZ; eassumption.
                   }
-                  rewrite H0.
+                  rewrite H2.
                   rewrite mod_add_eq.
                   thats_it.
                   apply Ir.MEMSZ_pos. congruence.
@@ -2346,8 +2375,10 @@ Proof.
                     rewrite HNONDET. reflexivity. }
                   { (* okay.. icmp eq phy log should be false. *)
                     inv HWF1. dup Heq.
-                    eapply wf_no_bogus_ptr in HOP1. inv HOP1.
-                    eapply wf_no_bogus_ptr in Heq. inv Heq.
+                    eapply wf_ptr in HOP1. inv HOP1. exploit H. ss. intros HH.
+                    inv HH. inv H2.
+                    eapply wf_ptr in Heq. inv Heq. exploit H2. ss. intros HH.
+                    inv HH. inv H6.
                     rewrite icmp_eq_ptr_nondet_cond_sym in HNONDET.
                     eapply physicalized_ptr_icmp_eq_nondet in HNONDET
                     ; try eassumption.
@@ -2355,8 +2386,8 @@ Proof.
                       rewrite Heq0 in HNONDET. inv HNONDET.
                       constructor. constructor. thats_it.
                       rewrite HOP2. reflexivity. rewrite Heq1. reflexivity. }
-                    { rewrite H. reflexivity. }
-                    { rewrite H0. reflexivity. }
+                    { eauto. }
+                    { eauto. }
                   }
                 }
               }
@@ -2369,17 +2400,18 @@ Proof.
                 unfold Ir.SmallStep.icmp_eq_ptr.
                 reflexivity.
               }
-              { inv HWF1. eapply wf_no_bogus_ptr in HOP1. destruct HOP1.
+              { inv HWF1. eapply wf_ptr in HOP1. destruct HOP1. exploit H.
+                ss. intros HH. inv HH. inv H2.
                 eapply physicalized_ptr_convert in HPP1; try reflexivity.
-                2: rewrite H; reflexivity.
+                2: eauto.
                 unfold Ir.SmallStep.icmp_eq_ptr in Heq0.
                 inv Heq0. unfold Ir.SmallStep.p2N. unfold Ir.log_to_phy.
-                rewrite H. rewrite Nat.min_id.
+                rewrite H3. rewrite Nat.min_id.
                 rewrite twos_compl_MEMSZ_PTRSZ.
                 assert (n1 = n1 mod Ir.MEMSZ).
-                { symmetry. apply Nat.mod_small. eapply wf_no_bogus_phyofs.
-                  eassumption. }
-                rewrite H0.
+                { symmetry. apply Nat.mod_small.
+                  eapply phy_ofs_lt_MEMSZ; eassumption. }
+                rewrite H2.
                 constructor. constructor. thats_it.
               }
             }
@@ -2533,7 +2565,7 @@ Proof.
   rewrite PTRSZ_MEMSZ.
   apply Nat.mod_small.
   inv HWF.
-  symmetry in HOP. apply wf_no_bogus_phyofs in HOP. omega.
+  symmetry in HOP. eapply phy_ofs_lt_MEMSZ; eauto.
 Qed.
 
 
@@ -2604,7 +2636,8 @@ Proof.
           destruct x.
           {
             inv HWF1.
-            dup HOP1. apply wf_no_bogus_ptr in HOP0. inv HOP0.
+            dup HOP1. apply wf_ptr in HOP0. inv HOP0. exploit H. ss.
+            intros HH. inv HH. inv H2.
 
             destruct p.
             { (* src: icmp ule log, log
@@ -2622,7 +2655,8 @@ Proof.
                 { constructor. constructor.
                   thats_it. }
               }
-              { dup Heq. apply wf_no_bogus_ptr in Heq1. inv Heq1.
+              { dup Heq. apply wf_ptr in Heq1. inv Heq1. exploit H2. ss.
+                intros HH. inv HH. inv H6.
                 eexists. split.
                 { eapply Ir.SmallStep.ss_inst. eapply Ir.SmallStep.s_det.
                   unfold Ir.SmallStep.inst_det_step. rewrite <- HINST1.
@@ -2630,8 +2664,8 @@ Proof.
                   erewrite physicalized_ptr_icmp_ule_nondet in Heq0.
                   { rewrite Heq0. reflexivity. }
                   { eassumption. }
-                  { rewrite H. reflexivity. }
-                  { rewrite H0. reflexivity. }
+                  { eauto. }
+                  { eauto. }
                   { assumption. }
                   { assumption. }
                 }
@@ -2651,7 +2685,7 @@ Proof.
                                                     (Ir.pphy n1 l0 o0) (Ir.Config.m st)).
                 { unfold Ir.SmallStep.icmp_ule_ptr.
                   unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond.
-                  erewrite p2N_addr. 2: rewrite H; reflexivity.
+                  erewrite p2N_addr. 2: eauto.
                   erewrite phy_p2N; try eassumption.
                   eapply physicalized_ptr_convert in HPP0; try reflexivity.
                   rewrite <- HPP0. reflexivity.
@@ -2832,7 +2866,8 @@ Proof.
           destruct x.
           {
             inv HWF1.
-            dup HOP1. apply wf_no_bogus_ptr in HOP0. inv HOP0.
+            dup HOP1. apply wf_ptr in HOP0. inv HOP0. exploit H. ss.
+            intros HH. inv HH. inv H2.
 
             destruct p.
             { (* src: icmp ule log, log
@@ -2850,7 +2885,8 @@ Proof.
                 { constructor. constructor.
                   thats_it. }
               }
-              { dup Heq. apply wf_no_bogus_ptr in Heq1. inv Heq1.
+              { dup Heq. apply wf_ptr in Heq1. inv Heq1. exploit H2. ss. intros HH.
+                inv HH. inv H6.
                 eexists. split.
                 { eapply Ir.SmallStep.ss_inst. eapply Ir.SmallStep.s_det.
                   unfold Ir.SmallStep.inst_det_step. rewrite <- HINST1.
@@ -2858,8 +2894,8 @@ Proof.
                   erewrite physicalized_ptr_icmp_ule_nondet2 in Heq0.
                   { rewrite Heq0. reflexivity. }
                   { eassumption. }
-                  { rewrite H0. reflexivity. }
-                  { rewrite H. reflexivity. }
+                  { eauto. }
+                  { eauto. }
                   { assumption. }
                   { assumption. }
                 }
@@ -2879,7 +2915,7 @@ Proof.
                                                     (Ir.plog b0 n0) (Ir.Config.m st)).
                 { unfold Ir.SmallStep.icmp_ule_ptr.
                   unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond.
-                  erewrite p2N_addr. 2: rewrite H; reflexivity.
+                  erewrite p2N_addr. 2: eauto.
                   erewrite phy_p2N; try eassumption.
                   eapply physicalized_ptr_convert in HPP0; try reflexivity.
                   rewrite <- HPP0. reflexivity.

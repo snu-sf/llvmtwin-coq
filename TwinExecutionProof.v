@@ -13,8 +13,11 @@ Require Import State.
 Require Import WellTyped.
 Require Import LoadStore.
 Require Import SmallStep.
+Require Import SmallStepAux.
+Require Import SmallStepWf.
 Require Import Reordering.
 Require Import TwinExecution.
+Require Import TwinExecutionAux.
 
 
 Module Ir.
@@ -52,7 +55,7 @@ Proof.
   { (* returned NULL*)
     left.
     rewrite <- HCUR in HCUR0. inv HCUR0.
-    rewrite get_val_update_reg_and_incrpc_samereg. reflexivity. assumption. }
+    rewrite Ir.SmallStep.get_val_update_reg_and_incrpc_samereg. reflexivity. assumption. }
   { (* malloc succeeded. *)
     right.
     rewrite <- HCUR in HCUR0.
@@ -62,7 +65,7 @@ Proof.
     assert (HMBWF' := HMBWF (Ir.Memory.mt (Ir.Config.m st))).
     clear HMBWF.
     inv HMBWF'.
-    rewrite get_val_update_reg_and_incrpc_samereg.
+    rewrite Ir.SmallStep.get_val_update_reg_and_incrpc_samereg.
     simpl in *.
     destruct P as [ | p1 P]; try (inv wf_twin; fail).
     destruct P as [ | p2 P]; try (inv wf_twin; fail).
@@ -133,13 +136,13 @@ Proof.
       unfold twin_state.
       split.
       { 
-        rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-        rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-        apply eq_wom_update_m.
-        apply eq_wom_refl.
+        rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+        rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+        apply Ir.Config.eq_wom_update_m.
+        apply Ir.Config.eq_wom_refl.
       }
-      { repeat (rewrite Ir.Reordering.update_reg_and_incrpc_update_m).
-        repeat (rewrite Ir.Reordering.m_update_m).
+      { repeat (rewrite Ir.SmallStep.update_reg_and_incrpc_update_m).
+        repeat (rewrite Ir.Config.m_update_m).
         simpl.
         split. reflexivity.
         split. reflexivity.
@@ -195,6 +198,9 @@ Proof.
   { rewrite <- HCUR in HCUR0. congruence. }
 Qed.
       
+
+Import TwinExecutionAux.
+Import Ir.
 
 Ltac thats_it := apply twin_state_update_reg_and_incrpc;
             assumption.
@@ -1155,34 +1161,34 @@ Proof.
         rewrite HTWIN3.
         rewrite HTWIN4.
         split.
-        { rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-          rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-          eapply eq_wom_update_m.
+        { rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+          rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+          eapply Ir.Config.eq_wom_update_m.
 
-          eapply eq_wom_update_reg_and_incrpc. assumption.
+          eapply Ir.SmallStep.eq_wom_update_reg_and_incrpc. assumption.
         }
         split.
-        { rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-          rewrite Ir.Reordering.m_update_m.
-          rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-          rewrite Ir.Reordering.m_update_m.
+        { rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+          rewrite Ir.Config.m_update_m.
+          rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+          rewrite Ir.Config.m_update_m.
           simpl. reflexivity. }
         split.
-        { rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-          rewrite Ir.Reordering.m_update_m.
-          rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-          rewrite Ir.Reordering.m_update_m.
+        { rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+          rewrite Ir.Config.m_update_m.
+          rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+          rewrite Ir.Config.m_update_m.
           simpl. reflexivity. }
         split.
-        { rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-          rewrite Ir.Reordering.m_update_m.
-          rewrite Ir.Reordering.update_reg_and_incrpc_update_m.
-          rewrite Ir.Reordering.m_update_m.
+        { rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+          rewrite Ir.Config.m_update_m.
+          rewrite Ir.SmallStep.update_reg_and_incrpc_update_m.
+          rewrite Ir.Config.m_update_m.
           simpl. reflexivity. }
-        rewrite Ir.Reordering.m_update_reg_and_incrpc.
-        rewrite Ir.Reordering.m_update_reg_and_incrpc.
-        rewrite Ir.Reordering.m_update_m.
-        rewrite Ir.Reordering.m_update_m.
+        rewrite Ir.SmallStep.m_update_reg_and_incrpc.
+        rewrite Ir.SmallStep.m_update_reg_and_incrpc.
+        rewrite Ir.Config.m_update_m.
+        rewrite Ir.Config.m_update_m.
         simpl.
         split.
         { intros HH. destruct (HTWIN5 bid').

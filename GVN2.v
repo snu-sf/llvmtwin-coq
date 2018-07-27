@@ -11,6 +11,8 @@ Require Import Memory.
 Require Import State.
 Require Import LoadStore.
 Require Import SmallStep.
+Require Import SmallStepAux.
+Require Import SmallStepWf.
 Require Import Refinement.
 Require Import SmallStepRefinement.
 Require Import Reordering.
@@ -71,7 +73,7 @@ Proof.
       inv HEQPROP.
       inv H. inv H0. inv H. inv H0. inv H1.
       des_ifs.
-      rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+      rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
       unfold Ir.Config.get_val in HTRUE.
       rewrite Ir.Config.get_rval_update_rval_id in HTRUE; try assumption.
       unfold Ir.SmallStep.icmp_eq_ptr in Heq.
@@ -92,7 +94,7 @@ Proof.
       }
     }
     { rewrite <- HINST in HCUR. inv HCUR.
-      rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+      rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
       unfold Ir.Config.get_val in HTRUE.
       rewrite Ir.Config.get_rval_update_rval_id in HTRUE; try assumption.
       inv HTRUE.
@@ -116,45 +118,47 @@ Proof.
       (* singleton-ize get_derefs. *)
       (* preparing Memory.get s.. *)
       inv HWF.
-      symmetry in HOP1. apply wf_no_bogus_ptr in HOP1. inv HOP1.
-      symmetry in HOP2. apply wf_no_bogus_ptr in HOP2. inv HOP2.
+      symmetry in HOP1. apply wf_ptr in HOP1. inv HOP1.
+      exploit H. ss. intros HH. inv HH. inv H4.
+      symmetry in HOP2. apply wf_ptr in HOP2. inv HOP2.
+      exploit H4. ss. intros HH. inv HH. inv H8.
       (* Okay, start! op1 *)
       dup Heq0.
       eapply Ir.get_deref_log in Heq1; try eassumption.
-      destruct Heq1; try congruence. inv H3.
+      destruct Heq1; try congruence. inv H8.
       (* okay, next op2. *)
       dup Heq.
       eapply Ir.get_deref_log in Heq1; try eassumption.
-      destruct Heq1; try congruence. inv H3.
+      destruct Heq1; try congruence. inv H8.
       (* okay, time to get inbounds conditions. *)
       eapply Ir.get_deref_inv in Heq0.
       eapply Ir.get_deref_inv in Heq.
       repeat (rewrite andb_true_iff in *).
-      destruct Heq0. destruct H3. destruct Heq. destruct H6.
-      unfold Ir.MemBlock.inbounds in H5, H4, H8, H7.
+      destruct Heq0. destruct H8. destruct Heq. destruct H12.
+      unfold Ir.MemBlock.inbounds in H11, H10, H13, H14.
       (* Now, go toward contradiction. *)
       unfold Ir.SmallStep.icmp_eq_ptr_nondet_cond in HNONDET.
-      rewrite H, H2 in HNONDET.
+      rewrite H5, H9 in HNONDET.
       rewrite <- Nat.eqb_neq in HDIFFBLK. rewrite HDIFFBLK in HNONDET.
       unfold Ir.MemBlock.alive in *.
       destruct (Ir.MemBlock.r x3) as [beg1 end1].
-      simpl in H3. destruct end1; try congruence.
+      simpl in H8. destruct end1; try congruence.
       destruct (Ir.MemBlock.r x4) as [beg2 end2].
-      simpl in H6. destruct end2; try congruence.
+      simpl in H12. destruct end2; try congruence.
       rewrite orb_false_r in HNONDET.
       simpl in HNONDET.
       assert (Ir.MemBlock.n x3 <? x0 = false).
-      { rewrite Nat.ltb_ge. rewrite  Nat.leb_le in H5. omega. }
-      rewrite H9 in HNONDET.
+      { rewrite Nat.ltb_ge. rewrite Nat.leb_le in H11. omega. }
+      rewrite H15 in HNONDET.
       assert (Ir.MemBlock.n x4 <? x2 = false).
-      { rewrite Nat.ltb_ge. rewrite  Nat.leb_le in H7. omega. }
-      rewrite H10 in HNONDET.
+      { rewrite Nat.ltb_ge. rewrite Nat.leb_le in H13. omega. }
+      rewrite H16 in HNONDET.
       assert (x0 =? Ir.MemBlock.n x3 = false).
-      { rewrite Nat.eqb_neq. rewrite Nat.leb_le in H4. omega. }
-      rewrite H11 in HNONDET.
+      { rewrite Nat.eqb_neq. rewrite Nat.leb_le in H10. omega. }
+      rewrite H17 in HNONDET.
       assert (x2 =? Ir.MemBlock.n x4 = false).
-      { rewrite Nat.eqb_neq. rewrite Nat.leb_le in H7. omega. }
-      rewrite H12 in HNONDET.
+      { rewrite Nat.eqb_neq. rewrite Nat.leb_le in H13. omega. }
+      rewrite H18 in HNONDET.
       rewrite andb_false_r in HNONDET.
       simpl in HNONDET. congruence.
 

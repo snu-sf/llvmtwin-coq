@@ -11,6 +11,8 @@ Require Import Memory.
 Require Import State.
 Require Import LoadStore.
 Require Import SmallStep.
+Require Import SmallStepAux.
+Require Import SmallStepWf.
 Require Import Refinement.
 Require Import SmallStepRefinement.
 Require Import Reordering.
@@ -98,7 +100,7 @@ Proof.
       unfold Ir.SmallStep.gep in *.
       des_ifs.
       {
-        rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+        rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
         unfold Ir.Config.get_val in HTRUE.
         rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
         inv HTRUE.
@@ -106,7 +108,7 @@ Proof.
         rewrite Nat.eqb_eq in Heq3. congruence. assumption.
       }
       {
-        rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+        rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
         unfold Ir.Config.get_val in HTRUE.
         rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
         inv HTRUE.
@@ -177,7 +179,7 @@ Proof.
   rewrite twos_compl_twos_compl_add_OPAQUED_PTRSZ in HNEXT.
   inversion HNEXT.
   rewrite H1 in HTRUE.
-  rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+  rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
   unfold Ir.Config.get_val in HTRUE.
   rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
   inversion HTRUE.
@@ -240,7 +242,7 @@ Proof.
         { unfold Ir.SmallStep.inst_det_step in HNEXT.
           rewrite <- HINST in HNEXT.
           rewrite <- HOP2 in HNEXT. des_ifs.
-          rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+          rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
           unfold Ir.Config.get_val in HTRUE.
           rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
           inv HTRUE. assumption.
@@ -248,7 +250,7 @@ Proof.
         { unfold Ir.SmallStep.inst_det_step in HNEXT.
           rewrite <- HINST in HNEXT.
           rewrite <- HOP1 in HNEXT. des_ifs.
-          rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+          rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
           unfold Ir.Config.get_val in HTRUE.
           rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
           inv HTRUE. assumption.
@@ -271,12 +273,12 @@ Proof.
              exfalso; apply HVAL2; eexists; reflexivity).
         { eapply gep_helper; try eassumption. }
         { inv HNEXT.
-          rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+          rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
           unfold Ir.Config.get_val in HTRUE.
           rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
           inv HTRUE. assumption. }
         { inv HNEXT.
-          rewrite Ir.Reordering.get_val_update_reg_and_incrpc in HTRUE.
+          rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
           unfold Ir.Config.get_val in HTRUE.
           rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
           inv HTRUE. assumption. }

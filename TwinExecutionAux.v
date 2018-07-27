@@ -1991,7 +1991,7 @@ Proof.
   destruct HH as [HH1 [HH2 [HH3 [HH4 [HH5 [HH6 HH7]]]]]].
   (* get the disjointness criteria. *)
   inv HWF1.
-  clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_no_bogus_ptr wf_no_bogus_ptr_mem.
+  clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_ptr wf_ptr_mem.
   inv wf_m.
   dup HGET1.
   apply Ir.Memory.get_In with (blks := Ir.Memory.blocks (Ir.Config.m st1)) in HGET0;
@@ -2177,8 +2177,8 @@ Proof.
     destruct HINB2.
     assert (disjoint_range P1 P2 = true).
     { inv HWF1.
-      clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_no_bogus_ptr_mem.
-      clear wf_no_bogus_ptr.
+      clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_ptr_mem.
+      clear wf_ptr.
       rewrite Ir.MemBlock.P_ranges_hd_P0_range.
       rewrite Ir.MemBlock.P_ranges_hd_P0_range.
       eapply Ir.Memory.disjoint_range_P0_range with (m := Ir.Config.m st1); try eassumption.
@@ -2230,7 +2230,7 @@ Proof.
   destruct HH as [HH1 [HH2 [HH3 [HH4 [HH5 [HH6 HH7]]]]]].
   (* get the disjointness criteria. *)
   inv HWF1.
-  clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_no_bogus_ptr wf_no_bogus_ptr_mem.
+  clear wf_cid_to_f wf_cid_to_f2 wf_stack wf_ptr wf_ptr_mem.
   inv wf_m.
   dup HGET1.
   apply Ir.Memory.get_In with (blks := Ir.Memory.blocks (Ir.Config.m st1)) in HGET0;
@@ -2364,9 +2364,5 @@ Proof.
   { inv HWF1. assumption. }
   { congruence. }
 Qed.
-
-
-
-
 
 End Ir.
