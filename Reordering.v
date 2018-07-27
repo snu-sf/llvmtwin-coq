@@ -11,6 +11,8 @@ Require Import Memory.
 Require Import State.
 Require Import LoadStore.
 Require Import SmallStep.
+Require Import SmallStepAux.
+Require Import SmallStepWf.
 Require Import Behaviors.
 
 Module Ir.

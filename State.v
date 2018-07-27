@@ -442,6 +442,42 @@ Proof.
   split; congruence. 
 Qed.
 
+Lemma eq_wom_refl:
+  forall st1,
+    eq_wom st1 st1.
+Proof.
+  intros.
+  split.
+  { apply Ir.Stack.eq_refl.  }
+  { split; congruence. }
+Qed.
+
+Lemma eq_wom_sym:
+  forall st1 st2 (HEQ:eq_wom st1 st2),
+    eq_wom st2 st1.
+Proof.
+  intros.
+  inv HEQ.
+  inv H0.
+  split.
+  { apply Ir.Stack.eq_symm. eassumption. }
+  { split; congruence. }
+Qed.
+
+Lemma eq_wom_update_m:
+  forall st1 st2 (HEQ:eq_wom st1 st2) m1 m2,
+    eq_wom (update_m st1 m1) (update_m st2 m2).
+Proof.
+  intros.
+  unfold update_m.
+  inv HEQ.
+  inv H0.
+  unfold eq_wom.
+  simpl.
+  split. assumption.
+  split; assumption.
+Qed.
+
 Theorem eq_update_rval:
   forall (c1 c2:t) (HEQ:eq c1 c2) r v,
     eq (update_rval c1 r v) (update_rval c2 r v).

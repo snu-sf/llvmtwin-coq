@@ -9,11 +9,14 @@ all:
 	coqc Behaviors.v
 	coqc WellTyped.v
 	coqc SmallStep.v
+	coqc SmallStepAux.v
+	coqc SmallStepWf.v
 	coqc SmallStepTest.v
 	coqc Refinement.v
 	coqc SmallStepRefinement.v
 	coqc Reordering.v
 	coqc TwinExecution.v
+	coqc TwinExecutionAux.v
 	coqc TwinExecutionProof.v
 	coqc GVN1.v
 	coqc GVN2.v
