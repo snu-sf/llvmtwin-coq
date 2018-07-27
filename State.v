@@ -258,6 +258,27 @@ Definition get_val (c:t) (o:Ir.op): option Ir.val:=
   end.
 
 
+
+(* Wellformedness of a pointer value. *)
+Definition ptr_wf (p:Ir.ptrval) (m:Ir.Memory.t):=
+  (forall l ofs,
+      p = Ir.plog l ofs ->
+      (ofs < Ir.MEMSZ /\ exists mb, Ir.Memory.get m l = Some mb))
+  /\
+  (forall ofs I cid,
+      p = Ir.pphy ofs I cid ->
+      ofs < Ir.MEMSZ).
+
+Definition ptr_in_byte (p:Ir.ptrval) ofs (b:Ir.Byte.t) :=
+  Ir.Bit.baddr p ofs = b.(Ir.Byte.b0) \/
+  Ir.Bit.baddr p ofs = b.(Ir.Byte.b1) \/
+  Ir.Bit.baddr p ofs = b.(Ir.Byte.b2) \/
+  Ir.Bit.baddr p ofs = b.(Ir.Byte.b3) \/
+  Ir.Bit.baddr p ofs = b.(Ir.Byte.b4) \/
+  Ir.Bit.baddr p ofs = b.(Ir.Byte.b5) \/
+  Ir.Bit.baddr p ofs = b.(Ir.Byte.b6) \/
+  Ir.Bit.baddr p ofs = b.(Ir.Byte.b7).
+
 (* Wellformedness of a program state. *)
 Structure wf (c:t) := mk_wf
   {
@@ -279,31 +300,18 @@ Structure wf (c:t) := mk_wf
                      (HIN2:List.In (curcid, funid) c.(cid_to_f))
                      (HF:Some f = Ir.IRModule.getf funid md),
         Ir.IRFunction.valid_pc curpc f = true;
-    (* wf_no_bogus_ptr: regfile has no pointer value which has
-       bogus block id. *)
-    wf_no_bogus_ptr:
-      forall op l ofs
-             (HGETVAL:get_val c op = Some (Ir.ptr (Ir.plog l ofs))),
-        exists mb, Ir.Memory.get c.(m) l = Some mb;
-    (* wf_no_bogus_logofs: regfile has no pointer value which has
-       log ofs larger than MEMSZ. *)
-    wf_no_bogus_logofs:
-      forall op l ofs
-             (HGETVAL:get_val c op = Some (Ir.ptr (Ir.plog l ofs))),
-        ofs < Ir.MEMSZ;
-    (* wf_no_bogus_phyofs: regfile has no pointer value which has
-       phy ofs larger than MEMSZ. *)
-    wf_no_bogus_phyofs:
-      forall op ofs I cid
-             (HGETVAL:get_val c op = Some (Ir.ptr (Ir.pphy ofs I cid))),
-        ofs < Ir.MEMSZ;
-    (* wf_no_bogus_ptr_mem: memory has no pointer value which has
-       bogus block id. *)
-    wf_no_bogus_ptr_mem:
-      forall p retty l ofs
-             (HGETVAL:Ir.load_val c.(m) p retty = Ir.ptr (Ir.plog l ofs)),
-        l < c.(m).(Ir.Memory.fresh_bid)
-    (* WIP - more properties will be added later. *)
+    (* wf_ptr: regfile has only wellformed ptr *)
+    wf_ptr:
+      forall op p
+             (HGETVAL:get_val c op = Some (Ir.ptr p)),
+        ptr_wf p c.(m);
+    (* wf_ptr_mem: memory has only wellformed ptr. *)
+    wf_ptr_mem:
+      forall bid mb byt ofs p
+             (HBLK:Some mb = Ir.Memory.get c.(m) bid)
+             (HBYTE:List.In byt (Ir.MemBlock.c mb))
+             (HBIT:ptr_in_byte p ofs byt),
+        ptr_wf p c.(m)
   }.
 
 
@@ -760,6 +768,26 @@ Lemma m_update_pc:
 Proof.
   unfold update_pc. intros.
   des_ifs.
+Qed.
+
+Lemma eq_wopc_update_m:
+  forall m st1 st2 (HEQ:eq_wopc st1 st2),
+    eq_wopc (update_m st1 m) (update_m st2 m).
+Proof.
+  intros.
+  inv HEQ.
+  desH H0.
+  split.
+  - unfold update_m. reflexivity.
+  - split. assumption. split. assumption. assumption.
+Qed.
+
+Lemma m_update_m:
+  forall st m0,
+    m (update_m st m0) = m0.
+Proof.
+  intros.
+  unfold update_m. reflexivity.
 Qed.
 
 Lemma get_rval_update_rval_id:

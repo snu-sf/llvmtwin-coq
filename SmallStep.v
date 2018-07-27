@@ -654,16 +654,379 @@ Inductive sstep: Ir.Config.t -> step_res -> Prop :=
            (HNOT_PHI_ANYMORE:is_pc_phi pc'' = false),
       sstep st0 (sr_success Ir.e_none st'').
 
+End SMALLSTEP.
+
+
+(****************************************************
+        Lemmas about aux. functions.
+ ****************************************************)
+
+Lemma get_val_incrpc:
+  forall md st r,
+    Ir.Config.get_val (incrpc md st) r = Ir.Config.get_val st r.
+Proof.
+  intros.
+  unfold Ir.Config.get_val.
+  unfold incrpc.
+  unfold Ir.Config.cur_fdef_pc.
+  unfold Ir.Config.get_rval.
+  unfold Ir.Config.update_pc.
+  simpl.
+  des_ifs; try congruence.
+  simpl in Heq. inv Heq. try congruence.
+Qed.
+
+Lemma incrpc_update_rval:
+  forall md st r v,
+    incrpc md (Ir.Config.update_rval st r v) =
+    Ir.Config.update_rval (incrpc md st) r v.
+Proof.
+  intros.
+  unfold incrpc.
+  rewrite Ir.Config.cur_fdef_pc_update_rval.
+  des_ifs.
+  unfold Ir.Config.update_rval.
+  destruct (Ir.Config.s st) eqn:Hs.
+  - unfold Ir.Config.update_pc at 2. repeat (rewrite Hs). reflexivity.
+  - unfold Ir.Config.update_pc at 2. repeat (rewrite Hs).
+    destruct p1 eqn:Hp1.
+    destruct p2 eqn:Hp2.
+    simpl. unfold Ir.Config.update_pc at 1. simpl.
+    unfold Ir.Config.update_pc. repeat (rewrite Hs). simpl.
+    reflexivity.
+Qed.
+
+Lemma cur_inst_update_reg_and_incrpc:
+  forall md st r v,
+    Ir.Config.cur_inst md (update_reg_and_incrpc md st r v) =
+    Ir.Config.cur_inst md (incrpc md st).
+Proof.
+  intros.
+  unfold Ir.Config.cur_inst.
+  unfold update_reg_and_incrpc.
+  rewrite incrpc_update_rval.
+  rewrite Ir.Config.cur_fdef_pc_update_rval.
+  reflexivity.
+Qed.
+
+Lemma m_update_reg_and_incrpc:
+  forall md st r v,
+    Ir.Config.m (update_reg_and_incrpc md st r v) =
+    Ir.Config.m st.
+Proof.
+  intros.
+  unfold update_reg_and_incrpc.
+  unfold incrpc.
+  unfold Ir.Config.update_pc.
+  unfold Ir.Config.update_rval.
+  des_ifs.
+Qed.
+
+Lemma m_incrpc:
+  forall md st,
+    Ir.Config.m (incrpc md st) =
+    Ir.Config.m st.
+Proof.
+  intros.
+  unfold incrpc.
+  unfold Ir.Config.update_pc.
+  unfold Ir.Config.update_rval.
+  des_ifs.
+Qed.
+
+Lemma incrpc_update_reg_and_incrpc:
+  forall md st r v,
+    incrpc md (update_reg_and_incrpc md st r v) =
+    update_reg_and_incrpc md (incrpc md st) r v.
+Proof.
+  intros.
+  unfold update_reg_and_incrpc.
+  rewrite incrpc_update_rval.
+  reflexivity.
+Qed.
+
+Lemma get_val_const_update_reg_and_incrpc:
+  forall md st r v c,
+    Ir.Config.get_val (update_reg_and_incrpc md st r v) (Ir.opconst c) =
+    Ir.Config.get_val st (Ir.opconst c).
+Proof.
+  intros.
+  unfold Ir.Config.get_val.
+  des_ifs.
+Qed.
+
+Lemma get_val_independent:
+  forall md r1 r2 (HNEQ:r1 <> r2) st v,
+    Ir.Config.get_val (update_reg_and_incrpc md st r2 v) (Ir.opreg r1) =
+    Ir.Config.get_val st (Ir.opreg r1).
+Proof.
+  intros.
+  unfold update_reg_and_incrpc.
+  rewrite get_val_incrpc.
+  unfold Ir.Config.get_val.
+  unfold Ir.Config.update_rval.
+  unfold Ir.Config.get_rval.
+  des_ifs.
+  congruence. simpl in Heq. inv Heq.
+  unfold Ir.Regfile.update. unfold Ir.Regfile.get.
+  simpl. apply not_eq_sym in HNEQ. rewrite <- PeanoNat.Nat.eqb_neq in HNEQ.
+  rewrite HNEQ. reflexivity.
+Qed.
+
+Lemma get_val_independent2:
+  forall md r2 opv st v
+         (HNEQ:opv <> Ir.opreg r2),
+    Ir.Config.get_val (update_reg_and_incrpc md st r2 v) opv =
+    Ir.Config.get_val st opv.
+Proof.
+  intros.
+  destruct opv.
+  - rewrite get_val_const_update_reg_and_incrpc. reflexivity.
+  - assert (r <> r2).
+    { intros H2. rewrite H2 in HNEQ. apply HNEQ. reflexivity. }
+    apply get_val_independent. assumption.
+Qed.
+
+Lemma config_eq_wopc_incrpc:
+  forall md st1 st2
+         (HEQ:Ir.Config.eq_wopc st1 st2),
+    Ir.Config.eq_wopc
+      (incrpc md st1) st2.
+Proof.
+  intros.
+  assert (HEQ_copy := HEQ).
+  unfold Ir.Config.eq_wopc in HEQ.
+  desH HEQ.
+  split.
+  - rewrite m_incrpc.
+    assumption.
+  - split.
+    + unfold incrpc.
+      des_ifs; unfold Ir.Config.update_pc.
+      des_ifs.
+      * inv HEQ0. rewrite Heq1. constructor.
+      * inv HEQ0. simpl. simpl in H2. desH H2.
+        destruct y. destruct p2.
+        unfold Ir.Stack.eq_wopc. constructor.
+        simpl in *. split. assumption. assumption.
+        assumption.
+    + split.
+      * unfold incrpc.
+        des_ifs.
+        unfold Ir.Config.update_pc.
+        des_ifs.
+      * unfold incrpc.
+        des_ifs.
+        unfold Ir.Config.update_pc.
+        des_ifs.
+Qed.
+
+Lemma incrpc_update_m:
+  forall md st m,
+         incrpc md (Ir.Config.update_m st m) =
+         Ir.Config.update_m (incrpc md st) m.
+Proof.
+  intros.
+  unfold incrpc.
+  rewrite Ir.Config.cur_fdef_pc_update_m.
+  des_ifs. rewrite Ir.Config.update_pc_update_m. reflexivity.
+Qed.
+
+Lemma update_reg_and_incrpc_update_m:
+  forall md st m r v,
+    update_reg_and_incrpc md (Ir.Config.update_m st m) r v=
+    Ir.Config.update_m (update_reg_and_incrpc md st r v) m.
+Proof.
+  intros.
+  unfold update_reg_and_incrpc.
+  rewrite Ir.Config.update_rval_update_m.
+  rewrite incrpc_update_m. reflexivity.
+Qed.
+
+Lemma cid_to_f_update_reg_and_incrpc:
+  forall md (st:Ir.Config.t) r v,
+    Ir.Config.cid_to_f (update_reg_and_incrpc md st r v) =
+    Ir.Config.cid_to_f st.
+Proof.
+  intros.
+  unfold update_reg_and_incrpc.
+  unfold incrpc.
+  rewrite Ir.Config.cur_fdef_pc_update_rval.
+  unfold Ir.Config.update_rval.
+  unfold Ir.Config.update_pc.
+  des_ifs.
+Qed.
+
+Lemma cid_fresh_update_reg_and_incrpc:
+  forall md (st:Ir.Config.t) r v,
+    Ir.Config.cid_fresh (update_reg_and_incrpc md st r v) =
+    Ir.Config.cid_fresh st.
+Proof.
+  intros.
+  unfold update_reg_and_incrpc.
+  unfold incrpc.
+  rewrite Ir.Config.cur_fdef_pc_update_rval.
+  unfold Ir.Config.update_rval.
+  unfold Ir.Config.update_pc.
+  des_ifs.
+Qed.
+
+Lemma stack_eq_wopc_incrpc:
+  forall st1 st2  (md1 md2:Ir.IRModule.t)
+         (HEQ:Ir.Stack.eq_wopc (Ir.Config.s st1) (Ir.Config.s st2)),
+    Ir.Stack.eq_wopc (Ir.Config.s (@incrpc md1 st1))
+                  (Ir.Config.s (@incrpc md2 st2)).
+Proof.
+  intros.
+  unfold incrpc.
+  des_ifs.
+  - apply Ir.Config.stack_eq_wopc_update_pc1.
+    apply Ir.Config.stack_eq_wopc_update_pc2. assumption.
+  - apply Ir.Config.stack_eq_wopc_update_pc1. assumption.
+  - apply Ir.Config.stack_eq_wopc_update_pc1. assumption.
+  - apply Ir.Config.stack_eq_wopc_update_pc2. assumption.
+  - apply Ir.Config.stack_eq_wopc_update_pc2. assumption.
+Qed.
+
+
+Lemma eq_wopc_update_reg_and_incrpc_update_m_reorder:
+  forall md1 md2 st r v m,
+    Ir.Config.eq_wopc
+      (update_reg_and_incrpc md1 (Ir.Config.update_m st m) r v)
+      (Ir.Config.update_m (update_reg_and_incrpc md2 st r v) m).
+Proof.
+  intros.
+  split.
+  - rewrite m_update_reg_and_incrpc.
+    unfold Ir.Config.update_m. reflexivity.
+  - split.
+    {
+      rewrite update_reg_and_incrpc_update_m.
+      unfold Ir.Config.update_m. simpl.
+      unfold update_reg_and_incrpc.
+      apply stack_eq_wopc_incrpc. apply Ir.Stack.eq_wopc_refl.
+    }
+    { split. rewrite update_reg_and_incrpc_update_m. unfold Ir.Config.update_m. simpl.
+      repeat (rewrite cid_to_f_update_reg_and_incrpc). reflexivity.
+      rewrite update_reg_and_incrpc_update_m. unfold Ir.Config.update_m. simpl.
+      repeat (rewrite cid_fresh_update_reg_and_incrpc). reflexivity. }
+Qed.
+
+Lemma eq_wopc_update_reg_and_incrpc_reorder:
+  forall md1 md2 st r1 r2 v1 v2
+         (HNEQ:r2 <> r1),
+    Ir.Config.eq_wopc
+      (update_reg_and_incrpc md1
+        (update_reg_and_incrpc md1 st r1 v1) r2 v2)
+      (update_reg_and_incrpc md2
+        (update_reg_and_incrpc md2 st r2 v2) r1 v1).
+Proof.
+  intros.
+  unfold update_reg_and_incrpc.
+  apply config_eq_wopc_incrpc.
+  rewrite <- incrpc_update_rval.
+  rewrite <- incrpc_update_rval.
+  apply config_eq_wopc_incrpc.
+  apply Ir.Config.eq_wopc_symm.
+  apply config_eq_wopc_incrpc.
+  apply config_eq_wopc_incrpc.
+  split.
+  { unfold Ir.Config.update_rval. des_ifs. }
+  split.
+  { unfold Ir.Config.update_rval. des_ifs; simpl in *.
+    - rewrite Heq1. constructor.
+    - inv Heq. inv Heq1.
+      unfold Ir.Regfile.update.
+      unfold Ir.Stack.eq.
+      constructor.
+      + simpl. split. reflexivity.
+        unfold Ir.Regfile.eq.
+        intros.
+        unfold Ir.Regfile.get.
+        simpl.
+        des_ifs; try congruence.
+        * rewrite PeanoNat.Nat.eqb_eq in *.
+          congruence.
+      + clear Heq0.
+        induction t3. constructor. constructor.
+        split. reflexivity. apply Ir.Regfile.eq_refl.
+        apply IHt3.
+  }
+  split.
+  { unfold Ir.Config.update_rval.
+    unfold Ir.Config.cid_to_f. des_ifs.
+  }
+  { unfold Ir.Config.update_rval.
+    unfold Ir.Config.cid_fresh. des_ifs.
+  }
+Qed.
+
+Lemma update_pc_incrpc:
+  forall md st p,
+    Ir.Config.update_pc (incrpc md st) p =
+    Ir.Config.update_pc st p.
+Proof.
+  intros.
+  unfold incrpc.  
+  unfold Ir.Config.update_pc.
+  des_ifs; simpl in *.
+  - rewrite Heq2 in Heq. congruence.
+  - inv Heq.  reflexivity.
+Qed.
+
+Lemma cur_inst_incrpc_update_m:
+  forall md m st,
+    Ir.Config.cur_inst md (incrpc md (Ir.Config.update_m st m)) =
+    Ir.Config.cur_inst md (incrpc md st).
+Proof.
+  intros.
+  rewrite incrpc_update_m.
+  rewrite Ir.Config.cur_inst_update_m.
+  reflexivity.
+Qed.
+
+Lemma get_val_update_reg_and_incrpc:
+  forall md st r v o,
+    Ir.Config.get_val (update_reg_and_incrpc md st r v) o =
+    Ir.Config.get_val (Ir.Config.update_rval st r v) o.
+Proof.
+  intros.
+  unfold update_reg_and_incrpc.
+  rewrite get_val_incrpc. reflexivity.
+Qed.
+
+Lemma m_incrpc_update_m:
+  forall md' st t,
+    Ir.Config.m (incrpc md' (Ir.Config.update_m st t)) = t.
+Proof.
+  intros.
+  rewrite incrpc_update_m.
+  reflexivity.
+Qed.
+
+Lemma get_val_incrpc_update_m:
+  forall md' st op11 t,
+    Ir.Config.get_val (incrpc md' (Ir.Config.update_m st t)) op11 =
+    Ir.Config.get_val st op11.
+Proof.
+  intros.
+  rewrite incrpc_update_m.
+  rewrite Ir.Config.get_val_update_m.
+  rewrite get_val_incrpc.
+  reflexivity.
+Qed.
+
+
+
 
 (****************************************************
         Theorems about sstep of instruction.
  ****************************************************)
 
-
-Lemma incrpc_wf:
-  forall c c'
+Theorem incrpc_wf:
+  forall md c c'
          (HWF:Ir.Config.wf md c)
-         (HC':c' = incrpc c),
+         (HC':c' = incrpc md c),
     Ir.Config.wf md c'.
 Proof.
   (* High-level proof: incrpc changes stack frame only, and
@@ -713,17 +1076,14 @@ Proof.
            inversion Heqofdef'. rewrite <- H1. congruence.
          -- apply wf_stack with (curcid := curcid) (funid := funid0) (curregfile := curregfile).
             right. assumption. assumption. assumption.
-      * simpl. intros. apply wf_no_bogus_ptr with (op := op) (ofs := ofs).
-        unfold Ir.Config.get_val in HGETVAL.
-        unfold Ir.Config.get_rval in HGETVAL. simpl in HGETVAL.
-        unfold Ir.Config.get_val. unfold Ir.Config.get_rval.
-        rewrite <- Heqs'. assumption.
-      * intros. eapply wf_no_bogus_logofs with (op := op). rewrite <- HGETVAL.
-        unfold Ir.Config.get_val. unfold Ir.Config.get_rval. des_ifs.
-      * intros. eapply wf_no_bogus_phyofs with (op := op). rewrite <- HGETVAL.
-        unfold Ir.Config.get_val. unfold Ir.Config.get_rval. des_ifs.
-      * simpl. intros. eapply wf_no_bogus_ptr_mem.
-        eassumption.
+      * simpl. intros.
+        eapply wf_ptr. erewrite <- get_val_incrpc with (md := md).
+        unfold incrpc. unfold Ir.Config.cur_fdef_pc. rewrite <- Heqs'.
+        rewrite <- Heqofunid. rewrite <- Heqofdef'.
+        rewrite <- Heqpc_next. unfold Ir.Config.update_pc.
+        rewrite <- Heqs'. eassumption.
+      * simpl. intros. eapply wf_ptr_mem.
+        eassumption. eassumption. eassumption.
     + congruence.
   - congruence.
 Qed.
@@ -731,15 +1091,10 @@ Qed.
 
 
 Theorem update_rval_wf:
-  forall c c' r v
+  forall md c c' r v
          (HWF:Ir.Config.wf md c)
          (HC':c' = Ir.Config.update_rval c r v)
-         (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
-             exists mb, Ir.Memory.get (Ir.Config.m c) l = Some mb)
-         (HNOBOGUSLOGOFS:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
-             o < Ir.MEMSZ)
-         (HNOBOGUSPHYOFS:forall o I cid (HPTR:v = Ir.ptr (Ir.pphy o I cid)),
-             o < Ir.MEMSZ),
+         (HPTRWF:forall p, v = Ir.ptr p -> Ir.Config.ptr_wf p (Ir.Config.m c)),
     Ir.Config.wf md c'.
 Proof.
   intros.
@@ -764,67 +1119,31 @@ Proof.
       unfold Ir.Config.get_rval in HGETVAL.
       simpl in HGETVAL.
       destruct op eqn:Hop.
-      + apply wf_no_bogus_ptr with (op := Ir.opconst c0) (ofs := ofs).
+      + eapply wf_ptr with (op := op). unfold Ir.Config.get_val. 
         des_ifs.
       + destruct (Nat.eqb r r0) eqn:Hreg.
-        { apply HNOBOGUSPTR with (o := ofs).
-          unfold Ir.Regfile.get in HGETVAL.
-          unfold Ir.Regfile.update in HGETVAL.
-          simpl in HGETVAL. rewrite Hreg in HGETVAL.
-          inv HGETVAL. reflexivity. }
-        { unfold Ir.Regfile.get in HGETVAL.
-          unfold Ir.Regfile.update in HGETVAL.
-          simpl in HGETVAL. rewrite Hreg in HGETVAL.
-          apply wf_no_bogus_ptr with (op := Ir.opreg r0) (ofs := ofs).
-          unfold Ir.Config.get_val.
-          unfold Ir.Config.get_rval. rewrite Hs. unfold Ir.Regfile.get.
-          assumption.
-        }
-    - (* no-bogus-logofs *)
-      intros.
-      unfold Ir.Config.get_val in HGETVAL. des_ifs. apply Ir.MEMSZ_pos.
-      destruct (Nat.eqb r r0) eqn:HEQ.
-      { rewrite PeanoNat.Nat.eqb_eq in HEQ. subst r.
-        unfold Ir.Config.get_rval in HGETVAL. simpl in HGETVAL.
-        rewrite Ir.Regfile.get_update in HGETVAL. inv HGETVAL.
-        eapply HNOBOGUSLOGOFS. reflexivity. }
-      { eapply wf_no_bogus_logofs with (op := Ir.opreg r0).
-        rewrite <- HGETVAL. unfold Ir.Config.get_val.
-        unfold Ir.Config.get_rval. simpl. des_ifs.
-        rewrite PeanoNat.Nat.eqb_neq in HEQ.
-        rewrite Ir.Regfile.get_update2; try congruence. }
-    - (* no-bogus-phyofs *) intros.
-      unfold Ir.Config.get_val in HGETVAL. des_ifs. apply Ir.MEMSZ_pos.
-      destruct (Nat.eqb r r0) eqn:HEQ.
-      { rewrite PeanoNat.Nat.eqb_eq in HEQ. subst r.
-        unfold Ir.Config.get_rval in HGETVAL. simpl in HGETVAL.
-        rewrite Ir.Regfile.get_update in HGETVAL. inv HGETVAL.
-        eapply HNOBOGUSPHYOFS. reflexivity. }
-      { eapply wf_no_bogus_phyofs with (op := Ir.opreg r0).
-        rewrite <- HGETVAL. unfold Ir.Config.get_val.
-        unfold Ir.Config.get_rval. simpl. des_ifs.
-        rewrite PeanoNat.Nat.eqb_neq in HEQ.
-        rewrite Ir.Regfile.get_update2; try congruence. }
+        { apply HPTRWF with (p := p).
+          rewrite Nat.eqb_eq in Hreg. subst r0.
+          rewrite Ir.Regfile.get_update in HGETVAL. congruence. }
+        { rewrite Nat.eqb_neq in Hreg.
+          rewrite Ir.Regfile.get_update2 in HGETVAL; try congruence.
+          eapply wf_ptr with (op := Ir.opreg r0).
+          unfold Ir.Config.get_val. unfold Ir.Config.get_rval.
+          des_ifs. }
   }
 Qed.
 
 Theorem update_reg_and_incrpc_wf:
-  forall c c' v r
+  forall md c c' v r
          (HWF:Ir.Config.wf md c)
-         (HC':c' = update_reg_and_incrpc c r v)
-         (HNOBOGUSPTR:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
-             exists mb, Ir.Memory.get (Ir.Config.m c) l = Some mb)
-         (HNOBOGUSLOGOFS:forall l o (HPTR:v = Ir.ptr (Ir.plog l o)),
-             o < Ir.MEMSZ)
-         (HNOBOGUSPHYOFS:forall o I cid (HPTR:v = Ir.ptr (Ir.pphy o I cid)),
-             o < Ir.MEMSZ),
+         (HC':c' = update_reg_and_incrpc md c r v)
+         (HPTRWF:forall p, v = Ir.ptr p -> Ir.Config.ptr_wf p (Ir.Config.m c)),
     Ir.Config.wf md c'.
 Proof.
   intros.
   unfold update_reg_and_incrpc in HC'.
   assert (Ir.Config.wf md (Ir.Config.update_rval c r v)).
-  { eapply update_rval_wf. eassumption. reflexivity.  eassumption.
-    eassumption. eassumption. }
+  { eapply update_rval_wf. eassumption. reflexivity.  eassumption. }
   rewrite HC'.
   eapply incrpc_wf.
   eapply H. reflexivity.
@@ -832,9 +1151,9 @@ Qed.
 
 
 Theorem t_step_wf:
-  forall c c' e
+  forall md c c' e
          (HWF:Ir.Config.wf md c)
-         (HSTEP:t_step c = sr_success e c'),
+         (HSTEP:t_step md c = sr_success e c'),
     Ir.Config.wf md c'.
 Proof.
   intros.
@@ -878,13 +1197,7 @@ Proof.
     }
     { simpl. intros.
       rewrite Ir.Config.m_update_pc. rewrite Ir.Config.get_val_update_pc in HGETVAL.
-      eapply wf_no_bogus_ptr. eassumption. }
-    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
-      eapply wf_no_bogus_logofs;
-                                                      eassumption. }
-    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
-      eapply wf_no_bogus_phyofs;
-                                                      eassumption. }
+      eapply wf_ptr. eassumption. }
   }
   { unfold br in HSTEP.
     des_ifs.
@@ -923,13 +1236,7 @@ Proof.
     }
     { simpl. intros.
       rewrite Ir.Config.m_update_pc. rewrite Ir.Config.get_val_update_pc in HGETVAL.
-      eapply wf_no_bogus_ptr. eassumption. }
-    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
-      eapply wf_no_bogus_logofs;
-                                                      eassumption. }
-    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
-      eapply wf_no_bogus_phyofs;
-                                                      eassumption. }
+      eapply wf_ptr. eassumption. }
   }
   { unfold br in HSTEP.
     des_ifs.
@@ -968,13 +1275,7 @@ Proof.
     }
     { simpl. intros.
       rewrite Ir.Config.m_update_pc. rewrite Ir.Config.get_val_update_pc in HGETVAL.
-      eapply wf_no_bogus_ptr. eassumption. }
-    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
-      eapply wf_no_bogus_logofs;
-                                                      eassumption. }
-    { intros. rewrite Ir.Config.get_val_update_pc in HGETVAL.
-      eapply wf_no_bogus_phyofs;
-                                                      eassumption. }
+      eapply wf_ptr. eassumption. }
   }
 Qed.
 
@@ -995,8 +1296,8 @@ Ltac try_wf :=
                 try reflexivity; try congruence; fail).
 
 Lemma no_mem_change_after_incrpc:
-  forall c,
-    Ir.Config.m c = Ir.Config.m (incrpc c).
+  forall md c,
+    Ir.Config.m c = Ir.Config.m (incrpc md c).
 Proof.
   intros.
   unfold incrpc.
@@ -1008,8 +1309,8 @@ Proof.
 Qed.
 
 Lemma no_mem_change_after_update:
-  forall c r v,
-    Ir.Config.m c = Ir.Config.m (update_reg_and_incrpc c r v).
+  forall md c r v,
+    Ir.Config.m c = Ir.Config.m (update_reg_and_incrpc md c r v).
 Proof.
   intros.
   unfold update_reg_and_incrpc.
@@ -1022,11 +1323,11 @@ Qed.
 Ltac thats_it2 := apply no_mem_change_after_update.
 
 Lemma changes_mem_spec_det:
-  forall c c' i e
+  forall md c c' i e
          (HWF:Ir.Config.wf md c)
          (HCUR:Some i = Ir.Config.cur_inst md c)
          (HNOMEMCHG:changes_mem i = false)
-         (HNEXT:Some (sr_success e c') = inst_det_step c),
+         (HNEXT:Some (sr_success e c') = inst_det_step md c),
     c.(Ir.Config.m) = c'.(Ir.Config.m).
 Proof.
     intros.
@@ -1058,16 +1359,16 @@ Qed.
    changed after inst_step.
    This includes ptrtoint/inttoptr/psub/gep/icmp. *)
 Theorem changes_mem_spec:
-  forall c i c' e
+  forall md c i c' e
          (HWF:Ir.Config.wf md c)
          (HCUR:Some i = Ir.Config.cur_inst md c)
          (HNOMEMCHG:changes_mem i = false)
-         (HSTEP:inst_step c (sr_success e c')),
+         (HSTEP:inst_step md c (sr_success e c')),
     c.(Ir.Config.m) = c'.(Ir.Config.m).
 Proof.
   intros.
   inversion HSTEP.
-  - eapply changes_mem_spec_det. assumption.
+  - eapply changes_mem_spec_det. eassumption.
     eassumption. assumption. eassumption.
   - (* malloc, NULL *)
     apply no_mem_change_after_update.
@@ -1077,8 +1378,6 @@ Proof.
   - (* iicmp_eq, nondet *) apply no_mem_change_after_update.
   - (* icmp_ule, nondet *) apply no_mem_change_after_update.
 Qed.
-
-End SMALLSTEP.
 
 End SmallStep.
 
