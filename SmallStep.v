@@ -364,7 +364,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         match retty with
         | Ir.ptrty retty =>
           match (Ir.Config.get_val c opint) with
-          | Some (Ir.num n) => Ir.ptr (Ir.pphy n nil None)
+          | Some (Ir.num n) => Ir.ptr (Ir.pphy (twos_compl n Ir.OPAQUED_PTRSZ) nil None)
           | _ => Ir.poison
           end
         | _ => Ir.poison
