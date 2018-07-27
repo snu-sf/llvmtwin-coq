@@ -49,8 +49,8 @@ This is a Coq formalization of OOPSLA'18 LLVM memory model.
 
 - Proof of a property of a guessed address (sec. 4.11): [TwinExecutionProof.v](TwinExecutionProof.v)
     - Theorem `malloc_creates_twin_state` states that malloc either returns a NULL pointer, or it creates a twin state.
-    - Theorem `twin_execution` states that 'twin-state-ness' is preserved if the block is not observed.
-    - Theorem `access_from_guessed_pointer_fails` states that if a guessed pointer accesses a block, then the access fails at the twin state.
+    - Theorem `twin_execution` states that 'twin-state-ness' is preserved if the block is not observed and no memory access through a guessed pointer is made.
+    - Theorem `access_from_guessed_pointer_fails` states that if a guessed pointer accesses a block at state st1, then the access fails at twin state st2.
 
 - Reordering of interested instructions: [Reordering.v](Reordering.v) 
     - This proves that ptrtoint/inttoptr/getelementptr/icmp eq/icmp ule/psub can be freely reordered with respect to malloc/free.
