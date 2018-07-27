@@ -24,7 +24,7 @@ Module GVN2.
    If p and q are both logical pointers, and
    either they point to the same block or
    they are both dereferenceable. *)
-Definition eqprop_valid (m:Ir.Memory.t) (p q:Ir.val) :=
+Definition eqprop_valid2 (m:Ir.Memory.t) (p q:Ir.val) :=
   exists l1 o1 l2 o2,
     p = Ir.ptr (Ir.plog l1 o1) /\ q = Ir.ptr (Ir.plog l2 o2) /\
     (l1 = l2 \/ (* they are logical ptrs on the same block, or *)
@@ -34,20 +34,20 @@ Definition eqprop_valid (m:Ir.Memory.t) (p q:Ir.val) :=
 
 
 (*********************************************************
- Critical property of eqprop_valid:
-  If eqprop_valid p q holds, and `icmp eq p, q` evaluates
+ Important property of eqprop_valid2:
+  If eqprop_valid2 p q holds, and `icmp eq p, q` evaluates
     to true, then p and q are exactly the same pointer!
  *********************************************************)
 
 
-Theorem eqprop_valid_after_icmpeq_true:
+Theorem eqprop_valid2_after_icmpeq_true:
   forall md st st' r ptrty op1 op2 v1 v2 e
     (HWF:Ir.Config.wf md st)
     (HINST:Some (Ir.Inst.iicmp_eq r ptrty op1 op2) = Ir.Config.cur_inst md st)
     (HOP1:Some v1 = Ir.Config.get_val st op1)
     (HOP2:Some v2 = Ir.Config.get_val st op2)
-    (* eqprop_valid holds *)
-    (HEQPROP:eqprop_valid (Ir.Config.m st) v1 v2)
+    (* eqprop_valid2 holds *)
+    (HEQPROP:eqprop_valid2 (Ir.Config.m st) v1 v2)
     (* have a small step *)
     (HSTEP:Ir.SmallStep.sstep md st (Ir.SmallStep.sr_success e st'))
     (* p1 == p2 is true *)
@@ -175,7 +175,7 @@ Qed.
 
 
 (*********************************************************
-    Okay, from theorem `eqprop_valid_after_icmpeq_true`,
+    Okay, from theorem `eqprop_valid2_after_icmpeq_true`,
     we can say that two pointers have same value after
     `p == q` check.
     It is trivial to have same execution when same value

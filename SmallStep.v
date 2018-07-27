@@ -120,7 +120,7 @@ Definition gep (p:Ir.ptrval) (idx0:nat) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir
   let idx := idx0 * (Ir.ty_bytesz t) in
   match p with
   | Ir.plog l o =>
-    let o' := twos_compl_add o idx Ir.PTRSZ in
+    let o' := twos_compl_add o idx OPAQUED_PTRSZ in
     if inb then
       (* In case of inbounds: check whether input/output pointer is
          within bounds. *)
@@ -135,9 +135,9 @@ Definition gep (p:Ir.ptrval) (idx0:nat) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir
       (* otherwise: just returns the pointer with updated offset. *)
       Ir.ptr (Ir.plog l o')
   | Ir.pphy o Is cid =>
-    let o' := twos_compl_add o idx Ir.PTRSZ in
+    let o' := twos_compl_add o idx OPAQUED_PTRSZ in
     if inb then
-      if Nat.ltb idx (Nat.shiftl 1 (Ir.PTRSZ - 1)) then
+      if Nat.ltb idx (Nat.shiftl 1 (OPAQUED_PTRSZ - 1)) then
         (* Added idx is positive. *)
         if Nat.ltb (o + idx) Ir.MEMSZ then
           (* Should not overflow Ir.MEMSZ *)

@@ -338,13 +338,14 @@ Proof.
       destruct (Ir.Memory.get m b) eqn:HGET.
       destruct (Ir.MemBlock.inbounds n0 t0 &&
            Ir.MemBlock.inbounds
-             (Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t) Ir.PTRSZ) t0)
+             (Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t)
+                                          Ir.SmallStep.OPAQUED_PTRSZ) t0)
                eqn:HINB2.
       ss.
       ss.
       ss.
       congruence.
-      destruct (idx * Ir.ty_bytesz t <? Nat.shiftl 1 (Ir.PTRSZ - 1)) eqn:HSHL.
+      destruct (idx * Ir.ty_bytesz t <? Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1)) eqn:HSHL.
       {
         destruct (n0 + idx * Ir.ty_bytesz t <? Ir.MEMSZ) eqn:HOFS.
         {
@@ -442,18 +443,20 @@ Proof.
           intros HH.
           unfold Ir.SmallStep.gep in HP2'.
           destruct ((idx * (Ir.ty_bytesz t) <?
-                     Nat.shiftl 1 (Ir.PTRSZ - 1))) eqn:H11.
+                     Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1))) eqn:H11.
           { (* positive offset add *)
             destruct (n + idx * Ir.ty_bytesz t <? Ir.MEMSZ) eqn:H2; try congruence.
             inversion HP2'. subst o2. subst Is2. subst cid2.
             rewrite PeanoNat.Nat.ltb_lt in H2.
             destruct (Ir.MemBlock.inbounds n0 t0 &&
                                            Ir.MemBlock.inbounds
-             (Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t) Ir.PTRSZ) t0)
+             (Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t)
+                                          Ir.SmallStep.OPAQUED_PTRSZ) t0)
                      eqn:HINB2.
             { inversion HP1'. subst l1. subst o1.
               unfold Ir.SmallStep.twos_compl_add.
               unfold Ir.SmallStep.twos_compl.
+              rewrite OPAQUED_PTRSZ_PTRSZ.
               rewrite PTRSZ_MEMSZ.
               rewrite Nat.add_mod_idemp_r.
               rewrite <- HH.
@@ -467,7 +470,8 @@ Proof.
         { (* negaitve offset add *)
           destruct (Ir.MemBlock.inbounds n0 t0 &&
            Ir.MemBlock.inbounds
-             (Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t) Ir.PTRSZ) t0)
+             (Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t)
+                                          Ir.SmallStep.OPAQUED_PTRSZ) t0)
                    eqn:HINB2.
           {
             inv HP2'.
@@ -475,6 +479,7 @@ Proof.
             rewrite HGETB in HGET. inv HGET.
             unfold Ir.SmallStep.twos_compl_add.
             unfold Ir.SmallStep.twos_compl.
+            rewrite OPAQUED_PTRSZ_PTRSZ.
             rewrite PTRSZ_MEMSZ.
             rewrite Nat.add_mod_idemp_r.
             rewrite Nat.add_mod_idemp_l.
@@ -492,6 +497,7 @@ Proof.
         intros HH. rewrite <- HH.
         unfold Ir.SmallStep.twos_compl_add.
         unfold Ir.SmallStep.twos_compl.
+        rewrite OPAQUED_PTRSZ_PTRSZ.
         rewrite PTRSZ_MEMSZ.
         rewrite Nat.add_mod_idemp_r.
         rewrite Nat.add_mod_idemp_l.
@@ -560,6 +566,7 @@ Proof.
       unfold Ir.MemBlock.inbounds in H2.
       unfold Ir.SmallStep.twos_compl_add in H2.
       unfold Ir.SmallStep.twos_compl in H2.
+      rewrite OPAQUED_PTRSZ_PTRSZ in H2.
       rewrite PTRSZ_MEMSZ in H2.
       rewrite Ir.MemBlock.inbounds_mod in Heq2; try assumption.
       rewrite PeanoNat.Nat.leb_le in H2.
@@ -589,7 +596,9 @@ Proof.
         simpl in wf_twin. inv wf_twin. simpl. intuition. }
       rewrite <- PTRSZ_MEMSZ2 in Heq2, H4.
       unfold Nat.double in *. omega.
-      rewrite <- PTRSZ_MEMSZ2. unfold Nat.double. omega.
+      rewrite <- PTRSZ_MEMSZ2. unfold Nat.double.
+      rewrite OPAQUED_PTRSZ_PTRSZ in *.
+      omega.
       inv HWF. eapply wf_blocks.
       eapply Ir.Memory.get_In. rewrite Heq. reflexivity. reflexivity.
     }
@@ -882,6 +891,7 @@ Proof.
         rewrite <- HPP.
         symmetry in Heq.
         erewrite inbounds_abs_true with (n0 := n); try eassumption; try reflexivity.
+        rewrite OPAQUED_PTRSZ_PTRSZ in *.
         erewrite inbounds_tcadd_abs; try eassumption; try reflexivity.
         erewrite IHHPP; try reflexivity; try eassumption.
         congruence.
@@ -895,6 +905,7 @@ Proof.
         rewrite <- HPP.
         symmetry in Heq.
         erewrite inbounds_abs_true with (n0 := n); try eassumption; try reflexivity.
+        rewrite OPAQUED_PTRSZ_PTRSZ in *.
         erewrite inbounds_tcadd_abs; try eassumption; try reflexivity.
         erewrite IHHPP; try reflexivity; try eassumption.
         congruence.
