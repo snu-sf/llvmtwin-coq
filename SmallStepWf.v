@@ -512,6 +512,457 @@ Proof.
   }
 Qed.
 
+Lemma N_to_bits_notbaddr:
+  forall n b
+         (HIN:List.In b (Ir.Bit.N_to_bits n)),
+    forall p ofs, b <> Ir.Bit.baddr p ofs.
+Proof.
+  intros n b HIN.
+  generalize dependent b.
+  induction n.
+  { intros. simpl in HIN. inv HIN. }
+  { intros.
+    simpl in HIN.
+    generalize dependent b.
+    induction p.
+    { simpl. intros. destruct HIN. rewrite <- H. ss.
+      apply IHp in H. ss. }
+    { simpl. intros. destruct HIN. rewrite <- H. ss.
+      apply IHp in H. ss. }
+    { simpl. intros. inv HIN. ss. inv H. }
+  }
+Qed.
+
+Lemma Forall_app {X:Type}:
+  forall (l1 l2:list X) (f:X -> Prop)
+         (HF:Forall f (l1++l2)),
+    Forall f l1 /\ Forall f l2.
+Proof.
+  intros.
+  induction l1.
+  simpl in HF. split. ss. ss.
+  simpl in HF. inv HF. split. constructor. ss.
+  apply IHl1 in H2. inv H2. ss.
+  apply IHl1 in H2. inv H2. ss.
+Qed.
+
+Lemma Forall_app2 {X:Type}:
+  forall (l1 l2:list X) (f:X -> Prop)
+         (HF1:Forall f l1)
+         (HF2:Forall f l2),
+    Forall f (l1 ++ l2).
+Proof.
+  intros.
+  induction l1.
+  simpl. ss.
+  inv HF1. apply IHl1 in H2. simpl. constructor.
+  ss. ss.
+Qed.
+
+Lemma Forall_repeat {X:Type}:
+  forall x n (f:X -> Prop)
+         (HF:f x),
+    Forall f (List.repeat x n).
+Proof.
+  intros.
+  induction n.
+  simpl. ss.
+  simpl. constructor. ss. ss.
+Qed.
+
+Lemma add_hzerobits_notbaddr:
+  forall bits n
+         (HFORALL:List.Forall (fun b => forall p ofs, b <> Ir.Bit.baddr p ofs) bits),
+    List.Forall (fun b => forall p ofs, b <> Ir.Bit.baddr p ofs)
+                (Ir.Bit.add_hzerobits bits n).
+Proof.
+  intros.
+  unfold Ir.Bit.add_hzerobits.
+  apply Forall_app2. ss.
+  apply Forall_repeat. ss.
+Qed.
+
+Lemma from_bits_notbaddr:
+  forall bits
+         (HFORALL:List.Forall (fun b => forall p ofs, b <> Ir.Bit.baddr p ofs) bits),
+    List.Forall (fun b =>
+                   forall p ofs, b.(Ir.Byte.b0) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b1) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b2) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b3) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b4) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b5) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b6) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b7) <> Ir.Bit.baddr p ofs) (Ir.Byte.from_bits bits).
+Proof.
+  intros.
+  remember (Ir.Byte.from_bits bits) as byt.
+  generalize dependent bits.
+  induction byt.
+  { simpl. intros. constructor. }
+  { intros.
+    destruct bits. simpl in Heqbyt.  inv Heqbyt.
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5. inv H6.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5. inv H6. inv H7.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5. inv H6. inv H7 . inv H8.
+      repeat (split; try congruence).
+      constructor. }
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5. inv H6. inv H7 . inv H8. inv H9.
+      repeat (split; try congruence).
+    remember (t::t0::t1::t2::t3::t4::t5::t6::nil) as l.
+    assert (t::t0::t1::t2::t3::t4::t5::t6::bits = l ++ bits).
+    { rewrite Heql. reflexivity. }
+    rewrite H in *.
+    apply Forall_app in HFORALL. inv HFORALL.
+    exploit IHbyt. eassumption. ss. eauto.
+    }
+  }
+Qed.
+
+
+Lemma In_ofint_not_ptr_in_byte:
+  forall n1 len b p0 ofs
+         (HIN:In b (Ir.Byte.ofint n1 len)),
+    ~ Ir.Config.ptr_in_byte p0 ofs b.
+Proof.
+  intros.
+  unfold Ir.Byte.ofint in HIN.
+  remember (Ir.Bit.add_hzerobits (Ir.Bit.N_to_bits n1) (len - length (Ir.Bit.N_to_bits n1)))
+           as bits.
+  assert (List.Forall (fun b => forall p ofs, b <> Ir.Bit.baddr p ofs) bits).
+  { rewrite Heqbits.
+    eapply add_hzerobits_notbaddr.
+    rewrite Forall_forall.
+    intros.
+    eapply N_to_bits_notbaddr. eassumption.
+  }
+  eapply from_bits_notbaddr in H.
+  rewrite Forall_forall in H.
+  apply H with (p := p0) (ofs := ofs) in HIN.
+  intros HH.
+  unfold Ir.Config.ptr_in_byte in HH.
+  intuition.
+Qed.
+
+Lemma ptr_wf_set:
+  forall p1 c b mb'
+    (HMWF:Ir.Memory.wf (Ir.Config.m c))
+    (HPTRWF:Ir.Config.ptr_wf p1 (Ir.Config.m c)),
+    Ir.Config.ptr_wf p1 (Ir.Memory.set (Ir.Config.m c) b mb').
+Proof.
+  intros.
+  destruct p1.
+  { inv HPTRWF. exploit H. ss. intros HH. inv HH.
+    inv H2.
+    split.
+    { intros. inv H2. split. ss.
+      destruct (l =? b) eqn:HEQ.
+      { rewrite Nat.eqb_eq in HEQ. subst l.
+        erewrite Ir.Memory.get_set_id_short. eexists. ss.
+        ss. eassumption. }
+      { erewrite Ir.Memory.get_set_diff_short. eexists. eassumption.
+        ss. rewrite Nat.eqb_neq in HEQ. congruence.
+      }
+    }
+    { intros. congruence. }
+  }
+  { inv HPTRWF. exploit H0. ss. intros HH.
+    split.
+    { intros. congruence. }
+    { intros. inv H1. eauto. }
+  }
+Qed.
+
+Lemma store_val_ptr_mem_wf:
+  forall md c opptr mb p v valty bid byt p0 ofs mb0
+         (HWF:Ir.Config.wf md c)
+         (HOPVAL:Ir.Config.get_val c opptr = Some v)
+         (HGET0:Some mb0 = Ir.Memory.get (Ir.Config.m c) bid)
+         (HGET:Some mb = Ir.Memory.get (Ir.store_val (Ir.Config.m c) p v valty) bid)
+         (HIN:In byt (Ir.MemBlock.c mb))
+         (HPTR:Ir.Config.ptr_in_byte p0 ofs byt),
+    Ir.Config.ptr_wf p0 (Ir.store_val (Ir.Config.m c) p v valty).
+Proof.
+  intros.
+  unfold Ir.store_val in *.
+  des_ifs; try (inv HWF; eapply wf_ptr_mem; eassumption).
+  { unfold Ir.store_bytes in *.
+    des_ifs;
+      try (inv HWF; eapply wf_ptr_mem; eassumption).
+    eapply Ir.get_deref_singleton in Heq0.
+    destruct Heq0; try congruence.
+    destruct H. destruct H. inv H. simpl in H0.
+    destruct (b =? bid) eqn:HBID.
+    { rewrite Nat.eqb_eq in HBID. subst bid.
+      erewrite Ir.Memory.get_set_id in HGET.
+      3: rewrite <- HGET0; reflexivity.
+      3: reflexivity.
+      inv HGET.
+      unfold Ir.MemBlock.set_bytes in HIN.
+      simpl in HIN.
+      apply List.in_app_or in HIN.
+      destruct HIN.
+      { (* unchanged part *)
+        inv HWF.
+        eapply ptr_wf_set. ss. eapply wf_ptr_mem.
+        rewrite H0. ss.
+        eapply firstn_In. ss. eassumption. eassumption.
+      }
+      apply List.in_app_or in H.
+      destruct H.
+      { (* changed part! but it's integer. *)
+        eapply In_ofint_not_ptr_in_byte in H.
+        eapply H in HPTR. inv HPTR.
+      }
+      { (* unchanged part. *)
+        inv HWF.
+        eapply ptr_wf_set. ss. eapply wf_ptr_mem.
+        rewrite H0. ss.
+        eapply skipn_In. ss. eassumption. eassumption.
+      }
+      { inv HWF. ss. }
+    }
+    { (* b <> bid *)
+      rewrite Ir.Memory.get_set_diff_short in HGET.
+      inv HWF.
+      eapply ptr_wf_set. ss. eapply wf_ptr_mem.
+      rewrite HGET. ss. eassumption. eassumption.
+      inv HWF. ss.
+      rewrite Nat.eqb_neq in HBID. congruence.
+    }
+    inv HWF. ss.
+    rewrite Nat.eqb_eq in Heq. rewrite <- Heq.
+    apply Ir.ty_bytesz_pos.
+  }
+  { (* stored value is ptr. *)
+    unfold Ir.store_bytes in *.
+    des_ifs; try (inv HWF; eauto; fail).
+    eapply Ir.get_deref_singleton in Heq0.
+    destruct Heq0; try congruence.
+    inv H. inv H0. inv H. simpl in H1.
+    destruct (b =? bid) eqn:HBID.
+    { rewrite Nat.eqb_eq in HBID. subst bid.
+      erewrite Ir.Memory.get_set_id in HGET.
+      3: eapply H1. 3: reflexivity.
+      inv HGET.
+      unfold Ir.MemBlock.set_bytes in *.
+      simpl in *.
+      eapply List.in_app_or in HIN.
+      destruct HIN.
+      { (* unchangd part *)
+        inv HWF.
+        eapply ptr_wf_set. ss. eapply wf_ptr_mem.
+        rewrite H1. ss. eapply firstn_In. ss. eassumption. eassumption.
+      }
+      simpl in H.
+      destruct H.
+      { (* changed part 1 *)
+        (* should use ptr_wf *)
+        rewrite <- H in HPTR.
+        unfold Ir.Config.ptr_in_byte in HPTR. simpl in HPTR.
+        inv HWF. dup HOPVAL.
+        apply wf_ptr in HOPVAL.
+        assert (HP0P1:p0 = p1).
+        { destruct HPTR. congruence.
+          repeat (destruct H; try congruence). }
+        subst p0.
+        eapply ptr_wf_set. ss. eapply wf_ptr. eassumption.
+      }
+      destruct H. (* one more time *)
+      { 
+        (* should use ptr_wf *)
+        rewrite <- H in HPTR.
+        unfold Ir.Config.ptr_in_byte in HPTR. simpl in HPTR.
+        inv HWF. dup HOPVAL.
+        apply wf_ptr in HOPVAL.
+        assert (HP0P1:p0 = p1).
+        { destruct HPTR. congruence.
+          repeat (destruct H; try congruence). }
+        subst p0.
+        eapply ptr_wf_set. ss. eapply wf_ptr. eassumption.
+      }
+      (* unchanged part *)
+      inv HWF.
+      eapply ptr_wf_set. ss. eapply wf_ptr_mem. rewrite H1. ss.
+      eapply skipn_In. ss. eassumption. eassumption.
+      inv HWF. ss.
+    }
+    { (* b <> bid *)
+      rewrite Ir.Memory.get_set_diff_short in HGET.
+      inv HWF.
+      eapply ptr_wf_set. ss. eapply wf_ptr_mem.
+      rewrite HGET. ss. eassumption. eassumption.
+      inv HWF. ss.
+      rewrite Nat.eqb_neq in HBID. congruence.
+    }
+    inv HWF. ss.
+    rewrite Nat.eqb_eq in Heq. rewrite <- Heq.
+    apply Ir.ty_bytesz_pos.
+  }
+Qed.
+
+Lemma list_find_key_set_none2:
+  forall (X : Type) (m : list (nat * X)) (k k' : nat) (v : X),
+  list_find_key m k = [] -> list_find_key (list_set m k' v) k = [].
+Proof.
+  intros.
+  induction m.
+  { reflexivity. }
+  { simpl.
+    simpl in H. des_ifs. simpl in Heq. rewrite Nat.eqb_eq in *. subst. rewrite Nat.eqb_refl in Heq1. ss.
+    apply IHm. ss.
+    eauto.
+  }
+Qed.
+
+Lemma get_set_exists:
+  forall m b bid mb mb'
+         (HGET:Some mb = Ir.Memory.get (Ir.Memory.set m b mb') bid),
+    exists mb'', Some mb'' = Ir.Memory.get m bid.
+Proof.
+  intros.
+  unfold Ir.Memory.get in *.
+  unfold Ir.Memory.set in *.
+  simpl in *.
+  des_ifs.
+  eapply list_find_key_set_none2 with (k' := b) (v := mb') in Heq.
+  rewrite Heq in Heq0. ss.
+  eexists. ss.
+Qed.
+
+Lemma s_update_m:
+  forall c t,
+    Ir.Config.s (Ir.Config.update_m c t) = Ir.Config.s c.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma free_ptr_wf:
+  forall c b t p
+    (HMWF:Ir.Memory.wf (Ir.Config.m c))
+    (HFREE: Ir.Memory.free (Ir.Config.m c) b = Some t)
+    (HWF:Ir.Config.ptr_wf p (Ir.Config.m c)),
+    Ir.Config.ptr_wf p t.
+Proof.
+  intros.
+  inv HWF.
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  destruct p.
+  { exploit H. ss. intros HH. inv HH. inv H2.
+    split.
+    { intros. inv H2. split. ss.
+      destruct (b =? l) eqn:HEQ.
+      { rewrite Nat.eqb_eq in HEQ.  subst b.
+        erewrite Ir.Memory.get_set_id_short. eexists. ss.
+        eapply Ir.Memory.incr_time_wf. eassumption.
+        ss.
+        rewrite Ir.Memory.get_incr_time_id. eassumption.
+      }
+      { rewrite Ir.Memory.get_set_diff_short.
+        rewrite Ir.Memory.get_incr_time_id. eexists. eassumption.
+        eapply Ir.Memory.incr_time_wf. eassumption. ss.
+        rewrite Nat.eqb_neq in HEQ. congruence.
+      }
+    }
+    { intros. congruence. }
+  }
+  { exploit H0. ss. intros HH.
+    split.
+    { intros. congruence. }
+    { intros. inv H1. ss. }
+  }
+Qed.
+
+Lemma get_free_c:
+  forall m m' b bid mb mb'
+         (HWF:Ir.Memory.wf m)
+         (HFREE:Ir.Memory.free m b = Some m')
+         (HGET:Some mb = Ir.Memory.get m bid)
+         (HGET':Some mb' = Ir.Memory.get m' bid),
+    Ir.MemBlock.c mb = Ir.MemBlock.c mb'.
+Proof.
+  intros.
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  destruct (b =? bid) eqn:HEQ.
+  { rewrite Nat.eqb_eq in HEQ.
+    subst b.
+    erewrite Ir.Memory.get_set_id_short in HGET'. inv HGET'.
+    unfold Ir.MemBlock.set_lifetime_end in Heq2.
+    des_ifs. simpl. congruence.
+    eapply Ir.Memory.incr_time_wf. eassumption.
+    ss. rewrite Ir.Memory.get_incr_time_id. rewrite HGET. ss.
+  }
+  { rewrite Ir.Memory.get_set_diff_short in HGET'.
+    rewrite Ir.Memory.get_incr_time_id in HGET'. congruence.
+    eapply Ir.Memory.incr_time_wf. eassumption.
+    ss. rewrite Nat.eqb_neq in HEQ. congruence.
+  }
+Qed.
+
+Lemma get_free_some_inv:
+  forall (m m' : Ir.Memory.t) (l l0 : Ir.blockid) (blk : Ir.MemBlock.t)
+         (HWF:Ir.Memory.wf m)
+         (HFREE:Some m' = Ir.Memory.free m l0)
+         (HGET:Ir.Memory.get m' l = Some blk),
+  exists blk' : Ir.MemBlock.t, Ir.Memory.get m l = Some blk'.
+Proof.
+  intros.
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  destruct (l0 =? l) eqn:HEQ.
+  { rewrite Nat.eqb_eq in HEQ.
+    subst. eexists. eassumption. }
+  { erewrite Ir.Memory.get_set_diff_short in HGET.
+    rewrite Ir.Memory.get_incr_time_id in HGET.
+    eexists. eapply HGET.
+    eapply Ir.Memory.incr_time_wf. eassumption.
+    ss. rewrite Nat.eqb_neq in HEQ. congruence.
+  }
+Qed.
+
+Lemma twos_compl_lt:
+  forall a,
+    twos_compl a Ir.PTRSZ < Ir.MEMSZ.
+Proof.
+  unfold twos_compl.
+  intros. rewrite PTRSZ_MEMSZ. apply Nat.mod_upper_bound.
+  pose Ir.MEMSZ_pos. omega.
+Qed.
+
+
 (* Lemma: inst_det_step preserves well-formedness of configuration. *)
 Lemma inst_det_step_wf:
   forall md c c' i e
@@ -558,35 +1009,65 @@ Proof.
         eapply store_val_ptr_wf. eassumption.
         eapply wf_ptr in HGETVAL. ss.
       * (* wf_ptr_mem *)
-        admit.
-      * reflexivity.
+        intros.
+        assert (exists mb', Some mb' = Ir.Memory.get (Ir.Config.m c) bid).
+        { unfold Ir.store_val in HBLK. unfold Ir.store_bytes in HBLK.
+          des_ifs; try (eexists; rewrite HBLK; reflexivity).
+          eapply get_set_exists. eassumption.
+          eapply get_set_exists. eassumption.
+        }
+        inv H.
+        eapply store_val_ptr_mem_wf; try eassumption.
+      * ss.
     + (* ifree *) try_wf; try (eapply incrpc_wf; try eassumption; try reflexivity; fail).
       apply incrpc_wf with (c := Ir.Config.update_m c t); try reflexivity.
       unfold free in Heq0.
       destruct HWF.
       des_ifs.
-      * split. eapply Ir.Memory.free_wf. eassumption.
-        rewrite Heq0. unfold Ir.Config.update_m. reflexivity.
-        unfold Ir.Config.cid_to_f in *. des_ifs.
-        intros. apply wf_cid_to_f2. unfold Ir.Config.cid_to_f in *. des_ifs.
-        intros.
-        apply wf_stack with (curcid := curcid) (funid := funid) (curregfile := curregfile).
-        assumption. unfold Ir.Config.cid_to_f in *.
-        unfold Ir.Config.update_m in HIN2. destruct c. simpl in *. assumption.
-        assumption.
-        ++ (* wf_ptr *) admit.
-        ++ (* wf_ptr_mem*) admit.
-      * split. eapply Ir.Memory.free_wf. eassumption.
-        rewrite Heq0. unfold Ir.Config.update_m. reflexivity.
-        unfold Ir.Config.cid_to_f in *. des_ifs.
-        intros. apply wf_cid_to_f2. unfold Ir.Config.cid_to_f in *. des_ifs.
-        intros.
-        apply wf_stack with (curcid := curcid) (funid := funid) (curregfile := curregfile).
-        assumption. unfold Ir.Config.cid_to_f in *.
-        unfold Ir.Config.update_m in HIN2. destruct c. simpl in *. assumption.
-        assumption.
-        ++ admit. (* wf_ptr *)
-        ++ admit. (* wf_ptr_mem *)
+      * split.
+        -- eapply Ir.Memory.free_wf. eassumption.
+           rewrite Heq0. unfold Ir.Config.update_m. reflexivity.
+        -- unfold Ir.Config.cid_to_f in *. des_ifs.
+        -- intros. apply wf_cid_to_f2. unfold Ir.Config.cid_to_f in *. des_ifs.
+        -- intros. rewrite s_update_m in HIN. eauto.
+        -- intros.
+           rewrite Ir.Config.get_val_update_m in HGETVAL.
+           rewrite Ir.Config.m_update_m.
+           apply wf_ptr in HGETVAL.
+           eapply free_ptr_wf; eassumption.
+        -- intros. rewrite Ir.Config.m_update_m in *.
+           dup HBLK. symmetry in HBLK.
+           eapply get_free_some_inv in HBLK; try eauto.
+           inv HBLK.
+           erewrite <- get_free_c in HBYTE.
+           3: eauto. 4: eauto. 3: eauto. 2: eauto.
+           eapply free_ptr_wf. eassumption. eauto.
+           eapply wf_ptr_mem. rewrite H. eauto. eauto. eauto.
+      * split.
+        -- eapply Ir.Memory.free_wf. eassumption.
+           rewrite Heq0. unfold Ir.Config.update_m. reflexivity.
+        -- unfold Ir.Config.cid_to_f in *. des_ifs.
+        -- intros. apply wf_cid_to_f2. unfold Ir.Config.cid_to_f in *. des_ifs.
+        -- intros.
+           apply wf_stack with (curcid := curcid) (funid := funid) (curregfile := curregfile).
+           assumption. unfold Ir.Config.cid_to_f in *.
+           unfold Ir.Config.update_m in HIN2. destruct c. simpl in *. assumption.
+           assumption.
+        -- intros.
+           rewrite Ir.Config.get_val_update_m in HGETVAL.
+           rewrite Ir.Config.m_update_m.
+           apply wf_ptr in HGETVAL.
+           eapply free_ptr_wf; eassumption.
+        -- intros. rewrite Ir.Config.m_update_m in *.
+           dup HBLK. symmetry in HBLK.
+           eapply get_free_some_inv in HBLK; try eauto.
+           inv HBLK.
+           eapply free_ptr_wf. eassumption. eassumption.
+           eapply wf_ptr_mem.
+           3: eapply HBIT.
+           rewrite H. reflexivity.
+           erewrite <- get_free_c in HBYTE. 3:eauto. 4:eauto. 3:eauto. 2:eauto.
+           eauto.
     + (* ibitcast. *) try_wf.
       eapply update_reg_and_incrpc_wf. eassumption.
       reflexivity.
@@ -598,7 +1079,9 @@ Proof.
       reflexivity.
       intros. inv H.
       split. intros. congruence.
-      intros. inv H. 
+      intros. inv H.
+      rewrite OPAQUED_PTRSZ_PTRSZ. 
+      eapply twos_compl_lt.
     + (* ievent *)
       rename HNEXT into H2. simpl in H2.
       des_op c opval opv H2. des_inv opv H2.
@@ -606,47 +1089,124 @@ Proof.
     + (* iicmp_eq, det *)
       rename HNEXT into HC'. simpl in HC'.
       des_op c op1 op1v HC'.
-      { destruct op1v.
-        - des_op c op2 op2v HC'.
-          destruct op2v; inversion HC'; thats_it. inv HC'. try_wf.
-        - des_op c op2 op2v HC'.
-          destruct op2v; try (inversion HC'; fail).
-          inv HC'. try_wf.
-          destruct (icmp_eq_ptr p p0 (Ir.Config.m c)) eqn:Heq_ptr; try (inversion HC'; fail);
-             inversion HC'; thats_it.
-          inversion HC'. thats_it.
-          inv HC'. try_wf.
-        - inversion HC'. thats_it. }
-      { des_op c op2 op2v HC'.
-        destruct op2v; try (inversion HC'; fail).
-        inversion HC'. thats_it.
-        inv HC'. try_wf. inv HC'. try_wf. inv HC'. try_wf.
+      { des_ifs;
+        try (eapply update_reg_and_incrpc_wf;
+             [ eassumption | ss | intros H1 H2; unfold to_num in H2; congruence ]).
+      }
+      { des_ifs;
+        try (eapply update_reg_and_incrpc_wf;
+             [ eassumption | ss | intros H1 H2; unfold to_num in H2; congruence ]).
       }
     + (* iicmp_ule, det *)
       rename HNEXT into HC'. simpl in HC'.
       des_op c op1 op1v HC'.
       { des_inv op1v HC';
           des_op c op2 op2v HC'; try (inv HC'; try_wf).
+        try (eapply update_reg_and_incrpc_wf;
+             [ eassumption | ss | intros H1 H2; unfold to_num in H2; congruence ]).
+        try (eapply update_reg_and_incrpc_wf;
+             [ eassumption | ss | intros H1 H2; unfold to_num in H2; congruence ]).
       }
       { des_ifs; try_wf. }
-Qed.*)
+Qed.
+
+(* Lemma: inst_step preserves well-formedness of configuration. *)
+Lemma inst_step_wf:
+  forall md c c' e
+         (HWF:Ir.Config.wf md c)
+         (HSTEP:inst_step md c (sr_success e c')),
+    Ir.Config.wf md c'.
+Proof.
+  intros.
+  inversion HSTEP.
+  - unfold inst_det_step in HNEXT.
+    destruct (Ir.Config.cur_inst md c) as [i0|] eqn:Hcur.
+    eapply inst_det_step_wf. eassumption.
+    rewrite Hcur. reflexivity. unfold inst_det_step.
+    rewrite Hcur. eassumption.
+    inversion HNEXT.
+  - (* imalloc returning null *)
+    thats_it. unfold Ir.NULL.
+    intros. inv H0.
+    split. intros. congruence.
+    intros. inv H. apply Ir.MEMSZ_pos.
+  - (* imalloc, succeed *)
+    eapply update_reg_and_incrpc_wf with (c := Ir.Config.update_m c m').
+    + inversion HWF.
+      split; try (simpl; assumption).
+      * simpl. eapply Ir.Memory.new_wf.
+        eapply wf_m.
+        eassumption.
+        eassumption.
+        eassumption.
+      * intros.
+        rewrite Ir.Config.get_val_update_m in HGETVAL.
+        admit.
+      * admit.
+    + reflexivity.
+    + admit.
+  - (* iicmp_eq, nondet *)
+    eapply update_reg_and_incrpc_wf.
+    eassumption.
+    reflexivity.
+    intros. congruence.
+  - (* icmp_ule, nondet *)
+    eapply update_reg_and_incrpc_wf. eassumption. reflexivity.
+    intros. congruence.
 Admitted.
 
 
+Lemma phi_step_wf:
+  forall md c c' bef_bbid
+         (HWF:Ir.Config.wf md c)
+         (HSTEP:phi_step md bef_bbid c = Some c'),
+    Ir.Config.wf md c'.
+Proof.
+  intros.
+  unfold phi_step in HSTEP.
+  des_ifs.
+  eapply update_reg_and_incrpc_wf. eassumption.
+  ss.
+  intros.
+  inv HWF.
+  eapply wf_ptr. eassumption.
+Qed.
+
+Lemma phi_bigstep_wf:
+  forall md c c' bef_bbid
+         (HWF:Ir.Config.wf md c)
+         (HSTEP:phi_bigstep md bef_bbid c c'),
+    Ir.Config.wf md c'.
+Proof.
+  intros.
+  induction HSTEP.
+  { eapply phi_step_wf; eassumption. }
+  { apply IHHSTEP in HWF.
+    eapply phi_step_wf. eassumption. eassumption.
+  }
+Qed.
+
+
+(* Theorem: small step preserves well-formedness of configuration. *)
+Theorem sstep_wf:
+  forall md c c' e
+         (HWF:Ir.Config.wf md c)
+         (HSTEP:sstep md c (sr_success e c')),
+    Ir.Config.wf md c'.
+Proof.
+  intros.
+  inv HSTEP.
+  { eapply inst_step_wf. eassumption. eassumption. }
+  { assert (Ir.Config.wf md st').
+    { eapply t_step_wf. eassumption. eassumption. }
+    eapply phi_bigstep_wf; eassumption.
+  }
+Qed.
 
 
 (****************************************************
    Theorems regarding categorization of instruction.
  ****************************************************)
-
-Ltac thats_it := eapply update_reg_and_incrpc_wf; eauto.
-Ltac des_op c op op' HINV :=
-  destruct (Ir.Config.get_val c op) as [op' | ]; try (inversion HINV; fail).
-Ltac des_inv v HINV :=
-  destruct (v); try (inversion HINV; fail).
-Ltac try_wf :=
-  des_ifs; try (eapply update_reg_and_incrpc_wf; try eassumption;
-                try reflexivity; try congruence; fail).
 
 Lemma no_mem_change_after_incrpc:
   forall md c,

@@ -227,7 +227,8 @@ Theorem inttoptr_returns_vanilla_Phy:
     (HOP1:Some (Ir.num n) = Ir.Config.get_val st opint)
     (HSTEP:Ir.SmallStep.sstep md st (Ir.SmallStep.sr_success e st')),
 
-  Some (Ir.ptr (Ir.pphy n [] None)) = Ir.Config.get_val st' (Ir.opreg r).
+  Some (Ir.ptr (Ir.pphy (Ir.SmallStep.twos_compl n Ir.PTRSZ) [] None)) =
+  Ir.Config.get_val st' (Ir.opreg r).
 Proof.
   intros.
   inv HSTEP.
@@ -238,7 +239,7 @@ Proof.
     inv HNEXT.
     rewrite Ir.SmallStep.get_val_update_reg_and_incrpc.
     unfold Ir.Config.get_val.
-    rewrite Ir.Config.get_rval_update_rval_id. reflexivity.
+    rewrite Ir.Config.get_rval_update_rval_id. rewrite OPAQUED_PTRSZ_PTRSZ. reflexivity.
     { unfold Ir.Config.cur_inst in HINST.
       unfold Ir.Config.cur_fdef_pc in HINST.
       des_ifs.
