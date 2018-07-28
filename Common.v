@@ -64,6 +64,42 @@ Proof.
       congruence. reflexivity.
 Qed.
 
+Lemma firstn_In {X:Type}:
+  forall (l:list X) n x l'
+         (HF:List.firstn n l = l')
+         (HIN:List.In x l'),
+    List.In x l.
+Proof.
+  intros.
+  generalize dependent l.
+  generalize dependent l'.
+  induction n.
+  { intros. simpl in HF. inv HF. inv HIN. }
+  { simpl. intros.
+    destruct l. inv HF. inv HIN.
+    destruct l'; try congruence.
+    inv HF. inv HIN. left. ss.
+    right. eapply IHn. eassumption. ss.
+  }
+Qed.
+
+Lemma skipn_In {X:Type}:
+  forall (l:list X) n x l'
+         (HF:List.skipn n l = l')
+         (HIN:List.In x l'),
+    List.In x l.
+Proof.
+  intros.
+  generalize dependent l'.
+  generalize dependent l.
+  induction n.
+  { intros. simpl in HF. congruence. }
+  { simpl. intros.
+    destruct l. congruence.
+    eapply IHn in HF. right. ss. ss.
+  }
+Qed.
+
 Lemma skipn_length {X:Type}:
   forall n (l:list X),
     List.length (List.skipn n l) = (List.length l) - n.
@@ -509,6 +545,43 @@ Proof.
     constructor. eapply HTRANS. eassumption. ss.
     eapply IHHFORALL1. assumption.
   }
+Qed.
+
+Lemma Forall_app {X:Type}:
+  forall (l1 l2:list X) (f:X -> Prop)
+         (HF:Forall f (l1++l2)),
+    Forall f l1 /\ Forall f l2.
+Proof.
+  intros.
+  induction l1.
+  simpl in HF. split. ss. ss.
+  simpl in HF. inv HF. split. constructor. ss.
+  apply IHl1 in H2. inv H2. ss.
+  apply IHl1 in H2. inv H2. ss.
+Qed.
+
+Lemma Forall_app2 {X:Type}:
+  forall (l1 l2:list X) (f:X -> Prop)
+         (HF1:Forall f l1)
+         (HF2:Forall f l2),
+    Forall f (l1 ++ l2).
+Proof.
+  intros.
+  induction l1.
+  simpl. ss.
+  inv HF1. apply IHl1 in H2. simpl. constructor.
+  ss. ss.
+Qed.
+
+Lemma Forall_repeat {X:Type}:
+  forall x n (f:X -> Prop)
+         (HF:f x),
+    Forall f (List.repeat x n).
+Proof.
+  intros.
+  induction n.
+  simpl. ss.
+  simpl. constructor. ss. ss.
 Qed.
 
 Lemma forallb_In {X:Type}:
@@ -1824,6 +1897,20 @@ Proof.
     destruct (fst a =? k) eqn:HK; des_ifs.
     apply IHm in HNO.
     simpl. rewrite HK. rewrite HK. assumption.
+  }
+Qed.
+
+Lemma list_find_key_set_none2:
+  forall (X : Type) (m : list (nat * X)) (k k' : nat) (v : X),
+  list_find_key m k = [] -> list_find_key (list_set m k' v) k = [].
+Proof.
+  intros.
+  induction m.
+  { reflexivity. }
+  { simpl.
+    simpl in H. des_ifs. simpl in Heq. rewrite Nat.eqb_eq in *. subst. rewrite Nat.eqb_refl in Heq1. ss.
+    apply IHm. ss.
+    eauto.
   }
 Qed.
 

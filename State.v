@@ -826,6 +826,13 @@ Proof.
   unfold update_m. reflexivity.
 Qed.
 
+Lemma s_update_m:
+  forall c t,
+    s (update_m c t) = s c.
+Proof.
+  reflexivity.
+Qed.
+
 Lemma get_rval_update_rval_id:
   forall st r v
          (HSTACK:s st <> nil),

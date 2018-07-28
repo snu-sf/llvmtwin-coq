@@ -277,7 +277,7 @@ Proof.
   - reflexivity.
 Qed.
 
-Theorem N_bits_N:
+Lemma N_bits_N:
   forall (n:N), bits_to_N (N_to_bits n) = n.
 Proof.
   intros.
@@ -488,7 +488,7 @@ Proof.
   simpl in HLEN. omega.
 Qed.
 
-Theorem from_bits_to_bits:
+Lemma from_bits_to_bits:
   forall (ls:list Bit.t),
     to_bits (from_bits ls) =
     ls ++ List.repeat (Bit.bpoison)
@@ -641,6 +641,107 @@ Proof.
       rewrite <- Nat.add_mod_idemp_l.
       simpl. reflexivity.
       omega.
+Qed.
+
+Lemma N_to_bits_notbaddr:
+  forall n b
+         (HIN:List.In b (Ir.Bit.N_to_bits n)),
+    forall p ofs, b <> Ir.Bit.baddr p ofs.
+Proof.
+  intros n b HIN.
+  generalize dependent b.
+  induction n.
+  { intros. simpl in HIN. inv HIN. }
+  { intros.
+    simpl in HIN.
+    generalize dependent b.
+    induction p.
+    { simpl. intros. destruct HIN. rewrite <- H. ss.
+      apply IHp in H. ss. }
+    { simpl. intros. destruct HIN. rewrite <- H. ss.
+      apply IHp in H. ss. }
+    { simpl. intros. inv HIN. ss. inv H. }
+  }
+Qed.
+
+Lemma add_hzerobits_notbaddr:
+  forall bits n
+         (HFORALL:List.Forall (fun b => forall p ofs, b <> Ir.Bit.baddr p ofs) bits),
+    List.Forall (fun b => forall p ofs, b <> Ir.Bit.baddr p ofs)
+                (Ir.Bit.add_hzerobits bits n).
+Proof.
+  intros.
+  unfold Ir.Bit.add_hzerobits.
+  apply Forall_app2. ss.
+  apply Forall_repeat. ss.
+Qed.
+
+Lemma from_bits_notbaddr:
+  forall bits
+         (HFORALL:List.Forall (fun b => forall p ofs, b <> Ir.Bit.baddr p ofs) bits),
+    List.Forall (fun b =>
+                   forall p ofs, b.(Ir.Byte.b0) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b1) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b2) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b3) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b4) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b5) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b6) <> Ir.Bit.baddr p ofs /\
+                                 b.(Ir.Byte.b7) <> Ir.Bit.baddr p ofs) (Ir.Byte.from_bits bits).
+Proof.
+  intros.
+  remember (Ir.Byte.from_bits bits) as byt.
+  generalize dependent bits.
+  induction byt.
+  { simpl. intros. constructor. }
+  { intros.
+    destruct bits. simpl in Heqbyt.  inv Heqbyt.
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5. inv H6.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5. inv H6. inv H7.
+      repeat (split; try congruence).
+      constructor. }
+    destruct bits.
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5. inv H6. inv H7 . inv H8.
+      repeat (split; try congruence).
+      constructor. }
+    { simpl in Heqbyt. inv Heqbyt. constructor. simpl.
+      inv HFORALL. inv H2. inv H4. inv H5. inv H6. inv H7 . inv H8. inv H9.
+      repeat (split; try congruence).
+    remember (t0::t1::t2::t3::t4::t5::t6::t7::nil) as l.
+    assert (t0::t1::t2::t3::t4::t5::t6::t7::bits = l ++ bits).
+    { rewrite Heql. reflexivity. }
+    rewrite H in *.
+    apply Forall_app in HFORALL. inv HFORALL.
+    exploit IHbyt. eassumption. ss. eauto.
+    }
+  }
 Qed.
 
 End Byte.
@@ -878,6 +979,20 @@ Proof.
   destruct (Ir.MemBlock.P mb).
   simpl in wf_twin0. unfold Ir.TWINCNT in wf_twin0. congruence.
   simpl. left. reflexivity.
+Qed.
+
+Lemma bytes_In_c:
+  forall mb ofs len byt b
+         (HBYTES:Ir.MemBlock.bytes mb ofs len = byt)
+         (HIN:List.In b byt),
+    List.In b (Ir.MemBlock.c mb).
+Proof.
+  intros.
+  unfold Ir.MemBlock.bytes in HBYTES.
+  rewrite <- HBYTES in HIN.
+  eapply firstn_In in HIN; try ss.
+  eapply skipn_In in HIN; try ss.
+  ss.
 Qed.
 
 Lemma n_pos:
@@ -1356,6 +1471,21 @@ Proof.
   reflexivity. eapply HWF. assumption. reflexivity.
 Qed.
 
+Lemma get_set_exists:
+  forall m b bid mb mb'
+         (HGET:Some mb = Ir.Memory.get (Ir.Memory.set m b mb') bid),
+    exists mb'', Some mb'' = Ir.Memory.get m bid.
+Proof.
+  intros.
+  unfold Ir.Memory.get in *.
+  unfold Ir.Memory.set in *.
+  simpl in *.
+  des_ifs.
+  eapply list_find_key_set_none2 with (k' := b) (v := mb') in Heq.
+  rewrite Heq in Heq0. ss.
+  eexists. ss.
+Qed.
+
 Lemma get_set_diff:
   forall m bid mb' m' mb bid'
          (HWF:Ir.Memory.wf m)
@@ -1708,6 +1838,23 @@ Proof.
   eapply get_In in HGET; try reflexivity. assumption.
 Qed.
 
+Lemma get_new_c_poison:
+  forall m m' l nsz P mb
+     (HNEW:(m', l) =
+           Ir.Memory.new m Ir.heap nsz Ir.SYSALIGN (repeat Ir.Byte.poison nsz) P)
+     (HGET:Some mb = Ir.Memory.get m' l),
+    Ir.MemBlock.c mb = repeat Ir.Byte.poison nsz.
+Proof.
+  intros.
+  unfold Ir.Memory.new in HNEW.
+  inv HNEW.
+  unfold Ir.Memory.get in HGET.
+  simpl in HGET. rewrite Nat.eqb_refl in HGET. inv HGET.
+  simpl. reflexivity.
+Qed.
+
+
+
 
 (**********************************************
       Preservation of wellformedness,
@@ -1818,7 +1965,7 @@ Proof.
   split. omega. omega.
 Qed.
 
-Theorem new_wf:
+Lemma new_wf:
   forall m (HWF:wf m) t n a c P m' mb
          (HWF0: forall begt, MemBlock.wf (MemBlock.mk t (begt, None) n a c P))
          (HDISJ:allocatable m (List.map (fun x => (x, n)) P) = true)
@@ -1974,7 +2121,7 @@ Proof.
       intros HH. omega.
 Qed.
 
-Theorem incr_time_wf:
+Lemma incr_time_wf:
   forall m (HWF:wf m) m'
          (HFREE:m' = incr_time m),
     wf m'.
@@ -2003,7 +2150,7 @@ Proof.
   }
 Qed.
 
-Theorem free_wf:
+Lemma free_wf:
   forall m (HWF:wf m) bid m'
          (HFREE:Some m' = free m bid),
     wf m'.
@@ -2386,6 +2533,54 @@ Proof.
   }
 Qed.
 
+Lemma get_free_c:
+  forall m m' b bid mb mb'
+         (HWF:Ir.Memory.wf m)
+         (HFREE:Ir.Memory.free m b = Some m')
+         (HGET:Some mb = Ir.Memory.get m bid)
+         (HGET':Some mb' = Ir.Memory.get m' bid),
+    Ir.MemBlock.c mb = Ir.MemBlock.c mb'.
+Proof.
+  intros.
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  destruct (b =? bid) eqn:HEQ.
+  { rewrite Nat.eqb_eq in HEQ.
+    subst b.
+    erewrite Ir.Memory.get_set_id_short in HGET'. inv HGET'.
+    unfold Ir.MemBlock.set_lifetime_end in Heq2.
+    des_ifs. simpl. congruence.
+    eapply Ir.Memory.incr_time_wf. eassumption.
+    ss. rewrite Ir.Memory.get_incr_time_id. rewrite HGET. ss.
+  }
+  { rewrite Ir.Memory.get_set_diff_short in HGET'.
+    rewrite Ir.Memory.get_incr_time_id in HGET'. congruence.
+    eapply Ir.Memory.incr_time_wf. eassumption.
+    ss. rewrite Nat.eqb_neq in HEQ. congruence.
+  }
+Qed.
+
+Lemma get_free_some_inv:
+  forall (m m' : Ir.Memory.t) (l l0 : Ir.blockid) (blk : Ir.MemBlock.t)
+         (HWF:Ir.Memory.wf m)
+         (HFREE:Some m' = Ir.Memory.free m l0)
+         (HGET:Ir.Memory.get m' l = Some blk),
+  exists blk' : Ir.MemBlock.t, Ir.Memory.get m l = Some blk'.
+Proof.
+  intros.
+  unfold Ir.Memory.free in HFREE.
+  des_ifs.
+  destruct (l0 =? l) eqn:HEQ.
+  { rewrite Nat.eqb_eq in HEQ.
+    subst. eexists. eassumption. }
+  { erewrite Ir.Memory.get_set_diff_short in HGET.
+    rewrite Ir.Memory.get_incr_time_id in HGET.
+    eexists. eapply HGET.
+    eapply Ir.Memory.incr_time_wf. eassumption.
+    ss. rewrite Nat.eqb_neq in HEQ. congruence.
+  }
+Qed.
+
 
 (**********************************************
       Lemmas&Theorems about inboundness
@@ -2492,9 +2687,9 @@ Proof.
 Qed.
 
 
-(* Theorem: there are at most 2 alive blocks
+(* Lemma: there are at most 2 alive blocks
    which have abs_ofs as inbounds. *)
-Theorem inbounds_blocks_atmost_2:
+Lemma inbounds_blocks_atmost_2:
   forall (m:t) abs_ofs l
          (HWF:wf m)
          (HINB:inbounds_blocks m abs_ofs = l),
@@ -2601,7 +2796,7 @@ Proof.
 Qed.
 
 (* Lemma: the result of inbounds_blocks all satisfies inbounds_abs. *)
-Theorem inbounds_blocks_forallb:
+Lemma inbounds_blocks_forallb:
   forall (m:t) abs_ofs blks
          (HALL:inbounds_blocks m abs_ofs = blks),
     List.forallb (MemBlock.inbounds_abs abs_ofs)
@@ -2849,7 +3044,7 @@ Qed.
 
 (* Theorem: The results of inbounds_blocks2,
    contain all input offsets. *)
-Theorem inbounds_blocks2_forallb2:
+Lemma inbounds_blocks2_forallb2:
   forall (m:t) abs_ofs blks
          (HALL:inbounds_blocks2 m abs_ofs = blks),
     List.forallb (fun abs_ofs =>
@@ -2877,8 +3072,8 @@ Proof.
     + assumption.
 Qed.
 
-(* Theorem: all blocks returned by inbounds_blocks2 are alive. *)
-Theorem inbounds_blocks2_alive:
+(* Lemma: all blocks returned by inbounds_blocks2 are alive. *)
+Lemma inbounds_blocks2_alive:
   forall (m:t) abs_ofs blks
          (HALL:inbounds_blocks2 m abs_ofs = blks),
     List.forallb (fun blk => MemBlock.alive blk.(snd)) blks = true.
