@@ -47,6 +47,9 @@ This is a Coq formalization of OOPSLA'18 LLVM memory model.
 
 ### Proofs
 
+- Small-step of instructions preserve wellformedness of state: [SmallStepWf.v](SmallStepWf.v)
+    - Theorem `sstep_wf` shows that if input state is well-formed, and executing small step on the state successesfully made output state, the output state is also well-formed.
+
 - Proof of a property of a guessed address (sec. 4.11): [TwinExecutionProof.v](TwinExecutionProof.v)
     - Theorem `malloc_creates_twin_state` states that malloc either returns a NULL pointer, or it creates a twin state.
     - Theorem `twin_execution` states that 'twin-state-ness' is preserved if the block is not observed and no memory access through a guessed pointer is made.
