@@ -41,21 +41,28 @@ Module GVN4.
       behave identically.
  **************************************************************)
 
+Definition posofs (ofs:nat) (t:Ir.ty) :=
+  ofs * Ir.ty_bytesz t < Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1).
+
 Inductive gepinbs: Ir.Memory.t -> Ir.val -> Ir.val -> Prop :=
-| gi_base: forall m p, gepinbs m (Ir.ptr p) (Ir.ptr p)
-| gi_gep_l:
+| gi_one:
+    forall m p0 p q ofs1 ofs2 t1 t2
+           (HGEP1:p = Ir.SmallStep.gep p0 ofs1 t1 m true)
+           (HGEP2:q = Ir.SmallStep.gep p0 ofs2 t2 m true)
+           (HPOS1:posofs ofs1 t1)
+           (HPOS2:posofs ofs2 t2),
+      gepinbs m p q
+| gi_succ_l:
     forall m p q ofs p' t
            (HBASE:gepinbs m (Ir.ptr p) (Ir.ptr q))
            (HGEP1:p' = Ir.SmallStep.gep p ofs t m true)
-           (HPOS:ofs * Ir.ty_bytesz t <
-                 (Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1))),
+           (HPOS:posofs ofs t),
       gepinbs m p' (Ir.ptr q)
-| gi_gep_r:
+| gi_succ_r:
     forall m p q ofs q' t
            (HBASE:gepinbs m (Ir.ptr p) (Ir.ptr q))
            (HGEP1:q' = Ir.SmallStep.gep q ofs t m true)
-           (HPOS:ofs * Ir.ty_bytesz t <
-                 (Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1))),
+           (HPOS:posofs ofs t),
       gepinbs m (Ir.ptr p) q'.
 
 Definition phys_minmaxI (p q:Ir.ptrval): Prop :=
@@ -81,8 +88,9 @@ Proof.
   generalize dependent l.
   generalize dependent o.
   induction HGEPINBS.
-  { intros. inv HP1. intros HH. inv HH. inv H. inv H0.
-    congruence.
+  { intros. inv HP1. intros HH. inv HH. inv H0. inv H1.
+    unfold Ir.SmallStep.gep in *.
+    des_ifs.
   }
   { unfold Ir.SmallStep.gep in HGEP1.
     des_ifs. intros. inv HP1.
@@ -108,7 +116,8 @@ Proof.
   generalize dependent I.
   generalize dependent cid.
   induction HGEPINBS.
-  { intros. inv HP1. intros HH. inv HH. inv H. inv H0.
+  { intros. inv HP1. intros HH. inv HH. inv H0. inv H1.
+    unfold Ir.SmallStep.gep in *. des_ifs.
   }
   { intros. intros HH. inv HH. inv H. inv H0.
     unfold Ir.SmallStep.gep in HP1.
@@ -121,6 +130,132 @@ Proof.
     des_ifs.
     exploit IHHGEPINBS. ss. eexists. eexists. eexists. ss.
   }
+Qed.
+
+Lemma gepinbs_phy_samecid:
+  forall m v1 v2 o1 o2 I1 I2 cid1 cid2
+         (HP1:Ir.ptr (Ir.pphy o1 I1 cid1) = v1)
+         (HP1:Ir.ptr (Ir.pphy o2 I2 cid2) = v2)
+         (HGEPINBS:gepinbs m v1 v2),
+    cid1 = cid2.
+Proof.
+  intros.
+  generalize dependent o1.
+  generalize dependent o2.
+  generalize dependent I1.
+  generalize dependent I2.
+  generalize dependent cid1.
+  generalize dependent cid2.
+  induction HGEPINBS.
+  { intros. inv HP1.
+    unfold Ir.SmallStep.gep in *. des_ifs.
+  }
+  { intros. inv HP0.
+    unfold Ir.SmallStep.gep in HP1.
+    des_ifs.
+    exploit IHHGEPINBS. ss. ss. eauto.
+    exploit IHHGEPINBS. ss. ss. eauto.
+  }
+  { intros. inv HP0.
+    unfold Ir.SmallStep.gep in *. des_ifs.
+    exploit IHHGEPINBS. ss. ss. eauto.
+    exploit IHHGEPINBS. ss. ss. eauto.
+  }
+Qed.
+
+Lemma shiftl_lle:
+  forall n m n'
+         (HLE:n <= n'),
+    Nat.shiftl n m <= Nat.shiftl n' m.
+Proof.
+  intros.
+  induction m.
+  { ss. }
+  { simpl.
+    unfold Nat.double. lia. }
+Qed.
+
+Lemma PTRSZ_MEMSZ:
+  Nat.shiftl 2 (Ir.PTRSZ - 1) = Ir.MEMSZ.
+Proof. reflexivity. Qed.
+
+Lemma OPAQUED_PTRSZ_PTRSZ:
+  Ir.SmallStep.OPAQUED_PTRSZ = Ir.PTRSZ.
+Proof.
+  unfold Ir.SmallStep.OPAQUED_PTRSZ.
+  unfold Ir.SmallStep.locked.
+  des_ifs.
+Qed.
+
+Lemma gep_phy_Ilb:
+  forall o1 o2 I1 I2 cid1 cid2 ofs t m
+         (HMIN:exists n, list_min n I1)
+         (HGEP:(Ir.ptr (Ir.pphy o2 I2 cid2)) =
+               Ir.SmallStep.gep (Ir.pphy o1 I1 cid1) ofs t m true)
+         (HPOS:ofs * Ir.ty_bytesz t <
+               (Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1))),
+  exists n, (list_min n (o1::I1) /\ list_min n I2).
+Proof.
+  intros.
+  unfold Ir.SmallStep.gep in HGEP.
+  rewrite <- Nat.ltb_lt in HPOS.
+  rewrite HPOS in HGEP.
+  des_ifs.
+  rewrite Nat.ltb_lt in *.
+  unfold Ir.SmallStep.twos_compl_add.
+  unfold Ir.SmallStep.twos_compl.
+  rewrite Nat.mod_small.
+  unfold list_min.
+  simpl.
+  inv HMIN. inv H.
+  destruct (x <=? o1) eqn:HEQ.
+  { rewrite Nat.leb_le in HEQ.
+    exists x.
+    split. split. eauto.
+    simpl. constructor. ss. ss.
+    split. do 2 right. ss.
+    constructor. ss. constructor. lia. ss.
+  }
+  { rewrite Nat.leb_gt in HEQ.
+    exists o1. split. split. eauto. constructor. ss.
+    rewrite List.Forall_forall in *. intros. eapply H1 in H. lia.
+    split. eauto.
+    constructor. ss. constructor. lia.
+    rewrite List.Forall_forall in *. intros. eapply H1 in H. lia.
+  }
+  rewrite OPAQUED_PTRSZ_PTRSZ in *.
+  rewrite PTRSZ_MEMSZ.
+  ss.
+Qed.
+
+Lemma gep_phy_Iub:
+  forall o1 o2 I1 I2 cid1 cid2 ofs t m
+         (HMAX:list_max o1 I1)
+         (HGEP:(Ir.ptr (Ir.pphy o2 I2 cid2)) =
+               Ir.SmallStep.gep (Ir.pphy o1 I1 cid1) ofs t m true)
+         (HPOS:ofs * Ir.ty_bytesz t <
+               (Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1))),
+  list_max o2 I2.
+Proof.
+  intros.
+  unfold Ir.SmallStep.gep in HGEP.
+  rewrite <- Nat.ltb_lt in HPOS.
+  rewrite HPOS in HGEP.
+  des_ifs.
+  rewrite Nat.ltb_lt in *.
+  unfold Ir.SmallStep.twos_compl_add.
+  unfold Ir.SmallStep.twos_compl.
+  rewrite Nat.mod_small.
+  unfold list_max.
+  simpl.
+  inv HMAX.
+  split.
+  right. left. ss.
+  constructor. lia. constructor. ss.
+  rewrite List.Forall_forall in *. intros. apply H0 in H1. lia.
+  rewrite OPAQUED_PTRSZ_PTRSZ in *.
+  rewrite PTRSZ_MEMSZ.
+  ss.
 Qed.
 
 Lemma gepinbs_log_sameblk:
@@ -136,7 +271,7 @@ Proof.
   generalize dependent o1.
   generalize dependent o2.
   induction HGEPINBS.
-  { intros. inv HP2. inv HP1. congruence. }
+  { intros. inv HP2. unfold Ir.SmallStep.gep in *. des_ifs. }
   { intros.
     unfold Ir.SmallStep.gep in HGEP1.
     des_ifs. exploit IHHGEPINBS. ss. eexists. eauto.
@@ -155,8 +290,8 @@ Lemma gepinbs_notnum:
 Proof.
   intros.
   induction HGEPINBS.
-  { split. intros HH. inv HH. congruence.
-    intros HH. inv HH. congruence. }
+  { split. intros HH. inv HH. unfold Ir.SmallStep.gep in *. des_ifs.
+    intros HH. inv HH. unfold Ir.SmallStep.gep in *.  des_ifs. }
   { inv IHHGEPINBS.
     split; try ss.
     intros HH.
@@ -186,7 +321,7 @@ Proof.
   rewrite Nat.eqb_refl. simpl. des_ifs.
 Qed.
 
-Theorem gepinbs_after_icmpeq_true:
+Lemma gepinbs_after_icmpeq_true:
   forall md st st' r ptrty op1 op2 v1 v2 e
     (HWF:Ir.Config.wf md st)
     (HINST:Some (Ir.Inst.iicmp_eq r ptrty op1 op2) = Ir.Config.cur_inst md st)
@@ -244,8 +379,57 @@ Proof.
           eapply gepinbs_phy_neverlog in HEQPROP; try reflexivity.
           exfalso. apply HEQPROP. do 3 eexists.
         }
-        { 
+        { right.
+          unfold Ir.SmallStep.icmp_eq_ptr in Heq.
+          unfold Ir.SmallStep.p2N in Heq.
+          rewrite Nat.min_id in Heq.
+          unfold Ir.SmallStep.twos_compl in Heq.
+          rewrite PTRSZ_MEMSZ in Heq.
+          rewrite Nat.mod_small in Heq.
+          inv Heq.
+          rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
+          unfold Ir.Config.get_val in HTRUE.
+          rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
+          unfold Ir.SmallStep.to_num in HTRUE.
+          inv HTRUE.
+          des_ifs.
+          rewrite Nat.eqb_eq in Heq. subst n.
+          dup HEQPROP.
+          eapply gepinbs_phy_samecid in HEQPROP0; try reflexivity.
+          subst o.
+
+
+Lemma phys_minmaxI_cons:
+  forall o I1 I2 cid i
+    (HPMM:phys_minmaxI (Ir.pphy o I1 cid) (Ir.pphy o I2 cid)),
+    phys_minmaxI (Ir.pphy o (i::I1) cid) (Ir.pphy o (i::I2) cid).
+Proof.
+  intros.
+  unfold phys_minmaxI in *.
+  inv HPMM. inv H. inv H0. inv H. inv H0. inv H.
+  inv H0. inv H1. inv H2. inv H3. inv H4.
+  do 4 eexists.
   
+
+Lemma gepinbs_phy_Iminmax:
+  forall m o I1 I2 cid p1 p2
+         (HP1:p1 = (Ir.ptr (Ir.pphy o I1 cid)))
+         (HP2:p2 = (Ir.ptr (Ir.pphy o I2 cid)))
+         (HGEP:gepinbs m p1 p2),
+    phys_minmaxI (Ir.pphy o I1 cid) (Ir.pphy o I2 cid).
+Proof.
+  intros.
+  generalize dependent o.
+  generalize dependent I1.
+  generalize dependent I2.
+  generalize dependent cid.
+  induction HGEP.
+  { intros. inv HP1. inv HP2.
+    destruct p0.
+    { unfold Ir.SmallStep.gep in *. des_ifs. }
+    { unfold Ir.SmallStep.gep in *.
+      des_ifs.rewrite H1.
+    
 
 
 
