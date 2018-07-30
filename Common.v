@@ -573,6 +573,20 @@ Proof.
   ss. ss.
 Qed.
 
+Lemma Forall_and {X:Type}:
+  forall (l:list X) (f g:X -> Prop)
+         (HF:List.Forall f l)
+         (HG:List.Forall g l),
+    List.Forall (fun x => f x /\ g x) l.
+Proof.
+  intros.
+  induction l.
+  { constructor. }
+  { inv HF. inv HG.
+    constructor. split; ss. eapply IHl; eauto.
+  }
+Qed.
+
 Lemma Forall_repeat {X:Type}:
   forall x n (f:X -> Prop)
          (HF:f x),
@@ -1619,6 +1633,35 @@ Proof.
     split. assumption. apply IHHLSS. assumption.
   - simpl in H. rewrite andb_true_iff in H.
     destruct H. apply IHHLSS. assumption.
+Qed.
+
+Lemma lsubseq_split_len2 {X:Type}:
+  forall (l:list X) (x1 x2:X)
+         (HLSS:lsubseq l (x1::x2::nil)),
+    exists l1 l2 l3,
+      l = l1 ++ x1 :: l2 ++ x2 :: l3.
+Proof.
+  intros.
+  induction l.
+  { inv HLSS. }
+  { inv HLSS.
+    { eapply lsubseq_In in H0.
+      2: constructor; ss.
+      eapply List.in_split in H0.
+      inv H0. inv H.
+      exists [].
+      exists x.
+      exists x0.
+      simpl. ss.
+    }
+    { apply IHl in H2.
+      inv H2. inv H. inv H0.
+      exists (a::x).
+      eexists.
+      eexists.
+      simpl. ss.
+    }
+  }
 Qed.
 
 Lemma lsubseq_NotIn {X:Type}:
@@ -3491,6 +3534,125 @@ Proof.
   }
 Qed.
 
+
+(*******************************************
+      Minimum/maximum value of list nat
+ *******************************************)
+
+Definition list_max (n:nat) (l:list nat): Prop :=
+  List.In n l /\ List.Forall (fun m => m <= n) l.
+
+Definition list_min (n:nat) (l:list nat): Prop :=
+  List.In n l /\ List.Forall (fun m => m >= n) l.
+
+Lemma list_minmax:
+  forall (l:list nat) n m
+         (HMIN:list_min n l)
+         (HMAX:list_max m l),
+    List.Forall (fun x => n <= x <= m) l.
+Proof.
+  intros.
+  eapply Forall_and.
+  eapply HMIN.
+  eapply HMAX.
+Qed.
+
+Lemma list_min_cons:
+  forall x l y
+         (HMIN:list_min x l)
+         (HLE:x <= y),
+    list_min x (y::l).
+Proof.
+  intros.
+  unfold list_min in *.
+  inv HMIN.
+  split. right. eauto.
+  rewrite List.Forall_forall in *. intros.
+  destruct H1. omega. apply H0. ss.
+Qed.
+
+Lemma list_max_cons:
+  forall x l y
+         (HMAX:list_max x l)
+         (HLE:x >= y),
+    list_max x (y::l).
+Proof.
+  intros.
+  unfold list_max in *.
+  inv HMAX.
+  split. right. eauto.
+  rewrite List.Forall_forall in *. intros.
+  destruct H1. omega. apply H0. ss.
+Qed.
+
+Lemma list_minmax_le:
+  forall x l y
+         (HMIN:list_min x l)
+         (HMAX:list_max y l),
+    x <= y.
+Proof.
+  intros.
+  unfold list_max in *.
+  unfold list_min in *.
+  rewrite List.Forall_forall in *.
+  inv HMIN. inv HMAX.
+  apply H0 in H1. omega.
+Qed.
+
+Lemma list_minmax_lt:
+  forall x l y a b
+         (HMIN:list_min x l)
+         (HMAX:list_max y l)
+         (HIN1:List.In a l)
+         (HIN2:List.In b l)
+         (HNEQ:a <> b),
+    x < y.
+Proof.
+  intros.
+  unfold list_max in *.
+  unfold list_min in *.
+  rewrite List.Forall_forall in *.
+  inv HMIN. inv HMAX.
+  destruct (a <=? b) eqn:HLE.
+  { rewrite Nat.leb_le in HLE.
+    apply H0 in HIN1. apply H2 in HIN2. omega. }
+  { rewrite Nat.leb_gt in HLE.
+    apply H0 in HIN2. apply H2 in HIN1. omega. }
+Qed.
+
+Lemma list_min_Permutation:
+  forall x l  l'
+         (HMIN:list_min x l)
+         (HPERM:Permutation l l'),
+    list_min x l'.
+Proof.
+  intros.
+  unfold list_min in *.
+  inv HMIN.
+  exploit Permutation_in. eassumption. eassumption. intros.
+  split. ss.
+  rewrite List.Forall_forall in *.
+  intros. eapply H0. 
+  eapply Permutation_in. eapply Permutation_sym in HPERM. eassumption.
+  ss.
+Qed.
+
+Lemma list_max_Permutation:
+  forall x l  l'
+         (HMAX:list_max x l)
+         (HPERM:Permutation l l'),
+    list_max x l'.
+Proof.
+  intros.
+  unfold list_max in *.
+  inv HMAX.
+  exploit Permutation_in. eassumption. eassumption. intros.
+  split. ss.
+  rewrite List.Forall_forall in *.
+  intros. eapply H0. 
+  eapply Permutation_in. eapply Permutation_sym in HPERM. eassumption.
+  ss.
+Qed.
 
 (*******************************************
       Lemmas about natural numbers

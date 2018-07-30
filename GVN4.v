@@ -36,81 +36,218 @@ Module GVN4.
       after calculation, given p=Phy(o1, I1, cid1) and
       q=Phy(o2, I2, cid2), min(I1) = min(I2) /\ max(I2) = max(I2)
       /\ o1 = o2 /\ cid1 = cid2. This relation is defined as
-      `phy_Isamerange p q`.
+      `phys_minmaxI p q`.
   (4) We show that if `phy_minmaxI p q` holds, then all instructions
       behave identically.
  **************************************************************)
 
 Inductive gepinbs: Ir.Memory.t -> Ir.val -> Ir.val -> Prop :=
-| gi_base: forall m p, gepinbs m p p
-| gi_gep:
-    forall m p q ofs p' q' t
+| gi_base: forall m p, gepinbs m (Ir.ptr p) (Ir.ptr p)
+| gi_gep_l:
+    forall m p q ofs p' t
            (HBASE:gepinbs m (Ir.ptr p) (Ir.ptr q))
            (HGEP1:p' = Ir.SmallStep.gep p ofs t m true)
-           (HGEP2:q' = Ir.SmallStep.gep q ofs t m true)
-           (HPOS:ofs * Ir.ty_bytesz t < (Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1))),
-      gepinbs m p' q'.
+           (HPOS:ofs * Ir.ty_bytesz t <
+                 (Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1))),
+      gepinbs m p' (Ir.ptr q)
+| gi_gep_r:
+    forall m p q ofs q' t
+           (HBASE:gepinbs m (Ir.ptr p) (Ir.ptr q))
+           (HGEP1:q' = Ir.SmallStep.gep q ofs t m true)
+           (HPOS:ofs * Ir.ty_bytesz t <
+                 (Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1))),
+      gepinbs m (Ir.ptr p) q'.
 
-Definition list_max (n:nat) (l:list nat): Prop :=
-  List.In n l /\ List.Forall (fun m => m <= n) l.
+Definition phys_minmaxI (p q:Ir.ptrval): Prop :=
+  exists o I1 I2 cid ofsmin ofsmax,
+    (p = Ir.pphy o I1 cid /\ q = Ir.pphy o I2 cid /\
+     list_min ofsmin I1 /\ list_min ofsmin I2 /\
+     list_max ofsmax I1 /\ list_max ofsmax I2).
 
-Definition list_min (n:nat) (l:list nat): Prop :=
-  List.In n l /\ List.Forall (fun m => m >= n) l.
 
-Lemma Forall_and {X:Type}:
-  forall (l:list X) (f g:X -> Prop)
-         (HF:List.Forall f l)
-         (HG:List.Forall g l),
-    List.Forall (fun x => f x /\ g x) l.
+(*********************************************************
+ Important property of gepinbs:
+  If gepinbs p q holds, and `icmp eq p, q` evaluates
+    to true, then either p = q or phys_minmaxI holds.
+ *********************************************************)
+
+Lemma gepinbs_log_neverphy:
+  forall m v1 l o v2
+         (HP1:Ir.ptr (Ir.plog l o) = v1)
+         (HGEPINBS:gepinbs m v1 v2),
+    ~ exists o2 I2 cid2, v2 = Ir.ptr (Ir.pphy o2 I2 cid2).
 Proof.
   intros.
-  induction l.
-  { constructor. }
-  { inv HF. inv HG.
-    constructor. split; ss. eapply IHl; eauto.
+  generalize dependent l.
+  generalize dependent o.
+  induction HGEPINBS.
+  { intros. inv HP1. intros HH. inv HH. inv H. inv H0.
+    congruence.
+  }
+  { unfold Ir.SmallStep.gep in HGEP1.
+    des_ifs. intros. inv HP1.
+    intros HH. inv HH. inv H. inv H0. inv H.
+    exploit IHHGEPINBS. ss. eexists. eexists. eexists. ss.
+    eauto. }
+  { intros. intros HH. inv HH. inv H. inv H0.
+    unfold Ir.SmallStep.gep in H.
+    des_ifs.
+    exploit IHHGEPINBS. ss. do 3 eexists. ss. eauto.
+    exploit IHHGEPINBS. ss. do 3 eexists. ss. eauto.
   }
 Qed.
 
-Lemma list_minmax:
-  forall (l:list nat) n m
-         (HMIN:list_min n l)
-         (HMAX:list_max m l),
-    List.Forall (fun x => n <= x <= m) l.
+Lemma gepinbs_phy_neverlog:
+  forall m v1 o I cid v2
+         (HP1:Ir.ptr (Ir.pphy o I cid) = v1)
+         (HGEPINBS:gepinbs m v1 v2),
+    ~ exists l2 o2, v2 = Ir.ptr (Ir.plog l2 o2).
 Proof.
   intros.
-  eapply Forall_and.
-  eapply HMIN.
-  eapply HMAX.
-Qed.
-
-Lemma lsubseq_split_len2 {X:Type}:
-  forall (l:list X) (x1 x2:X)
-         (HLSS:lsubseq l (x1::x2::nil)),
-    exists l1 l2 l3,
-      l = l1 ++ x1 :: l2 ++ x2 :: l3.
-Proof.
-  intros.
-  induction l.
-  { inv HLSS. }
-  { inv HLSS.
-    { eapply lsubseq_In in H0.
-      2: constructor; ss.
-      eapply List.in_split in H0.
-      inv H0. inv H.
-      exists [].
-      exists x.
-      exists x0.
-      simpl. ss.
-    }
-    { apply IHl in H2.
-      inv H2. inv H. inv H0.
-      exists (a::x).
-      eexists.
-      eexists.
-      simpl. ss.
-    }
+  generalize dependent o.
+  generalize dependent I.
+  generalize dependent cid.
+  induction HGEPINBS.
+  { intros. inv HP1. intros HH. inv HH. inv H. inv H0.
+  }
+  { intros. intros HH. inv HH. inv H. inv H0.
+    unfold Ir.SmallStep.gep in HP1.
+    des_ifs.
+    exploit IHHGEPINBS. ss. do 3 eexists. ss. eauto.
+    exploit IHHGEPINBS. ss. do 3 eexists. ss.
+  }
+  { intros. intros HH. inv HH. inv H.
+    unfold Ir.SmallStep.gep in H0.
+    des_ifs.
+    exploit IHHGEPINBS. ss. eexists. eexists. eexists. ss.
   }
 Qed.
+
+Lemma gepinbs_log_sameblk:
+  forall m v1 l1 o1 l2 o2 v2
+         (HP1:Ir.ptr (Ir.plog l1 o1) = v1)
+         (HP2:Ir.ptr (Ir.plog l2 o2) = v2)
+         (HGEPINBS:gepinbs m v1 v2),
+    l1 = l2.
+Proof.
+  intros.
+  generalize dependent l1.
+  generalize dependent l2.
+  generalize dependent o1.
+  generalize dependent o2.
+  induction HGEPINBS.
+  { intros. inv HP2. inv HP1. congruence. }
+  { intros.
+    unfold Ir.SmallStep.gep in HGEP1.
+    des_ifs. exploit IHHGEPINBS. ss. eexists. eauto.
+  }
+  { intros. unfold Ir.SmallStep.gep in HGEP1.
+    des_ifs.
+    exploit IHHGEPINBS. ss. do 3 eexists. ss.
+  }
+Qed.
+
+Lemma gepinbs_notnum:
+  forall m v1 v2
+         (HGEPINBS:gepinbs m v1 v2),
+    (~ (exists n1, v1 = Ir.num n1)) /\
+    (~ (exists n2, v2 = Ir.num n2)).
+Proof.
+  intros.
+  induction HGEPINBS.
+  { split. intros HH. inv HH. congruence.
+    intros HH. inv HH. congruence. }
+  { inv IHHGEPINBS.
+    split; try ss.
+    intros HH.
+    inv HH.
+    unfold Ir.SmallStep.gep in H1. des_ifs. }
+  { inv IHHGEPINBS.
+    split; try ss.
+    intros HH. inv HH.
+    unfold Ir.SmallStep.gep in H1. des_ifs. }
+Qed.
+
+Lemma gepinbs_icmp_det:
+  forall m v1 v2 p1 p2
+         (HP1:Ir.ptr p1 = v1)
+         (HP2:Ir.ptr p2 = v2)
+         (HGEPINBS:gepinbs m v1 v2),
+    Ir.SmallStep.icmp_eq_ptr_nondet_cond p1 p2 m = false.
+Proof.
+  intros.
+  unfold Ir.SmallStep.icmp_eq_ptr_nondet_cond.
+  destruct v1; try congruence.
+  destruct p; try (inv HP1; reflexivity).
+  inv HP1.
+  destruct p2; try reflexivity.
+  eapply gepinbs_log_sameblk in HGEPINBS; try reflexivity.
+  subst b.
+  rewrite Nat.eqb_refl. simpl. des_ifs.
+Qed.
+
+Theorem gepinbs_after_icmpeq_true:
+  forall md st st' r ptrty op1 op2 v1 v2 e
+    (HWF:Ir.Config.wf md st)
+    (HINST:Some (Ir.Inst.iicmp_eq r ptrty op1 op2) = Ir.Config.cur_inst md st)
+    (HOP1:Some v1 = Ir.Config.get_val st op1)
+    (HOP2:Some v2 = Ir.Config.get_val st op2)
+    (* gepinbs holds *)
+    (HEQPROP:gepinbs (Ir.Config.m st) v1 v2)
+    (* have a small step *)
+    (HSTEP:Ir.SmallStep.sstep md st (Ir.SmallStep.sr_success e st'))
+    (* p1 == p2 is true *)
+    (HTRUE:Some (Ir.num 1) = Ir.Config.get_val st' (Ir.opreg r)),
+
+    v1 = v2 \/
+    (exists p1 p2, Ir.ptr p1 = v1 /\ Ir.ptr p2 = v2 /\ phys_minmaxI p1 p2).
+Proof.
+  intros.
+  inv HSTEP; try congruence.
+  { inv HISTEP;try congruence.
+    { unfold Ir.SmallStep.inst_det_step in HNEXT. rewrite <- HINST in HNEXT.
+      rewrite <- HOP1, <- HOP2 in HNEXT.
+      dup HEQPROP. apply gepinbs_notnum in HEQPROP0.
+      inv HEQPROP0.
+      destruct v1.
+      { exfalso. eapply H. eexists. ss. }
+      destruct v2.
+      { exfalso. eapply H0. eexists. ss. }
+      des_ifs.
+      clear H H0.
+      destruct p.
+      { (* log *)
+        destruct p0.
+        { dup HEQPROP.
+          eapply gepinbs_log_sameblk in HEQPROP; try reflexivity.
+          subst b0.
+          unfold Ir.SmallStep.icmp_eq_ptr in Heq. rewrite Nat.eqb_refl in Heq.
+          inv Heq.
+          rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
+          unfold Ir.Config.get_val in HTRUE.
+          rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
+          unfold Ir.SmallStep.to_num in HTRUE.
+          des_ifs. rewrite Nat.eqb_eq in Heq. subst n.
+          left. ss.
+          { unfold Ir.Config.cur_inst in HINST.
+            unfold Ir.Config.cur_fdef_pc in HINST.
+            des_ifs. }
+        }
+        { (* cannot be phy *)
+          eapply gepinbs_log_neverphy in HEQPROP; try reflexivity.
+          exfalso. apply HEQPROP. do 3 eexists. ss.
+        }
+      }
+      { (* phy *)
+        destruct p0.
+        { (* cannot be log *)
+          eapply gepinbs_phy_neverlog in HEQPROP; try reflexivity.
+          exfalso. apply HEQPROP. do 3 eexists.
+        }
+        { 
+  
+
+
 
 Lemma inbounds_abs_minmax:
   forall ofsmin ofsmax mb ofss
@@ -134,82 +271,6 @@ Proof.
   rewrite List.Forall_forall in *.
   dup H.
   apply H1 in H4. apply H3 in H. omega.
-Qed.
-
-Lemma list_min_cons:
-  forall x l y
-         (HMIN:list_min x l)
-         (HLE:x <= y),
-    list_min x (y::l).
-Proof.
-  intros.
-  unfold list_min in *.
-  inv HMIN.
-  split. right. eauto.
-  rewrite List.Forall_forall in *. intros.
-  destruct H1. omega. apply H0. ss.
-Qed.
-
-Lemma list_max_cons:
-  forall x l y
-         (HMAX:list_max x l)
-         (HLE:x >= y),
-    list_max x (y::l).
-Proof.
-  intros.
-  unfold list_max in *.
-  inv HMAX.
-  split. right. eauto.
-  rewrite List.Forall_forall in *. intros.
-  destruct H1. omega. apply H0. ss.
-Qed.
-
-Lemma list_minmax_le:
-  forall x l y
-         (HMIN:list_min x l)
-         (HMAX:list_max y l),
-    x <= y.
-Proof.
-  intros.
-  unfold list_max in *.
-  unfold list_min in *.
-  rewrite List.Forall_forall in *.
-  inv HMIN. inv HMAX.
-  apply H0 in H1. omega.
-Qed.
-
-Lemma list_min_Permutation:
-  forall x l  l'
-         (HMIN:list_min x l)
-         (HPERM:Permutation l l'),
-    list_min x l'.
-Proof.
-  intros.
-  unfold list_min in *.
-  inv HMIN.
-  exploit Permutation_in. eassumption. eassumption. intros.
-  split. ss.
-  rewrite List.Forall_forall in *.
-  intros. eapply H0. 
-  eapply Permutation_in. eapply Permutation_sym in HPERM. eassumption.
-  ss.
-Qed.
-
-Lemma list_max_Permutation:
-  forall x l  l'
-         (HMAX:list_max x l)
-         (HPERM:Permutation l l'),
-    list_max x l'.
-Proof.
-  intros.
-  unfold list_max in *.
-  inv HMAX.
-  exploit Permutation_in. eassumption. eassumption. intros.
-  split. ss.
-  rewrite List.Forall_forall in *.
-  intros. eapply H0. 
-  eapply Permutation_in. eapply Permutation_sym in HPERM. eassumption.
-  ss.
 Qed.
 
 Lemma inbounds_blocks2_minmax:
@@ -373,16 +434,11 @@ Proof.
   ss.
 Qed.
 
-Definition phys_minmaxI (p q:Ir.ptrval): Prop :=
-  exists o I1 I2 cid ofsmin ofsmax,
-    (p = Ir.pphy o I1 cid /\ q = Ir.pphy o I2 cid /\
-     list_min ofsmin I1 /\ list_min ofsmin I2 /\
-     list_max ofsmax I1 /\ list_max ofsmax I2).
-
 Lemma phys_minmaxI_get_deref:
   forall m p q sz
          (HWF:Ir.Memory.wf m)
-         (HPMM:phys_minmaxI p q),
+         (HPMM:phys_minmaxI p q)
+         (HSZ:sz > 0),
     Ir.get_deref m p sz = Ir.get_deref m q sz.
 Proof.
   intros.
@@ -394,10 +450,104 @@ Proof.
   end).
   rewrite H, H0.
   unfold Ir.get_deref_blks_phyptr.
-  assert (Ir.Memory.inbounds_blocks2 m (x :: x + sz :: x0) =
-          Ir.Memory.inbounds_blocks2 m [x3;x4]).
-  { eapply inbounds_blocks2_minmax. ss. 
-  inv HPMM. inv H. inv H0. inv H. inv H0. inv H. inv H0. inv H1.
+  assert (HE1:exists xm, list_min xm (x :: (x+sz) :: x0) /\
+                         list_min xm (x :: (x+sz) :: x1)).
+  { destruct (x <=? x3) eqn:HLE.
+    { exists x.
+      split.
+      { unfold list_min in *. split. left. ss.
+        rewrite List.Forall_forall. intros.
+        inv H1. rewrite Nat.leb_le in HLE. inv H5.
+        { omega. }
+        inv H.
+        { omega. }
+        rewrite List.Forall_forall in H7.
+        apply H7 in H0. omega.
+      }
+      { unfold list_min in *. split. left. ss.
+        rewrite List.Forall_forall. intros.
+        inv H2. rewrite Nat.leb_le in HLE. inv H5.
+        { omega. }
+        inv H.
+        { omega. }
+        rewrite List.Forall_forall in H7.
+        apply H7 in H0. omega.
+      }
+    }
+    { rewrite Nat.leb_gt in HLE.
+      exists x3.
+      unfold list_min in *.
+      inv H1. inv H2.
+      repeat (rewrite List.Forall_forall in *).
+      split.
+      { split. right. right. ss.
+        intros. inv H1. omega. inv H2. omega. apply H6. ss.
+      }
+      { split. right. right. ss.
+        intros. inv H1. omega. inv H2. omega. apply H0. ss.
+      }
+    }
+  }
+  assert (HE2:exists xm, list_max xm (x :: (x+sz) :: x0) /\
+                         list_max xm (x :: (x+sz) :: x1)).
+  { destruct (x4 <=? x + sz) eqn:HLE.
+    { exists (x + sz).
+      split.
+      { unfold list_max in *. split. right. left. ss.
+        rewrite List.Forall_forall. intros.
+        inv H3. rewrite Nat.leb_le in HLE. inv H5.
+        { omega. }
+        inv H.
+        { omega. }
+        rewrite List.Forall_forall in H7.
+        apply H7 in H0. omega.
+      }
+      { unfold list_max in *. split. right. left. ss.
+        rewrite List.Forall_forall. intros.
+        inv H5.
+        { omega. }
+        inv H6.
+        { omega. }
+        rewrite Nat.leb_le in HLE.
+        rewrite List.Forall_forall in H4.
+        inv H4.
+        apply H5 in H. omega.
+      }
+    }
+    { rewrite Nat.leb_gt in HLE.
+      exists x4.
+      unfold list_max in *.
+      inv H3. inv H4.
+      repeat (rewrite List.Forall_forall in *).
+      split.
+      { split. right. right. ss.
+        intros. inv H3. omega. inv H4. omega. apply H6. ss.
+      }
+      { split. right. right. ss.
+        intros. inv H3. omega. inv H4. omega. apply H0. ss.
+      }
+    }
+  }
+  clear H1 H2 H3 H4.
+  inv HE1. inv H1. inv HE2. inv H1.
+
+  assert (HINB1:
+            Ir.Memory.inbounds_blocks2 m (x :: x + sz :: x0) =
+            Ir.Memory.inbounds_blocks2 m [x5;x6]).
+  { eapply inbounds_blocks2_minmax. ss. ss. ss. ss.
+    exploit list_minmax_lt. eapply H. eapply H2.
+    left. ss. right. left. ss. omega.
+    intros. omega. }
+  assert (HINB2:
+            Ir.Memory.inbounds_blocks2 m (x :: x + sz :: x1) =
+            Ir.Memory.inbounds_blocks2 m [x5;x6]).
+  { eapply inbounds_blocks2_minmax. ss. ss. ss. ss.
+    exploit list_minmax_lt. eapply H. eapply H2.
+    left. ss. right. left. ss. omega.
+    intros. omega. }
+  rewrite HINB1, HINB2.
+  reflexivity.
+Qed.
 
 End GVN4.
 
