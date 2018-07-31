@@ -2,6 +2,7 @@
 
 This is a Coq formalization of OOPSLA'18 LLVM memory model.
 
+Compile with Coq 8.8.1 please.
 
 ### Definition of Memory
 
@@ -70,5 +71,5 @@ This is a Coq formalization of OOPSLA'18 LLVM memory model.
         - It shows that if p and q satisfies the condition, and `icmp eq p, q` evaluates to true, p and q have same value.
     - [GVN4.v](GVN4.v) proves that replacing p with q is valid if either p or q is computed by a series of gep inbounds with positive offsets, based on the same base pointer.
         - It defines a notion of `gepinbs p q p0`, meaning that p and q are series of gep inbounds with positive offsets, based on p0.
-	- Theorem `gepinbs_after_icmpeq_true` shows that, if `icmp eq p q` evaluates to true, and `gepinbs p q p0` holds for any pointer p0, either p and q are equal or `phys_minmaxI p1 p2` holds. `phys_minmaxI p1 p2` means that p1 and p2 are physical pointers with `p1.I` and `p2.I` having same min/max value.
-	- Later on, GVN4.v shows that if `phys_minmaxI p1 p2` holds, then replacing p1 with p2 is valid (refinement holds) for all instructions which take pointer as operand. 
+        - Theorem `gepinbs_after_icmpeq_true` shows that, if `icmp eq p q` evaluates to true, and `gepinbs p q p0` holds for any pointer p0, either p and q are equal or `phys_minmaxI p1 p2` holds. `phys_minmaxI p1 p2` means that p1 and p2 are physical pointers with `p1.I` and `p2.I` having same min/max value.
+        - Later on, GVN4.v shows that if `phys_minmaxI p1 p2` holds, then replacing p1 with p2 is valid (refinement holds) for all instructions which take pointer as operand. 
