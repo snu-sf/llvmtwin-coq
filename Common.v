@@ -336,6 +336,17 @@ Proof.
   }
 Qed.
 
+Lemma In_swap {X:Type}:
+  forall (n m x:X) l
+         (HIN:List.In x (n::m::l)),
+    List.In x (m::n::l).
+Proof.
+  intros.
+  inv HIN. right. left. ss.
+  inv H. left. ss.
+  right. right. ss.
+Qed.
+
 (* Filtered list is shorter than the original list. *)
 Lemma filter_length:
   forall {X:Type} (l:list X) f,
@@ -3769,6 +3780,83 @@ Proof.
   rewrite List.Forall_forall in *.
   apply H3 in H. apply H0 in H1. omega.
 Qed.
+
+Lemma list_min_In:
+  forall x n l
+         (HMIN:list_min x (n::l))
+         (HIN:List.In n l),
+    list_min x l.
+Proof.
+  intros.
+  unfold list_min in *.
+  inv HMIN.
+  rewrite List.Forall_forall in *.
+  split. inv H. ss. ss. intros. eapply H0. right. ss.
+Qed.
+
+Lemma list_max_In:
+  forall x n l
+         (HMIN:list_max x (n::l))
+         (HIN:List.In n l),
+    list_max x l.
+Proof.
+  intros.
+  unfold list_max in *.
+  inv HMIN.
+  rewrite List.Forall_forall in *.
+  split. inv H. ss. ss. intros. eapply H0. right. ss.
+Qed.
+
+Lemma list_min_swap:
+  forall n m x l
+         (HMIN:list_min x (n::m::l)),
+    list_min x (m::n::l).
+Proof.
+  intros.
+  inv HMIN.
+  apply In_swap in H. split. ss.
+  rewrite List.Forall_forall in *.
+  intros. apply In_swap in H1. apply H0. ss.
+Qed.
+
+Lemma list_max_swap:
+  forall n m x l
+         (HMAX:list_max x (n::m::l)),
+    list_max x (m::n::l).
+Proof.
+  intros.
+  inv HMAX.
+  apply In_swap in H. split. ss.
+  rewrite List.Forall_forall in *.
+  intros. apply In_swap in H1. apply H0. ss.
+Qed.
+
+Lemma list_min_hd:
+  forall x n l
+         (HMIN:list_min x (n :: l)),
+    x <= n.
+Proof.
+  intros.
+  unfold list_min in HMIN.
+  inv HMIN.
+  inv H. ss.
+  rewrite List.Forall_forall in H0.
+  apply H0. left. ss.
+Qed.
+
+Lemma list_max_hd:
+  forall x n l
+         (HMAX:list_max x (n :: l)),
+    n <= x.
+Proof.
+  intros.
+  unfold list_max in HMAX.
+  inv HMAX.
+  inv H. ss.
+  rewrite List.Forall_forall in H0.
+  apply H0. left. ss.
+Qed.
+
 
 (*******************************************
       Lemmas about natural numbers

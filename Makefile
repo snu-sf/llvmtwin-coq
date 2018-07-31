@@ -21,3 +21,4 @@ all:
 	coqc GVN1.v
 	coqc GVN2.v
 	coqc GVN3.v
+	coqc GVN4.v
