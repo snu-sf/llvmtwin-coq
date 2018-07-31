@@ -3571,6 +3571,20 @@ Proof.
   destruct H1. omega. apply H0. ss.
 Qed.
 
+Lemma list_min_cons2:
+  forall x l y
+         (HMIN:list_min x l)
+         (HLE:y <= x),
+    list_min y (y::l).
+Proof.
+  intros.
+  unfold list_min in *.
+  inv HMIN.
+  split. left. eauto.
+  rewrite List.Forall_forall in *. intros.
+  destruct H1. omega. apply H0 in H1. omega.
+Qed.
+
 Lemma list_max_cons:
   forall x l y
          (HMAX:list_max x l)
@@ -3585,6 +3599,20 @@ Proof.
   destruct H1. omega. apply H0. ss.
 Qed.
 
+Lemma list_max_cons2:
+  forall x l y
+         (HMIN:list_max x l)
+         (HLE:y >= x),
+    list_max y (y::l).
+Proof.
+  intros.
+  unfold list_max in *.
+  inv HMIN.
+  split. left. eauto.
+  rewrite List.Forall_forall in *. intros.
+  destruct H1. omega. apply H0 in H1. omega.
+Qed.
+
 Lemma list_minmax_le:
   forall x l y
          (HMIN:list_min x l)
@@ -3597,6 +3625,20 @@ Proof.
   rewrite List.Forall_forall in *.
   inv HMIN. inv HMAX.
   apply H0 in H1. omega.
+Qed.
+
+Lemma list_min_one:
+  forall i, list_min i [i].
+Proof.
+  intros. unfold list_min. split. ss. eauto.
+  constructor. eauto. constructor.
+Qed.
+
+Lemma list_max_one:
+  forall i, list_max i [i].
+Proof.
+  intros. unfold list_max. split. ss. eauto.
+  constructor. eauto. constructor.
 Qed.
 
 Lemma list_minmax_lt:
@@ -3652,6 +3694,80 @@ Proof.
   intros. eapply H0. 
   eapply Permutation_in. eapply Permutation_sym in HPERM. eassumption.
   ss.
+Qed.
+
+Lemma list_min_exists:
+  forall i I,
+    exists i', list_min i' (i::I).
+Proof.
+  intros.
+  induction I.
+  { exists i. apply list_min_one. }
+  { inv IHI.
+    destruct (a <? x) eqn:HLE.
+    { exists a. rewrite Nat.ltb_lt in HLE.
+      constructor.
+      right. left. ss.
+      inv H. inv H1. constructor. omega. constructor. ss.
+      rewrite List.Forall_forall in *. intros. apply H4 in H. omega.
+    }
+    { rewrite Nat.ltb_ge in HLE.
+      exists x. inv H. constructor. inv H0.
+      constructor. ss. right. right. ss.
+      inv H1. constructor. ss. constructor. omega.
+      ss.
+    }
+  }
+Qed.
+
+Lemma list_max_exists:
+  forall i I,
+    exists i', list_max i' (i::I).
+Proof.
+  intros.
+  induction I.
+  { exists i. apply list_max_one. }
+  { inv IHI.
+    destruct (x <? a) eqn:HLE.
+    { exists a. rewrite Nat.ltb_lt in HLE.
+      constructor.
+      right. left. ss.
+      inv H. inv H1. constructor. omega. constructor. ss.
+      rewrite List.Forall_forall in *. intros. apply H4 in H. omega.
+    }
+    { rewrite Nat.ltb_ge in HLE.
+      exists x. inv H. constructor. inv H0.
+      constructor. ss. right. right. ss.
+      inv H1. constructor. ss. constructor. omega.
+      ss.
+    }
+  }
+Qed.
+
+Lemma list_max_inj_l:
+  forall n n' l
+         (H1:list_max n l)
+         (H2:list_max n' l),
+    n = n'.
+Proof.
+  intros.
+  unfold list_max in *.
+  inv H1. inv H2.
+  rewrite List.Forall_forall in *.
+  apply H3 in H. apply H0 in H1. omega.
+Qed.
+
+Lemma list_min_inj_l:
+  forall n n' l
+         (H1:list_min n l)
+         (H2:list_min n' l),
+    n = n'.
+Proof.
+  intros.
+  unfold list_min in *.
+  inv H1. inv H2.
+  rewrite List.Forall_forall in *.
+  apply H3 in H. apply H0 in H1. omega.
 Qed.
 
 (*******************************************
@@ -3725,6 +3841,18 @@ Proof.
   intros HH.
   rewrite Nat.shiftl_eq_0_iff.
   omega.
+Qed.
+
+Lemma shiftl_lle:
+  forall n m n'
+         (HLE:n <= n'),
+    Nat.shiftl n m <= Nat.shiftl n' m.
+Proof.
+  intros.
+  induction m.
+  { ss. }
+  { simpl.
+    unfold Nat.double. lia. }
 Qed.
 
 Lemma shiftl_2_decompose:

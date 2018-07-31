@@ -826,7 +826,7 @@ Proof.
   destruct p.
   { exploit H. ss. intros HH. inv HH. inv H2.
     split.
-    { intros. inv H2. split. ss. SearchAbout Ir.Memory.new.
+    { intros. inv H2. split. ss.
       eapply Ir.Memory.get_new in HNEW. rewrite HNEW. eexists. eassumption.
       inv HWF. ss. ss. ss.
       ss.
