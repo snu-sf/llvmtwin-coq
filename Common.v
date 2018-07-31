@@ -4087,10 +4087,61 @@ Section ABCDD.
 
 End ABCDD.
 
+Lemma nem_add_nem
+      K a b ctx
+      (HK:K > 0)
+      (EQM: a mod K <> b mod K)
+  :
+    (a + ctx) mod K <> (b + ctx) mod K
+.
+Proof.
+  intros HH. apply EQM. clear EQM.
+(*       (((a + x) mod K) + K - ((a + y) mod K)) mod K =
+      ((x mod K) + K - (y mod K)) mod K
+*)
+  rewrite <- Nat.mod_mod in HH; try omega.
+  rewrite Nat.add_comm with (n := a) in HH.
+  rewrite Nat.add_comm with (n := b) in HH.
+  rewrite <- Nat.mod_mod with (a := (ctx + b)) in HH; try omega.
+  apply eqm_add_eqm with (ctx := K - ((ctx + 0) mod K)) in HH; try omega.
+  rewrite Nat.add_sub_assoc in HH.
+  rewrite Nat.add_sub_assoc in HH.
+  rewrite addm_subm_eq in HH; try omega.
+  rewrite addm_subm_eq in HH; try omega.
+  rewrite Nat.mod_0_l in HH; try omega.
+  rewrite Nat.sub_0_r in HH.
+  rewrite Nat.sub_0_r in HH.
+  rewrite <- Nat.mul_1_l with (n := K) in HH at 2.
+  rewrite <- Nat.mul_1_l with (n := K) in HH at 5.
+  rewrite Nat.mod_add in HH; try omega.
+  rewrite Nat.mod_add in HH; try omega.
+  rewrite Nat.mod_mod in HH; try omega.
+  rewrite Nat.mod_mod in HH; try omega.
+  assert (HH2 := Nat.mod_upper_bound (ctx + 0) K).
+  exploit HH2. omega. intros. omega.
+  assert (HH2 := Nat.mod_upper_bound (ctx + 0) K).
+  exploit HH2. omega. intros. omega.
+Qed.
+
 Lemma mod_add_eq:
   forall a b c d (HD:d > 0),
   ((a + b) mod d =? (a + c) mod d) = ((b mod d) =? (c mod d)).
-Admitted.
+Proof.
+  intros.
+  destruct (b mod d =? c mod d) eqn:HE.
+  { rewrite Nat.eqb_eq in HE.
+    apply eqm_add_eqm with (ctx := a) in HE.
+    rewrite Nat.add_comm in HE.
+    rewrite Nat.add_comm with (n := c) in HE.
+    rewrite Nat.eqb_eq. ss.
+    omega.
+  }
+  { rewrite Nat.eqb_neq in *.
+    rewrite Nat.add_comm.
+    rewrite Nat.add_comm with (m := c).
+    apply nem_add_nem. ss. ss.
+  }
+Qed.
 
 
 Lemma andb_inj_r:
