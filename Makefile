@@ -44,7 +44,7 @@ CAMLFLAGS         := $(COQMF_CAMLFLAGS)
 HASNATDYNLINK     := $(COQMF_HASNATDYNLINK)
 
 Makefile.conf: 
-	C:\gil\unix\Coq\bin\coq_makefile.exe Behaviors.v Common.v GVN1.v GVN2.v GVN3.v GVN4.v Lang.v LoadStore.v Memory.v Refinement.v Reordering.v sflib.v SmallStep.v SmallStepAux.v SmallStepRefinement.v SmallStepTest.v SmallStepWf.v State.v TwinExecution.v TwinExecutionAux.v TwinExecutionProof.v Value.v WellTyped.v -o Makefile
+	coq_makefile.exe Behaviors.v Common.v GVN1.v GVN2.v GVN3.v GVN4.v Lang.v LoadStore.v Memory.v Refinement.v Reordering.v sflib.v SmallStep.v SmallStepAux.v SmallStepRefinement.v SmallStepTest.v SmallStepWf.v State.v TwinExecution.v TwinExecutionAux.v TwinExecutionProof.v Value.v WellTyped.v -o Makefile
 
 # This file can be created by the user to hook into double colon rules or
 # add any other Makefile code he may need
