@@ -87,32 +87,23 @@ Definition p2N (p:Ir.ptrval) (m:Ir.Memory.t) (sz:nat):nat :=
     twos_compl o sz
   end.
 
-(* Raw definition of PTRSZ makes coqtop loop infinitely. *)
-(* why should I do this? ... *)
-
-Definition master_key : unit.
-Proof. apply tt. Qed.
-
-Definition locked A := let 'tt := master_key in fun x : A => x.
-Definition OPAQUED_PTRSZ := locked nat Ir.PTRSZ.
-
 (* Pointer subtraction. *)
 Definition psub p1 p2 m bsz :=
   match (p1, p2) with
   | (Ir.plog l1 o1, Ir.plog l2 o2) =>
     if Nat.eqb l1 l2 then
       (* psub on two same block *)
-      Ir.num (twos_compl (twos_compl_sub o1 o2 OPAQUED_PTRSZ) bsz)
+      Ir.num (twos_compl (twos_compl_sub o1 o2 Ir.PTRSZ) bsz)
     else
       (* psub on two different blocks *)
       Ir.poison
   (* In all other cases, returns concrete number *)
   | (Ir.pphy o1 _ _, Ir.plog _ _) =>
-    Ir.num (twos_compl (twos_compl_sub o1 (p2N p2 m OPAQUED_PTRSZ) OPAQUED_PTRSZ) bsz)
+    Ir.num (twos_compl (twos_compl_sub o1 (p2N p2 m Ir.PTRSZ) Ir.PTRSZ) bsz)
   | (Ir.plog _ _, Ir.pphy o2 _ _) =>
-    Ir.num (twos_compl (twos_compl_sub (p2N p1 m OPAQUED_PTRSZ) o2 OPAQUED_PTRSZ) bsz)
+    Ir.num (twos_compl (twos_compl_sub (p2N p1 m Ir.PTRSZ) o2 Ir.PTRSZ) bsz)
   | (Ir.pphy o1 _ _, Ir.pphy o2 _ _) =>
-    Ir.num (twos_compl (twos_compl_sub o1 o2 OPAQUED_PTRSZ) bsz)
+    Ir.num (twos_compl (twos_compl_sub o1 o2 Ir.PTRSZ) bsz)
   end.
 
 (* getelementptr with/without inbounds tag. *)
@@ -120,7 +111,7 @@ Definition gep (p:Ir.ptrval) (idx0:nat) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir
   let idx := idx0 * (Ir.ty_bytesz t) in
   match p with
   | Ir.plog l o =>
-    let o' := twos_compl_add o idx OPAQUED_PTRSZ in
+    let o' := twos_compl_add o idx Ir.PTRSZ in
     if inb then
       (* In case of inbounds: check whether input/output pointer is
          within bounds. *)
@@ -135,9 +126,9 @@ Definition gep (p:Ir.ptrval) (idx0:nat) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir
       (* otherwise: just returns the pointer with updated offset. *)
       Ir.ptr (Ir.plog l o')
   | Ir.pphy o Is cid =>
-    let o' := twos_compl_add o idx OPAQUED_PTRSZ in
+    let o' := twos_compl_add o idx Ir.PTRSZ in
     if inb then
-      if Nat.ltb idx (Nat.shiftl 1 (OPAQUED_PTRSZ - 1)) then
+      if Nat.ltb idx (Nat.shiftl 1 (Ir.PTRSZ - 1)) then
         (* Added idx is positive. *)
         if Nat.ltb (o + idx) Ir.MEMSZ then
           (* Should not overflow Ir.MEMSZ *)
@@ -364,7 +355,7 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         match retty with
         | Ir.ptrty retty =>
           match (Ir.Config.get_val c opint) with
-          | Some (Ir.num n) => Ir.ptr (Ir.pphy (twos_compl n OPAQUED_PTRSZ) nil None)
+          | Some (Ir.num n) => Ir.ptr (Ir.pphy (twos_compl n Ir.PTRSZ) nil None)
           | _ => Ir.poison
           end
         | _ => Ir.poison

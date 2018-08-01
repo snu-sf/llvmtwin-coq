@@ -1017,8 +1017,8 @@ Proof.
   unfold Ir.store_bytes in HWF.
   assert (HPLEN:Ir.ty_bytesz (Ir.ptrty pt) =? length (Ir.Byte.ofptr p)).
   { unfold Ir.ty_bytesz.
-    unfold Ir.Byte.ofptr.
-    unfold Ir.PTRSZ. reflexivity. }
+    unfold Ir.Byte.ofptr. unfold Ir.ty_bitsz.
+    rewrite Ir.PTRSZ_def. reflexivity. }
   rewrite HPLEN in HWF.
   unfold Ir.deref in HDEREF.
   des_ifs.
@@ -1355,7 +1355,7 @@ Proof.
         { unfold Ir.ty_bytesz.
           unfold Ir.ty_bitsz.
           unfold Ir.Byte.ofptr.
-          unfold Ir.PTRSZ.
+          rewrite Ir.PTRSZ_def.
           reflexivity. }
         assert (HTWIN5' := HTWIN5 l).
         destruct (l =? blkid) eqn:HL.
@@ -1379,12 +1379,12 @@ Proof.
           { rewrite andb_true_iff in HINB.
             destruct HINB as [HINB1 HINB2].
             assert (HPLEN':length (Ir.Byte.ofptr p) = 2).
-            { unfold Ir.Byte.ofptr. unfold Ir.PTRSZ. reflexivity. }
+            { unfold Ir.Byte.ofptr. rewrite Ir.PTRSZ_def. reflexivity. }
             rewrite HPLEN' in *.
-            rewrite HINB1.
+            (*rewrite HINB1.
             unfold Ir.PTRSZ in HINB2. simpl in HINB2.
             rewrite HINB2.
-            simpl.
+            simpl.*)
             apply leb_complete in HINB2.
             rewrite <- Nat.ltb_ge in HINB2.
             rewrite HH4.
@@ -1404,10 +1404,10 @@ Proof.
               repeat (split; unfold Ir.MemBlock.set_bytes; simpl; try congruence).
             }
           }
-          { unfold Ir.Byte.ofptr in HINB.
-            unfold Ir.PTRSZ in HINB.
+          { (*unfold Ir.Byte.ofptr in HINB.
+            rewrite Ir.PTRSZ_def in HINB.
             simpl in HINB.
-            rewrite HINB.
+            rewrite HINB.*)
             assert (HTWIN5' := HTWIN5 blkid).
             destruct HTWIN5'.
             exploit H. reflexivity. intros HH.
@@ -1542,7 +1542,7 @@ Proof.
 
       assert (HWELLTYPED:Ir.ty_bytesz (Ir.ptrty t) =? length (Ir.Byte.ofptr p)).
       { unfold Ir.ty_bytesz. unfold Ir.Byte.ofptr. 
-        unfold Ir.ty_bitsz. unfold Ir.PTRSZ. reflexivity. }
+        unfold Ir.ty_bitsz. rewrite Ir.PTRSZ_def. reflexivity. }
 
       (* Okay, the block l can be the blkid or not. *)
       destruct (l =? blkid) eqn:HBLKID.

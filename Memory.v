@@ -68,6 +68,14 @@ Proof.
   omega.
 Qed.
 
+Lemma PTRSZ_MEMSZ:
+  Nat.shiftl 2 (Ir.PTRSZ - 1) = Ir.MEMSZ.
+Proof. unfold Ir.MEMSZ; rewrite Ir.PTRSZ_def. reflexivity. Qed.
+
+Lemma PTRSZ_MEMSZ2:
+  Nat.double (Nat.shiftl 1 (Ir.PTRSZ - 1)) = Ir.MEMSZ.
+Proof. unfold Ir.MEMSZ; rewrite Ir.PTRSZ_def. reflexivity. Qed.
+
 
 
 (* Are two pointers equivalent? *)

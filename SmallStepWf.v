@@ -309,7 +309,6 @@ Proof.
     split.
     { intros. inv H2.
       split.
-      rewrite OPAQUED_PTRSZ_PTRSZ.
       apply twos_compl_add_lt.
       eauto.
     }
@@ -318,26 +317,26 @@ Proof.
   { exploit H. ss. intros HH. inv HH. inv H2.
     split.
     { intros. inv H2. split.
-      rewrite OPAQUED_PTRSZ_PTRSZ. apply twos_compl_add_lt.
+      apply twos_compl_add_lt.
       eauto. }
     { intros. ss. }
   }
   { exploit H0. ss. intros HH.
     split.
     { intros. ss. }
-    { intros. inv H1. rewrite OPAQUED_PTRSZ_PTRSZ.
+    { intros. inv H1.
       apply twos_compl_add_lt. }
   }
   { exploit H0. ss. intros HH.
     split.
     { intros. ss. }
-    { intros. inv H1. rewrite OPAQUED_PTRSZ_PTRSZ.
+    { intros. inv H1.
       apply twos_compl_add_lt. }
   }
   { exploit H0. ss. intros HH.
     split.
     { intros. ss. }
-    { intros. inv H1. rewrite OPAQUED_PTRSZ_PTRSZ.
+    { intros. inv H1.
       apply twos_compl_add_lt. }
   }
 Qed.
@@ -570,7 +569,9 @@ Proof.
         eapply ptr_wf_set. ss. eapply wf_ptr_mem.
         rewrite H1. ss. eapply firstn_In. ss. eassumption. eassumption.
       }
-      simpl in H.
+      unfold Ir.Byte.ofptr in H.
+      rewrite Ir.PTRSZ_def in H.
+      simpl in H.      
       destruct H.
       { (* changed part 1 *)
         (* should use ptr_wf *)
@@ -772,7 +773,6 @@ Proof.
       intros. inv H.
       split. intros. congruence.
       intros. inv H.
-      rewrite OPAQUED_PTRSZ_PTRSZ. 
       eapply twos_compl_lt.
     + (* ievent *)
       rename HNEXT into H2. simpl in H2.

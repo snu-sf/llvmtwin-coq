@@ -25,28 +25,12 @@ Module SmallStep.
 Auxiliary Lemmas about PTRSZ,MEMSZ,two's complement,etc
  ****************************************************)
 
-Lemma OPAQUED_PTRSZ_PTRSZ:
-  Ir.SmallStep.OPAQUED_PTRSZ = Ir.PTRSZ.
-Proof.
-  unfold Ir.SmallStep.OPAQUED_PTRSZ.
-  unfold Ir.SmallStep.locked.
-  des_ifs.
-Qed.
-
-Lemma PTRSZ_MEMSZ:
-  Nat.shiftl 2 (Ir.PTRSZ - 1) = Ir.MEMSZ.
-Proof. unfold Ir.MEMSZ; rewrite Ir.PTRSZ_def. reflexivity. Qed.
-
-Lemma PTRSZ_MEMSZ2:
-  Nat.double (Nat.shiftl 1 (Ir.PTRSZ - 1)) = Ir.MEMSZ.
-Proof. unfold Ir.MEMSZ; rewrite Ir.PTRSZ_def. reflexivity. Qed.
-
 Lemma twos_compl_add_lt:
   forall a b,
     twos_compl_add a b Ir.PTRSZ < Ir.MEMSZ.
 Proof.
   unfold twos_compl_add. unfold twos_compl.
-  intros. rewrite PTRSZ_MEMSZ. apply Nat.mod_upper_bound.
+  intros. rewrite Ir.PTRSZ_MEMSZ. apply Nat.mod_upper_bound.
   pose Ir.MEMSZ_pos. omega.
 Qed.
 
@@ -55,7 +39,7 @@ Lemma twos_compl_lt:
     twos_compl a Ir.PTRSZ < Ir.MEMSZ.
 Proof.
   unfold twos_compl.
-  intros. rewrite PTRSZ_MEMSZ. apply Nat.mod_upper_bound.
+  intros. rewrite Ir.PTRSZ_MEMSZ. apply Nat.mod_upper_bound.
   pose Ir.MEMSZ_pos. omega.
 Qed.
 

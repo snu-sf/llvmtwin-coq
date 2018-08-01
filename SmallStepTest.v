@@ -3,6 +3,7 @@ Require Import Bool.
 Require Import List.
 Require Import sflib.
 Require Import Omega.
+Require Import Lia.
 
 Require Import Common.
 Require Import Lang.
@@ -868,7 +869,7 @@ Proof.
   inv HNEXT.
   unfold Ir.SmallStep.psub.
   rewrite PeanoNat.Nat.eqb_refl.
-  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
+  rewrite Ir.PTRSZ_def.
   des_ifs.
 Qed.
 
@@ -900,7 +901,7 @@ Proof.
   unfold Ir.SmallStep.twos_compl_sub.
   unfold Ir.SmallStep.twos_compl.
   rewrite PeanoNat.Nat.eqb_refl.
-  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
+  rewrite Ir.PTRSZ_def.
   des_ifs.
 Qed.
 
@@ -931,7 +932,6 @@ Proof.
   unfold Ir.SmallStep.psub.
   rewrite <- PeanoNat.Nat.eqb_neq in HDIFFBLK.
   rewrite HDIFFBLK.
-  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
   des_ifs.
 Qed.
 
@@ -967,8 +967,16 @@ Proof.
   unfold Ir.log_to_phy.
   rewrite HBLK.
   rewrite HADDR.
-  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
-  des_ifs.
+  rewrite Nat.min_id.
+  rewrite Ir.PTRSZ_MEMSZ.
+  unfold Ir.SmallStep.twos_compl.
+  rewrite Ir.PTRSZ_MEMSZ.
+  rewrite Nat.mod_mod.
+  replace ((((138 + 10) mod Ir.MEMSZ + Ir.MEMSZ - 128) mod Ir.MEMSZ)
+             mod Nat.shiftl 2 (8 - 1)) with 20.
+  ss.
+  unfold Ir.MEMSZ. rewrite Ir.PTRSZ_def. reflexivity.
+  pose Ir.MEMSZ_pos. omega.
 Qed.
 
 (****************************************************
@@ -1004,8 +1012,15 @@ Proof.
   unfold Ir.log_to_phy.
   rewrite HBLK.
   rewrite HADDR.
-  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
+  rewrite Ir.PTRSZ_def.
   des_ifs.
+  replace (((Ir.SmallStep.twos_compl ((4 + 1) mod Ir.MEMSZ) (Nat.min 16 16) +
+             Nat.shiftl 2 (16 - 1) - 8) mod Nat.shiftl 2 (16 - 1))
+           mod Nat.shiftl 2 (4 - 1)) with 13.
+  ss.
+  unfold Ir.MEMSZ. rewrite Nat.min_id.
+  rewrite Ir.PTRSZ_def.
+  reflexivity.
 Qed.
 
 (****************************************************
@@ -1035,8 +1050,11 @@ Proof.
   unfold Ir.SmallStep.twos_compl_sub.
   unfold Ir.SmallStep.twos_compl.
   unfold Ir.SmallStep.p2N.
-  unfold Ir.SmallStep.OPAQUED_PTRSZ. unfold Ir.SmallStep.locked.
-  des_ifs.
+  rewrite Ir.PTRSZ_def.
+  replace (((10 + Nat.shiftl 2 (16 - 1) - 8) mod Nat.shiftl 2 (16 - 1))
+           mod Nat.shiftl 2 (4 - 1)) with 2.
+  ss.
+  reflexivity.
 Qed.
 
 

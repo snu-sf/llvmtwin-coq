@@ -45,7 +45,7 @@ Module GVN4.
  **************************************************************)
 
 Definition posofs (ofs:nat) (t:Ir.ty) :=
-  ofs * Ir.ty_bytesz t < Nat.shiftl 1 (Ir.SmallStep.OPAQUED_PTRSZ - 1).
+  ofs * Ir.ty_bytesz t < Nat.shiftl 1 (Ir.PTRSZ - 1).
 
 Inductive gepinbs: Ir.Memory.t -> Ir.val -> Ir.val -> Ir.ptrval -> Prop :=
 | gi_one: (* should have at least one GEP *)
@@ -166,18 +166,6 @@ Proof.
   }
 Qed.
 
-Lemma PTRSZ_MEMSZ:
-  Nat.shiftl 2 (Ir.PTRSZ - 1) = Ir.MEMSZ.
-Proof. reflexivity. Qed.
-
-Lemma OPAQUED_PTRSZ_PTRSZ:
-  Ir.SmallStep.OPAQUED_PTRSZ = Ir.PTRSZ.
-Proof.
-  unfold Ir.SmallStep.OPAQUED_PTRSZ.
-  unfold Ir.SmallStep.locked.
-  des_ifs.
-Qed.
-
 Lemma gep_phy_Ilb:
   forall o1 o2 I1 I2 cid1 cid2 ofs t m
          (HMIN:exists n, list_min n I1)
@@ -214,8 +202,7 @@ Proof.
     constructor. ss. constructor. lia.
     rewrite List.Forall_forall in *. intros. eapply H1 in H. lia.
   }
-  rewrite OPAQUED_PTRSZ_PTRSZ in *.
-  rewrite PTRSZ_MEMSZ.
+  rewrite Ir.PTRSZ_MEMSZ.
   ss.
 Qed.
 
@@ -244,8 +231,7 @@ Proof.
   right. left. ss.
   constructor. lia. constructor. ss.
   rewrite List.Forall_forall in *. intros. apply H0 in H1. lia.
-  rewrite OPAQUED_PTRSZ_PTRSZ in *.
-  rewrite PTRSZ_MEMSZ.
+  rewrite Ir.PTRSZ_MEMSZ.
   ss.
 Qed.
 
@@ -386,7 +372,7 @@ Proof.
   intros.
   unfold Ir.SmallStep.twos_compl_add.
   unfold Ir.SmallStep.twos_compl.
-  rewrite PTRSZ_MEMSZ.
+  rewrite Ir.PTRSZ_MEMSZ.
   rewrite Nat.mod_small. ss.
   ss.
 Qed.
@@ -394,10 +380,9 @@ Qed.
 Lemma twos_compl_add_PTRSZ':
   forall o i
          (HLE:o + i <? Ir.MEMSZ = true),
-  Ir.SmallStep.twos_compl_add o i Ir.SmallStep.OPAQUED_PTRSZ = o + i.
+  Ir.SmallStep.twos_compl_add o i Ir.PTRSZ = o + i.
 Proof.
   intros.
-  rewrite OPAQUED_PTRSZ_PTRSZ.
   apply twos_compl_add_PTRSZ.
   rewrite <- Nat.ltb_lt. ss.
 Qed.
@@ -427,12 +412,12 @@ Proof.
         split.
         {
           apply list_max_cons. apply list_max_one.
-          rewrite OPAQUED_PTRSZ_PTRSZ. rewrite twos_compl_add_PTRSZ. lia.
+          rewrite twos_compl_add_PTRSZ. lia.
           rewrite Nat.ltb_lt in Heq. ss.
         }
         {
           apply list_max_cons. apply list_max_one.
-          rewrite OPAQUED_PTRSZ_PTRSZ. rewrite twos_compl_add_PTRSZ. lia.
+          rewrite twos_compl_add_PTRSZ. lia.
           rewrite Nat.ltb_lt in Heq. ss.
         }
       }
@@ -450,11 +435,11 @@ Proof.
         split.
         apply list_max_cons. eapply list_max_cons2. eapply H0.
         rewrite Nat.leb_le in HLE. lia.
-        rewrite OPAQUED_PTRSZ_PTRSZ. rewrite twos_compl_add_PTRSZ. lia.
+        rewrite twos_compl_add_PTRSZ. lia.
         rewrite Nat.ltb_lt in *. ss.
         apply list_max_cons. eapply list_max_cons2. eapply H0.
         rewrite Nat.leb_le in HLE. lia.
-        rewrite OPAQUED_PTRSZ_PTRSZ. rewrite twos_compl_add_PTRSZ. lia.
+        rewrite twos_compl_add_PTRSZ. lia.
         rewrite Nat.ltb_lt in *. ss.
       }
       { intros. eapply list_max_inj_l with (n := x) in H1; try ss.
@@ -467,9 +452,9 @@ Proof.
       split.
       {
         apply list_max_cons. apply list_max_cons. ss.
-        rewrite Nat.leb_gt in HLE. rewrite OPAQUED_PTRSZ_PTRSZ in *.
+        rewrite Nat.leb_gt in HLE.
         omega.
-        rewrite Nat.leb_gt in HLE. rewrite OPAQUED_PTRSZ_PTRSZ in *.
+        rewrite Nat.leb_gt in HLE.
         rewrite twos_compl_add_PTRSZ in HLE. eapply le_trans.
         instantiate (1 := o0 + ofs1 * Ir.ty_bytesz t1).
         eapply Nat.le_add_r.
@@ -492,13 +477,13 @@ Proof.
     ss. ss. intros HH. inv HH.
     { inv H. inv H0. inv H1. clear IHHGEP.
       remember (Ir.SmallStep.twos_compl_add n (ofs * Ir.ty_bytesz t)
-                                            Ir.SmallStep.OPAQUED_PTRSZ) as n'.
+                                            Ir.PTRSZ) as n'.
       destruct (x <=? n') eqn:HLE.
       { rewrite Nat.leb_le in HLE.
         right. split.
         apply list_max_cons. eapply list_max_cons2. eapply H. ss.
         subst n'.
-        rewrite OPAQUED_PTRSZ_PTRSZ. rewrite twos_compl_add_PTRSZ.
+        rewrite twos_compl_add_PTRSZ.
         apply Nat.le_add_r. rewrite Nat.ltb_lt in Heq. ss.
         intros. apply list_max_inj_l with (n := x) in H1. omega. ss.
       }
@@ -507,13 +492,11 @@ Proof.
         split.
         {  apply list_max_cons. apply list_max_cons. ss.
           subst n'.
-          rewrite OPAQUED_PTRSZ_PTRSZ in *.
           rewrite Nat.leb_gt in HLE. rewrite twos_compl_add_PTRSZ in *. omega.
           rewrite Nat.ltb_lt in Heq. omega.
           rewrite Nat.ltb_lt in Heq. omega.
           subst n'.
-          rewrite Nat.leb_gt in HLE.
-          rewrite OPAQUED_PTRSZ_PTRSZ in *. rewrite twos_compl_add_PTRSZ in *.
+          rewrite Nat.leb_gt in HLE. rewrite twos_compl_add_PTRSZ in *.
           lia. rewrite Nat.ltb_lt in Heq. ss.
         }
         { split. ss. rewrite Nat.leb_gt in HLE. omega. }
@@ -522,9 +505,9 @@ Proof.
     { inv H. right.
       split.
       { apply list_max_cons. eapply list_max_cons2. eassumption.
-        rewrite OPAQUED_PTRSZ_PTRSZ in *. rewrite twos_compl_add_PTRSZ.
+        rewrite twos_compl_add_PTRSZ.
         apply Nat.le_add_r. rewrite Nat.ltb_lt in Heq. ss.
-        rewrite OPAQUED_PTRSZ_PTRSZ in *. rewrite twos_compl_add_PTRSZ.
+        rewrite twos_compl_add_PTRSZ.
         apply Nat.le_add_r. rewrite Nat.ltb_lt in Heq. ss.
       }
       { intros. apply H1 in H.
@@ -602,7 +585,7 @@ Proof.
           rewrite Nat.ltb_lt in HLE. omega.
         }
         { destruct (x <=? Ir.SmallStep.twos_compl_add o0 (ofs1 * Ir.ty_bytesz t1)
-                          Ir.SmallStep.OPAQUED_PTRSZ)
+                          Ir.PTRSZ)
                    eqn:HLE2.
           { right. rewrite Nat.ltb_ge in HLE.
             eapply list_min_cons2.
@@ -788,8 +771,8 @@ Proof.
       unfold Ir.SmallStep.twos_compl.
       unfold list_max. split.
       right. constructor. ss.
-      constructor. rewrite Nat.mod_small. lia. rewrite OPAQUED_PTRSZ_PTRSZ in *.
-      rewrite PTRSZ_MEMSZ. rewrite Nat.ltb_lt in Heq0. ss.
+      constructor. rewrite Nat.mod_small. lia.
+      rewrite Ir.PTRSZ_MEMSZ. rewrite Nat.ltb_lt in Heq0. ss.
       constructor. ss.
       constructor.
     }
@@ -799,17 +782,17 @@ Proof.
     inv HH.
     unfold Ir.SmallStep.gep in HGEP.
     des_ifs.
-    { destruct (x <=? Ir.SmallStep.twos_compl_add o (ofs * Ir.ty_bytesz t) Ir.SmallStep.OPAQUED_PTRSZ)
+    { destruct (x <=? Ir.SmallStep.twos_compl_add o (ofs * Ir.ty_bytesz t) Ir.PTRSZ)
                eqn:HLE.
       { left.
         constructor.
         right. left. ss.
-        constructor. rewrite OPAQUED_PTRSZ_PTRSZ. rewrite twos_compl_add_PTRSZ. lia.
+        constructor. rewrite twos_compl_add_PTRSZ. lia.
           rewrite Nat.ltb_lt in Heq0. ss.
         constructor. ss.
         inv H.
         rewrite List.Forall_forall in *.
-        intros. apply H1 in H. rewrite OPAQUED_PTRSZ_PTRSZ in *. rewrite Nat.leb_le in HLE.
+        intros. apply H1 in H. rewrite Nat.leb_le in HLE.
           rewrite twos_compl_add_PTRSZ. eapply Nat.le_trans. eapply H.
           rewrite twos_compl_add_PTRSZ in HLE. ss.
           rewrite Nat.ltb_lt in Heq0. ss. rewrite Nat.ltb_lt in Heq0. ss.
@@ -818,12 +801,11 @@ Proof.
       { right. exists x.
         split. ss.
         rewrite Nat.leb_gt in HLE.
-        rewrite OPAQUED_PTRSZ_PTRSZ in HLE.
         rewrite twos_compl_add_PTRSZ in HLE.
         constructor. right. right. inv H. ss.
         constructor. 
         lia.
-        constructor. rewrite OPAQUED_PTRSZ_PTRSZ, twos_compl_add_PTRSZ. lia.
+        constructor. rewrite twos_compl_add_PTRSZ. lia.
         rewrite Nat.ltb_lt in Heq0. lia.
         inv H. rewrite List.Forall_forall in *.
         intros. apply H1 in H. ss.
@@ -897,7 +879,7 @@ Proof.
           unfold Ir.SmallStep.p2N in Heq.
           rewrite Nat.min_id in Heq.
           unfold Ir.SmallStep.twos_compl in Heq.
-          rewrite PTRSZ_MEMSZ in Heq.
+          rewrite Ir.PTRSZ_MEMSZ in Heq.
           rewrite Nat.mod_small in Heq.
           inv Heq.
           rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
@@ -987,7 +969,7 @@ Proof.
     apply Ir.Config.cur_inst_not_cur_terminator in HINST.
     des_ifs.
   }
-Admitted. (* Qed loops infinitely. :( *)
+Qed.
 
 
 
@@ -1010,7 +992,6 @@ Proof.
   unfold list_min in HMIN.
   unfold list_max in HMAX.
   inv HMIN. inv HMAX.
-  SearchAbout List.Forall.
   rewrite List.Forall_forall in *.
   dup H.
   apply H1 in H4. apply H3 in H. omega.
@@ -1778,7 +1759,6 @@ Proof.
       unfold_phys_minmaxI H0.
       subst x. subst x0.
       unfold Ir.SmallStep.icmp_eq_ptr in *.
-      rewrite <- OPAQUED_PTRSZ_PTRSZ in *.
       des_ifs; try (cc_thats_it; fail).
 
       inv HPMM. inv H. inv H0. inv H1.
@@ -1902,7 +1882,6 @@ Proof.
       subst x. subst x0.
       unfold Ir.SmallStep.icmp_ule_ptr in *.
       unfold Ir.SmallStep.icmp_ule_ptr_nondet_cond in *.
-      rewrite <- OPAQUED_PTRSZ_PTRSZ in *.
       des_ifs; try (cc_thats_it; fail).
 
       inv HPMM. inv H. inv H0. inv H1.

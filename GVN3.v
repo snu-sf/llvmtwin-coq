@@ -39,13 +39,13 @@ Definition eqprop_valid3 (m:Ir.Memory.t) (p q:Ir.val) :=
     to true, then p and q are exactly the same pointer.
  *********************************************************)
 
-Lemma twos_compl_twos_compl_add_OPAQUED_PTRSZ:
+Lemma twos_compl_twos_compl_add_PTRSZ:
   forall n x,
-    Ir.SmallStep.twos_compl (Ir.SmallStep.twos_compl_add n x Ir.SmallStep.OPAQUED_PTRSZ) Ir.PTRSZ =
-    Ir.SmallStep.twos_compl_add n x Ir.SmallStep.OPAQUED_PTRSZ.
+    Ir.SmallStep.twos_compl (Ir.SmallStep.twos_compl_add n x Ir.PTRSZ) Ir.PTRSZ =
+    Ir.SmallStep.twos_compl_add n x Ir.PTRSZ.
 Proof.
   intros.
-  rewrite Ir.GVN1.OPAQUED_PTRSZ_PTRSZ.
+  rewrite Ir.PTRSZ_def.
   unfold Ir.SmallStep.twos_compl_add.
   unfold Ir.SmallStep.twos_compl.
   rewrite Nat.mod_mod. reflexivity.
@@ -130,14 +130,6 @@ Proof.
   }
 Qed.
 
-Definition OPAQUED_MEMSZ := Ir.SmallStep.locked nat Ir.MEMSZ.
-Lemma OPAQUED_MEMSZ_MEMSZ:
-  OPAQUED_MEMSZ = Ir.MEMSZ.
-Proof.
-  intros. unfold OPAQUED_MEMSZ. unfold Ir.SmallStep.locked.
-  des_ifs.
-Qed.
-
 (* due to Coq bug, I made a separated lemmax *)
 Lemma gep_helper_small:
   forall n l o x1 x3 st p0 n'1
@@ -145,7 +137,7 @@ Lemma gep_helper_small:
           Ir.ptr p0)
 (Heqn'1: n'1 =
            Ir.SmallStep.twos_compl_add n (x1 * Ir.ty_bytesz x3)
-             Ir.SmallStep.OPAQUED_PTRSZ),
+             Ir.PTRSZ),
   p0 = Ir.pphy n'1 (n::n'1::l) o.
 Proof.
   intros. unfold Ir.SmallStep.gep in HVAL2. des_ifs.
@@ -176,20 +168,21 @@ Proof.
   rewrite HVAL1, HVAL2 in HNEXT.
   unfold Ir.SmallStep.icmp_eq_ptr in HNEXT.
   unfold Ir.SmallStep.p2N in HNEXT.
-  rewrite twos_compl_twos_compl_add_OPAQUED_PTRSZ in HNEXT.
+  rewrite Nat.min_id in HNEXT.
+  rewrite twos_compl_twos_compl_add_PTRSZ in HNEXT.
   inversion HNEXT.
   rewrite H1 in HTRUE.
   rewrite Ir.SmallStep.get_val_update_reg_and_incrpc in HTRUE.
   unfold Ir.Config.get_val in HTRUE.
   rewrite Ir.Config.get_rval_update_rval_id in HTRUE.
   inversion HTRUE.
-  destruct (Ir.SmallStep.twos_compl_add n (x0 * Ir.ty_bytesz x2) Ir.SmallStep.OPAQUED_PTRSZ =?
-         Ir.SmallStep.twos_compl_add n (x1 * Ir.ty_bytesz x3) Ir.SmallStep.OPAQUED_PTRSZ)
+  destruct (Ir.SmallStep.twos_compl_add n (x0 * Ir.ty_bytesz x2) Ir.PTRSZ =?
+         Ir.SmallStep.twos_compl_add n (x1 * Ir.ty_bytesz x3) Ir.PTRSZ)
            eqn:Heq; try congruence.
   rewrite Nat.eqb_eq in Heq. rewrite HVAL1, HVAL2, Heq.
   reflexivity.
   assumption.
-Admitted. (* This is really strange.. Why Qed never ends? *)
+Qed. (* This is really strange.. Why Qed never ends? *)
 
 
 Theorem eqprop_valid3_after_icmpeq_true:
