@@ -65,7 +65,7 @@ Proof.
     }
   }
   { unfold Ir.ty_bitsz.
-    unfold Ir.PTRSZ. simpl. omega.
+    rewrite Ir.PTRSZ_def. simpl. omega.
   }
 Qed.
 

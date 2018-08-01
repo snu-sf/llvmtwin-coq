@@ -12,7 +12,9 @@ Module Ir.
 (* Pointer value is 16 bits.
    The reason why it is not set as 32 or 64 is that sometimes
    it makes simpl and some tactics (almost) stop :( *)
-Definition PTRSZ := 16.
+Parameter PTRSZ : nat.
+Axiom PTRSZ_def: PTRSZ = 16.
+
 (* The size of memory. *)
 Definition MEMSZ := Nat.shiftl 1 PTRSZ.
 (* # of twin blocks. *)
@@ -60,7 +62,7 @@ Lemma MEMSZ_nonzero:
 Ir.MEMSZ <> 0.
 Proof.
   unfold Ir.MEMSZ.
-  unfold Ir.PTRSZ.
+  rewrite Ir.PTRSZ_def.
   intros HH. simpl in HH.
   repeat (rewrite Nat.double_twice in HH).
   omega.
@@ -944,7 +946,7 @@ Proof.
   rewrite PeanoNat.Nat.leb_le in H0.
   assert (Ir.MEMSZ = (Nat.shiftl 1 (Ir.PTRSZ - 1)) +
                      (Nat.shiftl 1 (Ir.PTRSZ - 1))).
-  { reflexivity. }
+  { unfold MEMSZ. rewrite Ir.PTRSZ_def. reflexivity. }
   destruct H0.
   { exploit wf_inmem0.
     simpl. right. left. reflexivity.

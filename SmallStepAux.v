@@ -13,14 +13,13 @@ Require Import LoadStore.
 Require Import Behaviors.
 Require Import SmallStep.
 
+Import SmallStep.
+Import Ir.
+Import Ir.SmallStep.
 
 Module Ir.
 
 Module SmallStep.
-
-Import SmallStep.
-Import Ir.
-Import Ir.SmallStep.
 
 (****************************************************
 Auxiliary Lemmas about PTRSZ,MEMSZ,two's complement,etc
@@ -36,11 +35,11 @@ Qed.
 
 Lemma PTRSZ_MEMSZ:
   Nat.shiftl 2 (Ir.PTRSZ - 1) = Ir.MEMSZ.
-Proof. reflexivity. Qed.
+Proof. unfold Ir.MEMSZ; rewrite Ir.PTRSZ_def. reflexivity. Qed.
 
 Lemma PTRSZ_MEMSZ2:
   Nat.double (Nat.shiftl 1 (Ir.PTRSZ - 1)) = Ir.MEMSZ.
-Proof. reflexivity. Qed.
+Proof. unfold Ir.MEMSZ; rewrite Ir.PTRSZ_def. reflexivity. Qed.
 
 Lemma twos_compl_add_lt:
   forall a b,

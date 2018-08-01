@@ -14,16 +14,16 @@ Require Import Behaviors.
 Require Import SmallStep.
 Require Import SmallStepAux.
 
-Module Ir.
-
-Module SmallStep.
-
 Import SmallStep.
 Import Ir.
 Import Ir.SmallStep.
 Import SmallStepAux.
 Import Ir.
 Import Ir.SmallStep.
+
+Module Ir.
+
+Module SmallStep.
 
 (****************************************************
         Theorems about sstep of instruction.
@@ -367,7 +367,7 @@ Proof.
   unfold Ir.Byte.getptr in Heq.
   unfold Ir.ty_bytesz in Heq.
   unfold Ir.ty_bitsz in Heq.
-  unfold Ir.PTRSZ in Heq.
+  rewrite Ir.PTRSZ_def in Heq.
   simpl in Heq.
   des_ifs.
   unfold Ir.load_bytes in Heq1.
