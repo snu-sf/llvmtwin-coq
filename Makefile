@@ -4,7 +4,7 @@
 ##   \VV/  #                                                                 ##
 ##    //   #                                                                 ##
 ###############################################################################
-## GNUMakefile for Coq 8.8.0
+## GNUMakefile for Coq 8.8.1
 
 # For debugging purposes (must stay here, don't move below)
 INITIAL_VARS := $(.VARIABLES)
@@ -44,7 +44,7 @@ CAMLFLAGS         := $(COQMF_CAMLFLAGS)
 HASNATDYNLINK     := $(COQMF_HASNATDYNLINK)
 
 Makefile.conf: 
-	coq_makefile.exe Behaviors.v Common.v GVN1.v GVN2.v GVN3.v GVN4.v Lang.v LoadStore.v Memory.v Refinement.v Reordering.v sflib.v SmallStep.v SmallStepAux.v SmallStepRefinement.v SmallStepTest.v SmallStepWf.v State.v TwinExecution.v TwinExecutionAux.v TwinExecutionProof.v Value.v WellTyped.v -o Makefile
+	coq_makefile Behaviors.v Common.v GVN1.v GVN2.v GVN3.v GVN4.v Lang.v LoadStore.v Memory.v Refinement.v Reordering.v sflib.v SmallStep.v SmallStepAux.v SmallStepRefinement.v SmallStepTest.v SmallStepWf.v State.v TwinExecution.v TwinExecutionAux.v TwinExecutionProof.v Value.v WellTyped.v -o Makefile
 
 # This file can be created by the user to hook into double colon rules or
 # add any other Makefile code he may need
@@ -176,7 +176,7 @@ COQDOCLIBS?=$(COQLIBS_NOML)
 # The version of Coq being run and the version of coq_makefile that
 # generated this makefile
 COQ_VERSION:=$(shell $(COQC) --print-version | cut -d " " -f 1)
-COQMAKEFILE_VERSION:=8.8.0
+COQMAKEFILE_VERSION:=8.8.1
 
 COQSRCLIBS?= $(foreach d,$(COQ_SRC_SUBDIRS), -I "$(COQLIB)$(d)")
 
@@ -216,7 +216,7 @@ ifdef DSTROOT
 DESTDIR := $(DSTROOT)
 endif
 
-concat_path = $(if $(1),$(1)/$(subst $(COQMF_WINDRIVE),/,$(2)),$(2))
+concat_path = $(if $(1),$(1)/$(if $(COQMF_WINDRIVE),$(subst $(COQMF_WINDRIVE),/,$(2)),$(2)),$(2))
 
 COQLIBINSTALL = $(call concat_path,$(DESTDIR),$(COQLIB)user-contrib)
 COQDOCINSTALL = $(call concat_path,$(DESTDIR),$(DOCDIR)user-contrib)
@@ -371,7 +371,7 @@ real-all: $(VOFILES) $(if $(USEBYTE),bytefiles,optfiles)
 .PHONY: real-all
 
 real-all.timing.diff: $(VOFILES:.vo=.v.timing.diff)
-.PHONE: real-all.timing.diff
+.PHONY: real-all.timing.diff
 
 bytefiles: $(CMOFILES) $(CMAFILES)
 .PHONY: bytefiles

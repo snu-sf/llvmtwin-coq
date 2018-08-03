@@ -19,11 +19,13 @@ Require Import Reordering.
 Require Import TwinExecution.
 Require Import TwinExecutionAux.
 
-
-Module Ir.
-
 Import TwinExecution.
 Import Ir.
+Import TwinExecutionAux.
+Import Ir.
+
+
+Module Ir.
 
 (*******************************************************
                  Main Theorems 
@@ -199,11 +201,11 @@ Proof.
 Qed.
       
 
-Import TwinExecutionAux.
-Import Ir.
-
-Ltac thats_it := apply twin_state_update_reg_and_incrpc;
-            assumption.
+Ltac thats_it :=
+  try (apply twin_state_update_reg_and_incrpc;
+            assumption);
+  try (apply twin_state_incrpc; assumption);
+  fail.
 
 Ltac coalesce_op Hop1 Hop2 st2 HTWIN :=
   assert (Htmp := Hop1);
@@ -212,10 +214,24 @@ Ltac coalesce_op Hop1 Hop2 st2 HTWIN :=
   try apply HTWIN;
   rewrite Htmp in Htmp2; inv Htmp2; clear Htmp.
 
+Ltac success_trivial :=
+  eapply ts_success; try reflexivity; thats_it.
 
+Ltac goes_wrong :=
+  eapply ts_goes_wrong; reflexivity.
 
-Opaque Ir.MEMSZ.
-Opaque Ir.PTRSZ.
+Ltac inst_det_step_op0 HINST :=
+          apply Ir.SmallStep.s_det; unfold Ir.SmallStep.inst_det_step;
+          rewrite <- HINST; reflexivity.
+
+Ltac inst_det_step_op1 HINST HOP :=
+          apply Ir.SmallStep.s_det; unfold Ir.SmallStep.inst_det_step;
+          rewrite <- HINST; rewrite HOP; reflexivity.
+
+Ltac inst_det_step_op2 HINST HOP HOP2 :=
+          apply Ir.SmallStep.s_det; unfold Ir.SmallStep.inst_det_step;
+          rewrite <- HINST; rewrite HOP; rewrite HOP2; reflexivity.
+
 
 (* Lemma: If (1) input states are twin-state &
    (2) current instruction don't do memory access from a guessed pointer &
@@ -257,11 +273,7 @@ Proof.
             try (apply HTWIN; fail).
           erewrite twin_state_get_val_eq with (st1 := st1);
             try (apply HTWIN; fail).
-          eapply ts_success.
-          { reflexivity. }
-          { reflexivity. }
-          { reflexivity. }
-          { thats_it. }
+          success_trivial.
         }
       }
       { (* psub *)
@@ -334,9 +346,7 @@ Proof.
     }
     { (* gep *)
       eexists. split.
-      { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-        rewrite <- Heqoi1.
-        reflexivity. }
+      inst_det_step_op0 Heqoi1.
       { erewrite <- twin_state_get_val_eq with (st2 := st2);
           try (apply HTWIN; fail).
         erewrite <- twin_state_get_val_eq with (st2 := st2);
@@ -364,13 +374,10 @@ Proof.
       { dup Hop11.
         erewrite twin_state_get_val_eq with (st2 := st2) in Hop0;
           try apply HTWIN.
-        eexists. split.
-        { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-          rewrite <- Heqoi1.
-          rewrite Hop0.
-          reflexivity. }
-        { inv H0. eapply ts_success. reflexivity. reflexivity. reflexivity.
-          thats_it. }
+        inv H0.
+        eexists. split; 
+          [ inst_det_step_op1 Heqoi1 Hop0
+          | success_trivial ].
       }
       destruct p eqn:HP.
       { (* logical ptr: okay *)
@@ -382,11 +389,8 @@ Proof.
             try apply HTWIN.
           rewrite twin_state_deref_eq with (st2 := st2) (blkid := blkid) in HDEREF0;
             try assumption.
-          eexists. split.
-          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi1.
-            rewrite Hop11.
-            rewrite HDEREF0. reflexivity. }
+          eexists. split. inv H0.
+          inst_det_step_op2 Heqoi1 Hop11 HDEREF0.
           { inv H0. eapply ts_success.
             {reflexivity. } { reflexivity. } { reflexivity. }
             { erewrite twin_state_load_val_eq. thats_it.
@@ -401,11 +405,8 @@ Proof.
             try assumption.
           eexists.
           split.
-          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi1.
-            rewrite Hop11.
-            rewrite HDEREF0. reflexivity. }
-          { eapply ts_goes_wrong; reflexivity. }
+          inst_det_step_op2 Heqoi1 Hop11 HDEREF0.
+          goes_wrong.
         }
       }
       { (* physical ptr: no *)
@@ -424,21 +425,16 @@ Proof.
         inv H0.
         erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
           try apply HTWIN.
-        eexists . split. 
-        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-          rewrite <- Heqoi1.
-          rewrite Hop11. reflexivity. }
-        { eapply ts_goes_wrong; try reflexivity. }
+        eexists . split;
+        [ inst_det_step_op1 Heqoi1 Hop11 | goes_wrong ].
       }
       { (* ty is problematic *)
         inv H0.
         erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
           try apply HTWIN.
-        eexists . split. 
-        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-          rewrite <- Heqoi1.
-          rewrite Hop11. reflexivity. }
-        { eapply ts_success; try reflexivity. thats_it. }
+        eexists . split.
+        inst_det_step_op1 Heqoi1 Hop11.
+        success_trivial.
       }
     }
     { (* store *)
@@ -455,15 +451,8 @@ Proof.
             try apply HTWIN;
             rewrite Hop21 in Hop11; inv Hop11;
             eexists; split;
-            [ apply Ir.SmallStep.s_det; unfold Ir.SmallStep.inst_det_step;
-              rewrite <- Heqoi1;
-              rewrite Hop21; reflexivity
-            | eapply ts_success;
-              [ reflexivity
-                | reflexivity
-                | reflexivity
-                | apply twin_state_incrpc; assumption ]
-            ]).
+            [ inst_det_step_op1 Heqoi1 Hop21 |
+              success_trivial ]).
         destruct (Ir.deref (Ir.Config.m st1) p (Ir.ty_bytesz t))
                  eqn:HDEREF; inv H1; destruct p.
         {
@@ -535,10 +524,7 @@ Proof.
             try apply HTWIN.
           eexists.
           split.
-          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi1.
-            rewrite Hop11. rewrite Hop22.
-            reflexivity. }
+          inst_det_step_op2 Heqoi1 Hop11 Hop22.
           { constructor; reflexivity. }
         }
       }
@@ -547,33 +533,18 @@ Proof.
         erewrite twin_state_get_val_eq with (st2 := st2) in Hop11;
             try apply HTWIN.
         rewrite Hop11 in Hop1. inv Hop1.
-        destruct v0.
-        { inv H0.
-          eexists. split.
-          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi1. rewrite Hop21. reflexivity.
-          }
-          { eapply ts_success.
-            reflexivity. reflexivity. reflexivity.
-            apply twin_state_incrpc. assumption. }
+        destruct v0; inv H0.
+        { eexists. split.
+          inst_det_step_op1 Heqoi1 Hop21.
+          success_trivial.
         }
-        { inv H0.
-          eexists. split.
-          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi1. rewrite Hop21. rewrite Hop22. reflexivity.
-          }
-          { eapply ts_success.
-            reflexivity. reflexivity. reflexivity.
-            apply twin_state_incrpc. assumption. }
+        { eexists. split.
+          inst_det_step_op2 Heqoi1 Hop21 Hop22.
+          success_trivial.
         }
-        { inv H0.
-          eexists. split.
-          { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi1. rewrite Hop21. rewrite Hop22. reflexivity.
-          }
-          { eapply ts_success.
-            reflexivity. reflexivity. reflexivity.
-            apply twin_state_incrpc. assumption. }
+        { eexists. split.
+          inst_det_step_op2 Heqoi1 Hop21 Hop22.
+          success_trivial.
         }
       }
       { (* Hop11, Hop21 is none.*)
@@ -582,22 +553,14 @@ Proof.
             try apply HTWIN.
         rewrite Hop12 in Hop1. inv Hop1. inv H0.
         eexists. split.
-        { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-          rewrite <- Heqoi1. rewrite Hop21. reflexivity.
-        }
-        { eapply ts_success.
-          reflexivity. reflexivity. reflexivity.
-          apply twin_state_incrpc. assumption. }
+        inst_det_step_op1 Heqoi1 Hop21.
+        success_trivial.
       }
       { (* all ops are none.*)
         inv H0.
         eexists. split.
-        { apply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-          rewrite <- Heqoi1. rewrite Hop21. reflexivity.
-        }
-        { eapply ts_success.
-          reflexivity. reflexivity. reflexivity.
-          apply twin_state_incrpc. assumption. }
+        inst_det_step_op1 Heqoi1 Hop21.
+        success_trivial.
       }
     }
     { (* free *)
@@ -615,10 +578,8 @@ Proof.
         { (* free (int) -_-; *)
           inv H0.
           eexists . split.
-          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi2.
-            rewrite H. reflexivity. }
-          { eapply ts_goes_wrong; reflexivity. }
+          inst_det_step_op1 Heqoi2 H.
+          goes_wrong.
         }
         { (* free (ptr) *)
           destruct p.
@@ -636,19 +597,15 @@ Proof.
             { destruct H1 as [m1 [m2 [H1 [H2 H3]]]].
               rewrite <- H1 in H0. inv H0.
               eexists.
-              split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite H.
-                rewrite <- H2. reflexivity. }
-              { eapply ts_success. reflexivity. reflexivity. reflexivity.
-                eapply twin_state_incrpc. eassumption. }
+              split. symmetry in H2.
+              inst_det_step_op2 Heqoi2 H H2.
+              success_trivial.
             }
             { destruct H1. rewrite <- H1 in H0.
               inv H0.
-              eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite H. rewrite <- H2. reflexivity. }
-              { eapply ts_goes_wrong; reflexivity. }
+              eexists. split. symmetry in H2.
+              inst_det_step_op2 Heqoi2 H H2.
+              goes_wrong.
             }
           }
           { (* free(phy) *)
@@ -663,10 +620,7 @@ Proof.
         { (* free (int) -_-; *)
           inv H0.
           eexists . split.
-          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi2.
-            rewrite H. reflexivity. }
-          { eapply ts_goes_wrong; reflexivity. }
+          inst_det_step_op1 Heqoi2 H. goes_wrong.
         }
       }
       { (* goes wrong *)
@@ -677,7 +631,7 @@ Proof.
           remember (Ir.Config.get_val st2 o) as op2 eqn:Hop2.
           coalesce_op Hop1 Hop2 st2 HTWIN.
           reflexivity. }
-        { eapply ts_goes_wrong; reflexivity. }
+        goes_wrong.
       }
     }
     { (* bit cast *)
@@ -691,8 +645,8 @@ Proof.
       { assert (HOP:Ir.Config.get_val st1 o = Ir.Config.get_val st2 o).
         { eapply twin_state_get_val_eq. eassumption. }
         rewrite HOP.
-        eapply ts_success. reflexivity. reflexivity. reflexivity.
-        thats_it. }
+        success_trivial.
+      }
     }
     { (* ptrtoint *)
       assert (Heqoi2 := Heqoi1).
@@ -700,15 +654,14 @@ Proof.
                                              (blkid := blkid) in Heqoi1;
         try assumption.
       eexists. split.
-      { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-        rewrite <- Heqoi2. reflexivity. }
+      inst_det_step_op0 Heqoi2.
       { assert (HOP:Ir.Config.get_val st1 o = Ir.Config.get_val st2 o).
         { eapply twin_state_get_val_eq. eassumption. }
         rewrite HOP.
-        destruct t; try (eapply ts_success; try reflexivity; thats_it).
+        destruct t; try success_trivial.
         destruct (Ir.Config.get_val st2 o) eqn:HOPVAL;
-          try (eapply ts_success; try reflexivity; thats_it).
-        { destruct v; try (eapply ts_success; try reflexivity; thats_it).
+          try success_trivial.
+        { destruct v; try success_trivial.
           destruct p.
           { (* p shouldn't be log (blkid, ..) *)
             destruct (b =? blkid) eqn:HBLKID.
@@ -726,14 +679,11 @@ Proof.
               unfold Ir.SmallStep.p2N.
               unfold Ir.log_to_phy.
               rewrite HH.
-              eapply ts_success; try reflexivity.
-              eapply twin_state_update_reg_and_incrpc.
-              eassumption.
+              success_trivial.
             }
           }
           { (* p is phy is okay. *)
-            unfold Ir.SmallStep.p2N.
-            eapply ts_success; try reflexivity. thats_it.
+            success_trivial.
           }
         }
       }
@@ -749,8 +699,7 @@ Proof.
       { assert (HOP:Ir.Config.get_val st1 o = Ir.Config.get_val st2 o).
         { eapply twin_state_get_val_eq. eassumption. }
         rewrite HOP.
-        eapply ts_success. reflexivity. reflexivity. reflexivity.
-        thats_it. }
+        success_trivial. }
     }
     { (* ievent *)
       assert (Heqoi2 := Heqoi1).
@@ -760,36 +709,19 @@ Proof.
       assert (HOP:Ir.Config.get_val st1 o = Ir.Config.get_val st2 o).
       { eapply twin_state_get_val_eq. eassumption. }
       destruct (Ir.Config.get_val st1 o) eqn:HOP1.
-      { destruct v.
-        { inv H0.
-          eexists. split.
-          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi2. rewrite <- HOP.
-            reflexivity. }
-          { eapply ts_success; try reflexivity.
-            eapply twin_state_incrpc. assumption. }
+      { symmetry in HOP. destruct v; inv H0.
+        { eexists. split.
+          inst_det_step_op1 Heqoi2 HOP. success_trivial.
         }
-        { inv H0.
-          eexists. split.
-          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi2. rewrite <- HOP.
-            reflexivity. }
-          { eapply ts_goes_wrong; try reflexivity. }
+        { eexists. split.
+          inst_det_step_op1 Heqoi2 HOP. goes_wrong.
         }
-        { inv H0.
-          eexists. split.
-          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi2. rewrite <- HOP.
-            reflexivity. }
-          { eapply ts_goes_wrong; try reflexivity. }
+        { eexists. split. inst_det_step_op1 Heqoi2 HOP. goes_wrong.
         }
       }
-      { inv H0.
+      { symmetry in HOP. inv H0.
         eexists. split.
-        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-          rewrite <- Heqoi2. rewrite <- HOP.
-          reflexivity. }
-        { eapply ts_goes_wrong; try reflexivity. }
+        inst_det_step_op1 Heqoi2 HOP. goes_wrong.
       }
     }
     { (* icmp ule *)
@@ -801,39 +733,26 @@ Proof.
       { eapply twin_state_get_val_eq. eassumption. }
       assert (HOPEQ2:Ir.Config.get_val st1 o0 = Ir.Config.get_val st2 o0).
       { eapply twin_state_get_val_eq. eassumption. }
+      symmetry in HOPEQ1. symmetry in HOPEQ2.
       destruct (Ir.Config.get_val st1 o) eqn:Hop11.
       { destruct v.
-        { destruct (Ir.Config.get_val st1 o0) eqn:Hop12.
-          { destruct v; inv H0.
-            { eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
-            }
-            { eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
-            }
-            { eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
-            }
+        {
+          destruct (Ir.Config.get_val st1 o0) eqn:Hop12.
+          { destruct v; inv H0;
+              (eexists; split;
+               [ inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2 | success_trivial ]).
           }
           { inv H0.
             eexists. split.
-            { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-              rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-            { eapply ts_success; try reflexivity. thats_it. }
+            inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2.
+            success_trivial.
           }
         }
         { destruct (Ir.Config.get_val st1 o0) eqn:Hop12.
           { destruct v.
             { inv H0. eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
+              inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2.
+              success_trivial.
             }
             { (* okay, the important case. *)
               unfold Ir.SmallStep.icmp_eq_ptr in H0.
@@ -844,17 +763,17 @@ Proof.
                 { inv H0.
                   eexists. split.
                   { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                    rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                    rewrite <- Heqoi2. rewrite HOPEQ1, HOPEQ2.
                     unfold Ir.SmallStep.icmp_eq_ptr. rewrite HBB0. reflexivity. }
-                  { eapply ts_success; try reflexivity. thats_it. }
+                  success_trivial.
                 }
                 { des_ifs.
                   eexists. split.
                   { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                    rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                    rewrite <- Heqoi2. rewrite HOPEQ1, HOPEQ2.
                     unfold Ir.SmallStep.icmp_eq_ptr. rewrite HBB0.
                     rewrite Heq0. reflexivity. }
-                  { eapply ts_success; try reflexivity. thats_it. }
+                  success_trivial.
                 }
               }
               { (* log, phy *)
@@ -868,9 +787,9 @@ Proof.
                 inv H0.
                 eexists. split.
                 { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                  rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                  rewrite <- Heqoi2. rewrite HOPEQ1, HOPEQ2.
                   unfold Ir.SmallStep.icmp_ule_ptr. reflexivity. }
-                { eapply ts_success; try reflexivity. thats_it. }
+                success_trivial.
               }
               { (* phy. log *)
                 assert (b <> blkid).
@@ -883,46 +802,42 @@ Proof.
                 inv H0.
                 eexists. split.
                 { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                  rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                  rewrite <- Heqoi2. rewrite HOPEQ1, HOPEQ2.
                   unfold Ir.SmallStep.icmp_ule_ptr. reflexivity. }
-                { eapply ts_success; try reflexivity. thats_it. }
+                success_trivial.
               }
               { (* phy phy *)
                 inversion H0.
                 inv H0.
                 eexists. split.
                 { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                  rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                  rewrite <- Heqoi2. rewrite HOPEQ1, HOPEQ2.
                   unfold Ir.SmallStep.icmp_ule_ptr. reflexivity. }
-                { eapply ts_success; try reflexivity. thats_it. }
+                success_trivial.
               }
             }
             { inv H0.
               eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
+              inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2.
+              success_trivial.
             }
           }
           { inv H0.
             eexists. split.
-            { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-              rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-            { eapply ts_success; try reflexivity. thats_it. }
+            inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2.
+            success_trivial.
           }
         }
         { inv H0.
           eexists. split.
-          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi2. rewrite <- HOPEQ1. reflexivity. }
-          { eapply ts_success; try reflexivity. thats_it. }
+          inst_det_step_op1 Heqoi2 HOPEQ1.
+          success_trivial.
         }
       }
       { inv H0.
         eexists. split.
-        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-          rewrite <- Heqoi2. rewrite <- HOPEQ1. reflexivity. }
-        { eapply ts_success; try reflexivity. thats_it. }
+        inst_det_step_op1 Heqoi2 HOPEQ1.
+        success_trivial.
       }
     }
     { (* icmp ule *)
@@ -934,39 +849,26 @@ Proof.
       { eapply twin_state_get_val_eq. eassumption. }
       assert (HOPEQ2:Ir.Config.get_val st1 o0 = Ir.Config.get_val st2 o0).
       { eapply twin_state_get_val_eq. eassumption. }
+      symmetry in HOPEQ1. symmetry in HOPEQ2.
       destruct (Ir.Config.get_val st1 o) eqn:Hop11.
       { destruct v.
         { destruct (Ir.Config.get_val st1 o0) eqn:Hop12.
-          { destruct v; inv H0.
-            { eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
-            }
-            { eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
-            }
-            { eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
-            }
+          { destruct v; inv H0;
+              (eexists; split;
+               [ inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2 |
+                 success_trivial ]).
           }
           { inv H0.
             eexists. split.
-            { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-              rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-            { eapply ts_success; try reflexivity. thats_it. }
+            inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2.
+            success_trivial.
           }
         }
         { destruct (Ir.Config.get_val st1 o0) eqn:Hop12.
           { destruct v.
             { inv H0. eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
+              inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2.
+              success_trivial.
             }
             { (* okay, the important case. *)
               unfold Ir.SmallStep.icmp_ule_ptr in H0.
@@ -976,7 +878,7 @@ Proof.
                 des_ifs.
                 { eexists. split.
                   { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                    rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                    rewrite <- Heqoi2. rewrite HOPEQ1, HOPEQ2.
                     unfold Ir.SmallStep.icmp_ule_ptr. rewrite Heq0. reflexivity. }
                   { eapply ts_success; try reflexivity.
                     dup HTWIN.
@@ -1009,7 +911,8 @@ Proof.
                       intros HH.
                       eexists. split.
                       { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                        rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                        rewrite <- Heqoi2. 
+                        rewrite HOPEQ1, HOPEQ2.
                         unfold Ir.SmallStep.icmp_ule_ptr. rewrite Heq0. reflexivity. }
                       { eapply ts_success; try reflexivity. rewrite <- HH.
                         rewrite Heq.
@@ -1028,9 +931,9 @@ Proof.
                 inv H0.
                 eexists. split.
                 { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                  rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                  rewrite <- Heqoi2. rewrite HOPEQ1, HOPEQ2.
                   unfold Ir.SmallStep.icmp_ule_ptr. reflexivity. }
-                { eapply ts_success; try reflexivity. thats_it. }
+                success_trivial.
               }
               { (* phy. log *)
                 assert (b <> blkid).
@@ -1043,45 +946,41 @@ Proof.
                 inv H0.
                 eexists. split.
                 { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                  rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                  rewrite <- Heqoi2. rewrite HOPEQ1, HOPEQ2.
                   unfold Ir.SmallStep.icmp_ule_ptr. reflexivity. }
-                { eapply ts_success; try reflexivity. thats_it. }
+                success_trivial.
               }
               { (* phy phy *)
                 inv H0.
                 eexists. split.
                 { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                  rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2.
+                  rewrite <- Heqoi2. rewrite HOPEQ1, HOPEQ2.
                   unfold Ir.SmallStep.icmp_ule_ptr. reflexivity. }
-                { eapply ts_success; try reflexivity. thats_it. }
+                success_trivial.
               }
             }
             { inv H0.
               eexists. split.
-              { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-                rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-              { eapply ts_success; try reflexivity. thats_it. }
+              inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2.
+              success_trivial.
             }
           }
           { inv H0.
             eexists. split.
-            { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-              rewrite <- Heqoi2. rewrite <- HOPEQ1, <- HOPEQ2. reflexivity. }
-            { eapply ts_success; try reflexivity. thats_it. }
+            inst_det_step_op2 Heqoi2 HOPEQ1 HOPEQ2.
+            success_trivial.
           }
         }
         { inv H0.
           eexists. split.
-          { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-            rewrite <- Heqoi2. rewrite <- HOPEQ1. reflexivity. }
-          { eapply ts_success; try reflexivity. thats_it. }
+          inst_det_step_op1 Heqoi2 HOPEQ1.
+          success_trivial.
         }
       }
       { inv H0.
         eexists. split.
-        { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-          rewrite <- Heqoi2. rewrite <- HOPEQ1. reflexivity. }
-        { eapply ts_success; try reflexivity. thats_it. }
+        inst_det_step_op1 Heqoi2 HOPEQ1.
+        success_trivial.
       }
     }
   }
@@ -1090,9 +989,7 @@ Proof.
     rewrite twin_state_cur_inst_eq with (st2 := st2)
                                            (blkid := blkid) in Heqoi2.
     { eexists. split.
-      { eapply Ir.SmallStep.s_det. unfold Ir.SmallStep.inst_det_step.
-        rewrite <- Heqoi2. reflexivity. }
-      { eapply ts_goes_wrong; try reflexivity. }
+      inst_det_step_op0 Heqoi2. goes_wrong.
     }
     { eassumption. }
   }
@@ -1104,7 +1001,7 @@ Proof.
                                            (blkid := blkid) in Heqoi2.
     { eexists. split.
       { eapply Ir.SmallStep.s_malloc_null. eassumption. reflexivity. }
-      { eapply ts_success; try reflexivity. thats_it. }
+      success_trivial.
     }
     { eassumption. }
   }
@@ -1282,8 +1179,7 @@ Proof.
       { rewrite HOP2. reflexivity. }
       { eassumption. }
     }
-    { eapply ts_success; try reflexivity.
-      thats_it. }
+    success_trivial.
   }
 Qed.
 
@@ -1600,72 +1496,30 @@ Proof.
     { eapply twin_execution_unidir; try eassumption.
       apply twin_state_sym. assumption.
       { intros HH. apply HNOGUESSEDACCESS.
-        inv HH.
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
+        inv HH;
+          rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
+            in HINST; try assumption;
           rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
             in HOPPTR; try assumption.
-          eapply gp_store; try eassumption. }
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOPPTR; try assumption.
-          eapply gp_load; try eassumption. }
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOPPTR; try assumption.
-          eapply gp_free; try eassumption. }
+        { eapply gp_store; try eassumption. }
+        { eapply gp_load; try eassumption. }
+        { eapply gp_free; try eassumption. }
       }
       { intros HH. apply HNOTOBSERVE.
-        inv HH.
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
+        inv HH;
+          rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
+            in HINST; try assumption;
           rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP1; try assumption.
-          eapply ob_by_ptrtoint; try eassumption. }
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP1; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP2; try assumption.
-          eapply ob_by_iicmpeq_l; try eassumption. }
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP1; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP2; try assumption.
-          eapply ob_by_iicmpeq_r; try eassumption. }
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP1; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP2; try assumption.
-          eapply ob_by_iicmpule_l; try eassumption. }
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP1; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP2; try assumption.
-          eapply ob_by_iicmpule_r; try eassumption. }
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP1; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP2; try assumption.
-          eapply ob_by_psub_l; try eassumption. }
-        { rewrite <- twin_state_cur_inst_eq with (st1 := st1) (blkid := blkid)
-            in HINST; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP1; try assumption.
-          rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
-            in HOP2; try assumption.
-          eapply ob_by_psub_r; try eassumption. }
+            in HOP1; try assumption;
+          try (rewrite <- twin_state_get_val_eq with (st1 := st1) (blkid := blkid)
+            in HOP2; try assumption).
+        { eapply ob_by_ptrtoint; try eassumption. }
+        { eapply ob_by_iicmpeq_l; try eassumption. }
+        { eapply ob_by_iicmpeq_r; try eassumption. }
+        { eapply ob_by_iicmpule_l; try eassumption. }
+        { eapply ob_by_iicmpule_r; try eassumption. }
+        { eapply ob_by_psub_l; try eassumption. }
+        { eapply ob_by_psub_r; try eassumption. }
       }
     }
     intros.
