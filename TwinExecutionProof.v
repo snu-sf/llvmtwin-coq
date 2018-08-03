@@ -54,6 +54,7 @@ Proof.
   inv HNEXT.
   { unfold Ir.SmallStep.inst_det_step in HNEXT0.
     des_ifs. }
+  { left. rewrite <- HCUR in HCUR0. inv HCUR0. }
   { (* returned NULL*)
     left.
     rewrite <- HCUR in HCUR0. inv HCUR0.
@@ -275,6 +276,20 @@ Proof.
             try (apply HTWIN; fail).
           success_trivial.
         }
+      }
+      { (* freeze *)
+        des_ifs.
+        erewrite twin_state_get_val_eq with (st1 := st1) (st2 := st2) in Heq;
+            try (apply HTWIN; fail).
+        eexists. split.
+        inst_det_step_op1 Heqoi1 Heq.
+        success_trivial. }
+      { (* select *)
+        eexists. split.
+        inst_det_step_op0 Heqoi1.
+        repeat (erewrite <- twin_state_get_val_eq with (st1 := st1) (st2 := st2);
+            try (apply HTWIN; fail)).
+        des_ifs; success_trivial.
       }
       { (* psub *)
         eexists. split.
@@ -994,6 +1009,13 @@ Proof.
     { eassumption. }
   }
 }
+  { (* freeze *)
+    eexists. split.
+    erewrite twin_state_cur_inst_eq in HCUR; try eassumption.
+    eapply Ir.SmallStep.s_freeze; try eassumption. ss.
+    erewrite twin_state_get_val_eq in HPOISON; try eassumption.
+    success_trivial.
+  }
   { (* malloc null *)
     rename HCUR into Heqoi1.
     assert (Heqoi2 := Heqoi1).
