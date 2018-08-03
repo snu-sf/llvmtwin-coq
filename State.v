@@ -138,6 +138,12 @@ Definition eq_wopc (s1 s2:t):Prop :=
                   Regfile.eq itm1.(snd).(snd) itm2.(snd).(snd))
                s1 s2.
 
+Definition empty (s:t): bool :=
+  match s with
+  | [] => true
+  | _ => false
+  end.
+
 (***************************************************
               Lemmas about Stack.
  ***************************************************)
@@ -674,6 +680,21 @@ Proof.
   unfold update_rval.
   unfold update_m.
   simpl. des_ifs. rewrite Heq. reflexivity.
+Qed.
+
+Lemma update_rval_diffval:
+  forall st r v1 v2
+         (HDIFF:v1 <> v2) (HNOTEMPTY:Ir.Stack.empty (s st) = false),
+    update_rval st r v1 <> update_rval st r v2.
+Proof.
+  intros.
+  unfold update_rval.
+  unfold Ir.Stack.empty in HNOTEMPTY.
+  destruct (s st) eqn:HS.
+  - congruence.
+  - destruct p. destruct p.
+    intros H0.
+    inv H0. congruence.
 Qed.
 
 Lemma get_funid_update_m:

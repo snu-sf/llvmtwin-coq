@@ -499,6 +499,35 @@ Proof.
   }
 Qed.
 
+Lemma update_reg_and_incrpc_diffval:
+  forall md st r v1 v2
+         (HDIFF:v1 <> v2) (HNOTEMPTY:Ir.Stack.empty (Ir.Config.s st) = false),
+    Ir.SmallStep.update_reg_and_incrpc md st r v1 <>
+    Ir.SmallStep.update_reg_and_incrpc md st r v2.
+Proof.
+  intros.
+  unfold Ir.SmallStep.update_reg_and_incrpc.
+  unfold Ir.SmallStep.incrpc.
+  dup HNOTEMPTY.
+  unfold Ir.Stack.empty in HNOTEMPTY.
+  repeat (rewrite Ir.Config.cur_fdef_pc_update_rval).
+  destruct (Ir.Config.cur_fdef_pc md st) eqn:HPC.
+  { destruct p. des_ifs.
+    unfold Ir.Config.update_pc.
+    unfold Ir.Config.update_rval.
+    destruct (Ir.Config.s st) eqn:HS.
+    { congruence. }
+    { destruct p1. destruct p1.
+      simpl. intros H0. destruct p2. destruct p2. simpl in H0.
+      inv H0. congruence. }
+    apply Ir.Config.update_rval_diffval. assumption.
+    rewrite Heq0. assumption.
+  }
+  { apply Ir.Config.update_rval_diffval; assumption. }
+Qed.
+
+
+
 End SmallStep.
 
 End Ir.
