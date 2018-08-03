@@ -264,6 +264,24 @@ Definition inst_det_step (c:Ir.Config.t): option step_res :=
         | _ => Ir.poison
         end))
 
+    | ifreeze r op retty =>
+      match (Ir.Config.get_val c op) with
+      | (Some (Ir.num i1)) =>
+        Some (sr_success Ir.e_none (update_reg_and_incrpc c r (Ir.num i1)))
+      | _ => None
+      end
+
+    | iselect r opcond condty op1 op2 opty =>
+      Some (sr_success Ir.e_none (update_reg_and_incrpc c r
+        match (Ir.Config.get_val c opcond,
+               Ir.Config.get_val c op1,
+               Ir.Config.get_val c op2) with
+        | (Some Ir.poison, _, _) => Ir.poison
+        | (Some (Ir.num icond), Some v1, Some v2) =>
+           if Nat.eqb icond 1 then v1 else v2
+        | (_, _, _) => Ir.poison
+        end))
+
     | ipsub r retty ptrty op1 op2 =>
       Some (sr_success Ir.e_none (update_reg_and_incrpc c r
         match retty with
@@ -407,6 +425,14 @@ Inductive inst_step: Ir.Config.t -> step_res -> Prop :=
 | s_det: forall c sr
       (HNEXT:Some sr = inst_det_step c), inst_step c sr
 
+(* freeze, with poison value given as operand *)
+| s_freeze: forall c i r op1 isz j
+      (HCUR:Some i = Ir.Config.cur_inst md c)
+      (HINST:i = Ir.Inst.ifreeze r op1 (Ir.ity isz))
+      (HPOISON:Some Ir.poison = Ir.Config.get_val c op1),
+    inst_step c (sr_success Ir.e_none
+                            (update_reg_and_incrpc c r (Ir.num (twos_compl j isz))))
+
 (* a case where malloc nondeterministically returns NULL.
    This is required because we really cannot expect when
    malloc will return NULL in assembly code. *)
@@ -483,6 +509,8 @@ Inductive inst_nstep: Ir.Config.t -> nat -> Ir.trace * step_res -> Prop :=
 Definition changes_mem (i:Ir.Inst.t): bool :=
   match i with
   | ibinop _ _ _ _ _ => false
+  | ifreeze _ _ _ => false
+  | iselect _ _ _ _ _ _ => false
   | ipsub _ _ _ _ _ => false
   | igep _ _ _ _ _ => false
   | iload _ _ _ => false
@@ -499,6 +527,8 @@ Definition changes_mem (i:Ir.Inst.t): bool :=
 Definition never_goes_wrong (i:Ir.Inst.t): bool :=
   match i with
   | ibinop _ _ _ _ _ => true
+  | ifreeze _ _ _ => true
+  | iselect _ _ _ _ _ _ => true
   | ipsub _ _ _ _ _ => true
   | igep _ _ _ _ _ => true
   | iload _ _ _ => false
@@ -520,6 +550,8 @@ Definition allocates_mem (i:Ir.Inst.t): bool :=
 Definition raises_event (i:Ir.Inst.t): bool :=
   match i with
   | ibinop _ _ _ _ _ => false
+  | ifreeze _ _ _ => false
+  | iselect _ _ _ _ _ _ => false
   | ipsub _ _ _ _ _ => false
   | igep _ _ _ _ _ => false
   | iload _ _ _ => false

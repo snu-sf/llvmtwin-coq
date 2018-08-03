@@ -668,6 +668,8 @@ Proof.
     unfold inst_det_step in HNEXT. (* ibinop. *)
     rewrite <- HCUR in HNEXT.
     destruct i as [r retty bopc op1 op2 (* ibinop *)
+                  |r op1 retty (* ifreeze *)
+                  |r opcond condty op1 op2 opty (* iselect *)
                   |r retty ptrty opptr1 opptr2 (* ipsub *)
                   |r retty opptr opidx inb (* igep *)
                   |r retty opptr (* iload *)
@@ -682,6 +684,12 @@ Proof.
                   |r opty op1 op2 (* iicmp_ule *)
                   ] eqn:HINST; try (inversion HNEXT; fail).
     + destruct bopc; try_wf.
+    + (* ifreeze. *) try_wf.
+    + (* iselect. *) try_wf.
+      eapply update_reg_and_incrpc_wf. eassumption. ss. inv HWF.
+      intros. destruct v; try discriminate. inv H. eapply wf_ptr. eassumption.
+      eapply update_reg_and_incrpc_wf. eassumption. ss. inv HWF.
+      intros. destruct v0; try discriminate. inv H. eapply wf_ptr. eassumption.
     + (* ipsub. *) unfold psub in HNEXT. try_wf.
     + (* igep. *) try_wf.
       eapply update_reg_and_incrpc_wf; try reflexivity.
@@ -880,6 +888,8 @@ Proof.
     rewrite Hcur. reflexivity. unfold inst_det_step.
     rewrite Hcur. eassumption.
     inversion HNEXT.
+  - (* freeze *)
+    thats_it. intros. ss.
   - (* imalloc returning null *)
     thats_it. unfold Ir.NULL.
     intros. inv H0.
@@ -1049,6 +1059,8 @@ Proof.
     unfold inst_det_step in HNEXT. (* ibinop. *)
     rewrite <- HCUR in HNEXT.
     destruct i as [r retty bopc op1 op2 (* ibinop *)
+                  |r op1 retty (* ifreeze *)
+                  |r opcond condty op1 op2 opty (* iselect *)
                   |r retty ptrty opptr1 opptr2 (* ipsub *)
                   |r retty opptr opidx inb (* igep *)
                   |r retty opptr (* iload *)
@@ -1085,6 +1097,8 @@ Proof.
   inversion HSTEP.
   - eapply changes_mem_spec_det. eassumption.
     eassumption. assumption. eassumption.
+  - (* freeze *)
+    apply no_mem_change_after_update.
   - (* malloc, NULL *)
     apply no_mem_change_after_update.
   - (* malloc *)

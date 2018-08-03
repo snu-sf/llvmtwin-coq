@@ -94,6 +94,8 @@ Inductive bopcode :=
 
 Inductive t :=
 | ibinop: reg -> ty -> bopcode -> op -> op -> t (* lhs, retty, op1, op2 *)
+| ifreeze: reg -> op -> ty -> t (* lhs, op, retty *)
+| iselect: reg -> op -> ty -> op -> op -> ty -> t (* lhs, cond, condty, op1, op2, opty *)
 | ipsub: reg -> ty -> ty -> op -> op -> t (* lhs, retty, ptrty, ptr1, ptr2 *)
 | igep: reg -> ty -> op -> op -> bool -> t (* lhs, retty, ptr, idx, inbounds *)
                                            (* For simplicity, retty equals first operand ty *)
@@ -101,7 +103,7 @@ Inductive t :=
 | istore: ty -> op -> op -> t (* valty, ptr, val *)
 | imalloc: reg -> ty -> op -> t (* block size ty, block size *)
 | ifree: op -> t (* pointer *)
-| ibitcast: reg -> op -> ty -> t (* lhs, val, ty, retty *)
+| ibitcast: reg -> op -> ty -> t (* lhs, val, retty *)
 | iptrtoint: reg -> op -> ty -> t (* lhs, ptr, retty *)
 | iinttoptr: reg -> op -> ty -> t (* rhs, int, retty *)
 | ievent: op -> t
@@ -112,6 +114,8 @@ Inductive t :=
 Definition ops (i:t) :=
   match i with
   | ibinop _ _ _ op1 op2 => op1::op2::nil
+  | ifreeze _ op1 _ => op1::nil
+  | iselect _ opcond _ op1 op2 _ => opcond::op1::op2::nil
   | ipsub _ _ _ op1 op2 => op1::op2::nil
   | igep _ _ op1 op2 _ => op1::op2::nil
   | iload _ _ op1 => op1::nil
@@ -129,6 +133,8 @@ Definition ops (i:t) :=
 Definition regops (i:t) :=
   match i with
   | ibinop _ _ _ op1 op2 => (regop op1) ++ (regop op2)
+  | ifreeze _ op1 _ => (regop op1)
+  | iselect _ opcond _ op1 op2 _ => (regop opcond) ++ (regop op1) ++ (regop op2)
   | ipsub _ _ _ op1 op2 => (regop op1) ++ (regop op2)
   | igep _ _ op1 op2 _ => (regop op1) ++ (regop op2)
   | iload _ _ op1 => regop op1
@@ -146,6 +152,8 @@ Definition regops (i:t) :=
 Definition def (i:t): option (reg * ty) :=
   match i with
   | ibinop r t _ _ _ => Some (r, t)
+  | ifreeze r _ t => Some (r, t)
+  | iselect r _ _ _ _ t => Some (r, t)
   | ipsub r t _ _ _ => Some (r, t)
   | igep r t _ _ _ => Some (r, t)
   | iload r t _ => Some (r, t)
