@@ -21,6 +21,204 @@ Module Ir.
 Module SmallStepTest.
 
 
+Module GetElementPtr.
+
+(****************************************************
+            gep poison, idx is always poison.
+ ****************************************************)
+
+Theorem gep_poison1:
+  forall st md r ptrty op1 opidx inb sr
+         (HOP1:Ir.Config.get_val st op1 = Some Ir.poison)
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.igep r ptrty op1 opidx inb))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := poison *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r Ir.poison).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT. rewrite HCUR in HNEXT.
+  inv HNEXT. des_ifs.
+Qed.
+
+(****************************************************
+            gep ptr, poison is always poison.
+ ****************************************************)
+
+Theorem gep_poison2:
+  forall st md r ptrty op1 opidx inb sr
+         (HOP1:Ir.Config.get_val st opidx = Some Ir.poison)
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.igep r ptrty op1 opidx inb))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := poison *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r Ir.poison).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT. rewrite HCUR in HNEXT.
+  inv HNEXT. des_ifs.
+Qed.
+
+(****************************************************
+            gep log(l, 10), 5 is log(l, 15).
+ ****************************************************)
+
+Theorem gep_logical1:
+  forall st md r ptrty op1 opidx sr l
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l 10)))
+         (HOP2:Ir.Config.get_val st opidx = Some (Ir.num 5))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.igep r (Ir.ptrty ptrty) op1 opidx false))
+         (HSZ:Ir.ty_bytesz ptrty = 1)
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := log (l, 15 * |ptrty|) *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.ptr (Ir.plog l 15))).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT. rewrite HCUR in HNEXT.
+  inv HNEXT. des_ifs.
+  unfold Ir.SmallStep.gep. rewrite HSZ. simpl.
+  assert (Ir.SmallStep.twos_compl_add 10 5 Ir.PTRSZ = 15).
+  { unfold Ir.SmallStep.twos_compl_add.
+    simpl. unfold Ir.SmallStep.twos_compl. rewrite Ir.PTRSZ_def.
+    reflexivity. }
+  rewrite H. ss.
+Qed.
+
+(****************************************************
+            gep phy(10), 5 is phy(15)
+ ****************************************************)
+
+Theorem gep_physical1:
+  forall st md r ptrty op1 opidx sr I cid
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.pphy 10 I cid)))
+         (HOP2:Ir.Config.get_val st opidx = Some (Ir.num 5))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.igep r (Ir.ptrty ptrty) op1 opidx false))
+         (HSZ:Ir.ty_bytesz ptrty = 1)
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := phy (l, 15 * |ptrty|) *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r (Ir.ptr (Ir.pphy 15 I cid))).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT. rewrite HCUR in HNEXT.
+  inv HNEXT. des_ifs.
+  unfold Ir.SmallStep.gep. rewrite HSZ. simpl.
+  assert (Ir.SmallStep.twos_compl_add 10 5 Ir.PTRSZ = 15).
+  { unfold Ir.SmallStep.twos_compl_add.
+    simpl. unfold Ir.SmallStep.twos_compl. rewrite Ir.PTRSZ_def.
+    reflexivity. }
+  rewrite H. ss.
+Qed.
+
+(****************************************************
+         gep inbounds log(l, 10), 5 is poison
+             if l's size is less than 10.
+ ****************************************************)
+
+Theorem gep_inb_logical1:
+  forall st md r ptrty op1 opidx sr l mb
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.plog l 10)))
+         (HOP2:Ir.Config.get_val st opidx = Some (Ir.num 5))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.igep r (Ir.ptrty ptrty) op1 opidx true))
+         (HSZ:Ir.ty_bytesz ptrty = 1)
+         (HMB:Ir.Memory.get (Ir.Config.m st) l = Some mb)
+         (HN: Ir.MemBlock.n mb < 10 * Ir.ty_bytesz ptrty)
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := poison *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r Ir.poison).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT. rewrite HCUR in HNEXT.
+  inv HNEXT. des_ifs.
+  unfold Ir.SmallStep.gep. rewrite HMB. rewrite HSZ in *. simpl.
+  assert (Ir.SmallStep.twos_compl_add 10 5 Ir.PTRSZ = 15).
+  { unfold Ir.SmallStep.twos_compl_add.
+    simpl. unfold Ir.SmallStep.twos_compl. rewrite Ir.PTRSZ_def.
+    reflexivity. }
+  rewrite H. unfold Ir.MemBlock.inbounds.
+  rewrite Nat.lt_nge in HN.
+  rewrite <- Nat.leb_nle in HN.
+  replace (10 * 1) with 10 in HN. rewrite HN. ss. ss.
+Qed.
+
+(****************************************************
+         gep inbounds pphy(l, i), j is poison
+     if j*Ir.ty_bytesz is positive &
+        i+(j*Ir.ty_bytesz) is not smaller than MEMSZ.
+ ****************************************************)
+
+Theorem gep_inb_physical1:
+  forall st md r ptrty op1 opidx sr i I cid j
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.pphy i I cid)))
+         (HOP2:Ir.Config.get_val st opidx = Some (Ir.num j))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.igep r (Ir.ptrty ptrty) op1 opidx true))
+         (HN: Ir.MEMSZ <= i + j * Ir.ty_bytesz ptrty)
+         (HPOS: j * Ir.ty_bytesz ptrty < Nat.shiftl 1 (Ir.PTRSZ - 1))
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := poison *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r Ir.poison).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT. rewrite HCUR in HNEXT.
+  inv HNEXT. des_ifs.
+  unfold Ir.SmallStep.gep.
+  rewrite <- Nat.ltb_lt in HPOS. rewrite HPOS.
+  rewrite Nat.le_ngt in HN.
+  rewrite <- Nat.ltb_nlt in HN.
+  rewrite HN. ss.
+Qed.
+
+(****************************************************
+         gep inbounds pphy(l, i), j is poison
+     if j*Ir.ty_bytesz is negative &
+   i+(j*Ir.ty_bytesz) is smaller than Ir.MEMSZ
+  (which means that, i-|j*Ir.ty_bytesz| is less than
+   0)
+ ****************************************************)
+
+Theorem gep_inb_physical2:
+  forall st md r ptrty op1 opidx sr i I cid j
+         (HOP1:Ir.Config.get_val st op1 = Some (Ir.ptr (Ir.pphy i I cid)))
+         (HOP2:Ir.Config.get_val st opidx = Some (Ir.num j))
+         (HCUR:Ir.Config.cur_inst md st = Some (Ir.Inst.igep r (Ir.ptrty ptrty) op1 opidx true))
+         (HN: i + j * Ir.ty_bytesz ptrty < Ir.MEMSZ)
+         (HNEG: Nat.shiftl 1 (Ir.PTRSZ - 1) <= j * Ir.ty_bytesz ptrty)
+         (HINST:Ir.SmallStep.inst_step md st sr),
+    sr = Ir.SmallStep.sr_success
+           Ir.e_none (* no event *)
+           (* new state, with PC incremented & r := poison *)
+           (Ir.SmallStep.update_reg_and_incrpc md st r Ir.poison).
+Proof.
+  intros.
+  inv HINST; try congruence.
+  unfold Ir.SmallStep.inst_det_step in HNEXT. rewrite HCUR in HNEXT.
+  inv HNEXT. des_ifs.
+  unfold Ir.SmallStep.gep.
+  rewrite Nat.le_ngt in HNEG.
+  rewrite <- Nat.ltb_nlt in HNEG. rewrite HNEG.
+  rewrite Nat.lt_nge in HN.
+  rewrite <- Nat.leb_nle in HN.
+  rewrite HN. ss.
+Qed.
+
+End GetElementPtr.
+
+
 Module IcmpEq.
 
 (****************************************************

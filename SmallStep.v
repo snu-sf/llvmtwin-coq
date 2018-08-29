@@ -129,14 +129,17 @@ Definition gep (p:Ir.ptrval) (idx0:nat) (t:Ir.ty) (m:Ir.Memory.t) (inb:bool): Ir
     let o' := twos_compl_add o idx Ir.PTRSZ in
     if inb then
       if Nat.ltb idx (Nat.shiftl 1 (Ir.PTRSZ - 1)) then
-        (* Added idx is positive. *)
+        (* idx is positive. *)
         if Nat.ltb (o + idx) Ir.MEMSZ then
           (* Should not overflow Ir.MEMSZ *)
           Ir.ptr (Ir.pphy o' (o::o'::Is) cid)
         else Ir.poison
       else
-        (* idx is negative: no constraint. *)
-        Ir.ptr (Ir.pphy o' (o::o'::Is) cid)
+        (* idx is negative. *)
+        if Nat.leb Ir.MEMSZ (o + idx) then
+          (* Should not underflow 0 (= Ir.MEMSZ). *)
+          Ir.ptr (Ir.pphy o' (o::o'::Is) cid)
+        else Ir.poison
     else
       (* if no inbounds tag, don't update Is. *)
       Ir.ptr (Ir.pphy o' Is cid)

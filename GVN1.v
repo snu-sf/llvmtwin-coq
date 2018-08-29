@@ -47,6 +47,18 @@ Proof.
   omega.
 Qed.
 
+Lemma twos_compl_add_lt:
+  forall a b
+         (HLT:a + b < Ir.MEMSZ),
+    Ir.SmallStep.twos_compl_add a b Ir.PTRSZ = a + b.
+Proof.
+  intros.
+  unfold Ir.SmallStep.twos_compl_add.
+  unfold Ir.SmallStep.twos_compl.
+  rewrite PTRSZ_MEMSZ.
+  rewrite Nat.mod_small. ss. ss.
+Qed.
+
 Lemma twos_compl_sub_common_MEMSZ_PTRSZ:
   forall x y a,
     Ir.SmallStep.twos_compl_sub ((a + x) mod Ir.MEMSZ)
@@ -341,52 +353,16 @@ Proof.
       ss.
       ss.
       congruence.
-      destruct (idx * Ir.ty_bytesz t <? Nat.shiftl 1 (Ir.PTRSZ - 1)) eqn:HSHL.
-      {
-        destruct (n0 + idx * Ir.ty_bytesz t <? Ir.MEMSZ) eqn:HOFS.
-        {
-          inversion HP1'. subst o1. subst Is1. subst cid1.
-          exploit IHHPP.
-          { reflexivity. }
-          { reflexivity. }
-          intros HH. destruct HH. destruct H0.
-          unfold Ir.SmallStep.gep in HP2'.
-          rewrite HSHL in HP2'.
-          destruct (n + idx * Ir.ty_bytesz t <? Ir.MEMSZ) eqn:HN.
-          { inversion HP2'. subst n0. subst o. subst o2. subst Is2. subst cid2.
-             split.
-            { congruence. }
-            split.
-            { constructor. constructor. assumption. }
-            { congruence. }
-          }
-          { ss. }
-        }
-        { ss. }
+      { unfold Ir.SmallStep.gep in HP2'.
+        exploit IHHPP. ss. ss. intros HH. inv HH. inv H0.
+        des_ifs.
+        { split. ss. split. do 2 constructor. ss. ss. }
+        { split. ss. split. do 2 constructor. ss. ss. }
       }
-      { exploit IHHPP; try reflexivity.
-        intros HH.
-        inv HH. destruct H0.
-        unfold Ir.SmallStep.gep in HP2'.
-        inversion HP1'. subst o o1 Is1 cid1.
-        destruct HP1'.
-        rewrite HSHL in HP2'.
-        inversion HP2'. subst o2 Is2 cid2.
-        destruct HP2'.
-        split. congruence.
-        split. constructor. constructor. assumption.
-        congruence.
-      }
-      { exploit IHHPP; try reflexivity.
-        intros HH.
-        inv HH. destruct H0.
-        unfold Ir.SmallStep.gep in HP2'.
-        subst o.
-        inversion HP2'. subst o2 Is2 cid2.
-        destruct HP2'.
-        inversion HP1'. subst o1 Is1 cid1.
-        destruct HP1'.
-        split. congruence. split. congruence. congruence.
+      { unfold Ir.SmallStep.gep in HP2'.
+        inv HP2'. inv HP1'.
+        exploit IHHPP. ss. ss. intros HH. inv HH. inv H0.
+        ss.
       }
     }
   }
@@ -462,25 +438,18 @@ Proof.
             }
             { ss. }
           }
-        { (* negaitve offset add *)
-          destruct (Ir.MemBlock.inbounds n0 t0 &&
-           Ir.MemBlock.inbounds
-             (Ir.SmallStep.twos_compl_add n0 (idx * Ir.ty_bytesz t)
-                                          Ir.PTRSZ) t0)
-                   eqn:HINB2.
-          {
-            inv HP2'.
-            inv HP1'.
-            rewrite HGETB in HGET. inv HGET.
-            unfold Ir.SmallStep.twos_compl_add.
-            unfold Ir.SmallStep.twos_compl.
-            rewrite PTRSZ_MEMSZ.
-            rewrite Nat.add_mod_idemp_r.
-            rewrite Nat.add_mod_idemp_l.
-            rewrite PeanoNat.Nat.add_assoc. reflexivity.
-            apply Ir.MEMSZ_nonzero. apply Ir.MEMSZ_nonzero.
-          }
-          { ss. }
+        { (* negative offset add *)
+          des_ifs.
+          rewrite HGETB in HGET.
+          inv HGET.
+          unfold Ir.SmallStep.twos_compl_add.
+          unfold Ir.SmallStep.twos_compl.
+          rewrite PTRSZ_MEMSZ.
+          rewrite Nat.add_mod_idemp_r.
+          rewrite Nat.add_mod_idemp_l.
+          rewrite PeanoNat.Nat.add_assoc.
+          reflexivity.
+          apply Ir.MEMSZ_nonzero. apply Ir.MEMSZ_nonzero.
         }
       }
       { (* no inbounds *)
@@ -501,6 +470,20 @@ Proof.
     { des_ifs. }
     }
   }
+Qed.
+
+
+Lemma addr_pos:
+  forall mb (HWF:Ir.MemBlock.wf mb),
+    0 < Ir.MemBlock.addr mb.
+Proof.
+  intros.
+  inv HWF. unfold Ir.MemBlock.addr.
+  destruct (Ir.MemBlock.P mb).
+  { inv wf_twin. }
+  { simpl. apply neq_0_lt. intros HH. subst.
+    exploit wf_notnull. constructor. ss. ss. eauto. }
+  Unshelve. apply 0.
 Qed.
 
 
@@ -593,13 +576,38 @@ Proof.
       inv HWF. eapply wf_blocks.
       eapply Ir.Memory.get_In. rewrite Heq. reflexivity. reflexivity.
     }
-    { eapply physicalized_ptr_phy in HPP; try reflexivity.
-      destruct HPP. destruct H2. subst n0. subst o.
-      congruence.
+    { rewrite Nat.leb_gt in Heq2.
+      rewrite Nat.ltb_ge in Heq1.
+      rewrite andb_true_iff in Heq0.
+      inv Heq0.
+      exploit physicalized_ptr_convert.
+      eassumption. ss. ss. rewrite Heq. ss. intros HH.
+      rewrite Ir.MemBlock.inbounds_mod in HH; try assumption.
+      unfold Ir.MemBlock.inbounds in *.
+      rewrite Nat.leb_le in H1, H2.
+      unfold Ir.SmallStep.twos_compl_add in H2.
+      unfold Ir.SmallStep.twos_compl in H2.
+      rewrite Nat.mod_small in H2.
+      exploit Ir.MemBlock.blocksz_lt.
+      { inv HWF. eapply wf_blocks. eapply Ir.Memory.get_In. rewrite Heq. ss. ss. }
+      { omega. }
+      intros HH2. inv HH2. (* False *)
+      { rewrite <- HH in Heq2. rewrite Ir.PTRSZ_MEMSZ.
+        assert (0 < Ir.MemBlock.addr t0).
+        { inv HWF. exploit wf_blocks. eapply Ir.Memory.get_In. rewrite Heq. ss. ss.
+          intros. apply addr_pos. ss.
+        }
+        omega.
+      }
+      { inv HWF. eapply wf_blocks. eapply Ir.Memory.get_In. rewrite Heq. ss. ss. }
     }
+    { exploit physicalized_ptr_phy. eassumption. ss. ss.
+      intros HH. inv HH. inv H2. congruence. }
+    { exploit physicalized_ptr_phy. eassumption. ss. ss.
+      intros HH. inv HH. inv H2. congruence. }
   }
 Qed.
-      
+
 
 (**** lemmas regarding twos_compl_add and inbounds_abs *****)
 
