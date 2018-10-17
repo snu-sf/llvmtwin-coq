@@ -1282,12 +1282,12 @@ Proof.
                    eqn:HWELLTYPED.
           { rewrite PeanoNat.Nat.eqb_eq in HWELLTYPED.
             destruct (Ir.Memory.get (Ir.Config.m st2) l)
-              as [ | mbl2] eqn:HMBl2; try congruence.
+              as [ mbl2 | ] eqn:HMBl2; try congruence.
             rewrite HWELLTYPED in HDEREF'.
-            destruct (Ir.MemBlock.alive t && Ir.MemBlock.inbounds ofs t &&
-                  Ir.MemBlock.inbounds (ofs + length (Ir.Byte.ofint (N.of_nat n0) n)) t)
+            destruct (Ir.MemBlock.alive mbl2 && Ir.MemBlock.inbounds ofs mbl2 &&
+                  Ir.MemBlock.inbounds (ofs + length (Ir.Byte.ofint (N.of_nat n0) n)) mbl2)
                      eqn:HRANGE; try congruence.
-            destruct (Ir.MemBlock.n t <? ofs + length (Ir.Byte.ofint (N.of_nat n0) n)).
+            destruct (Ir.MemBlock.n mbl2 <? ofs + length (Ir.Byte.ofint (N.of_nat n0) n)).
             { assert (HTWIN5' := HTWIN5 blkid).
               destruct HTWIN5'.
               exploit H. reflexivity. intros HH.
@@ -1299,7 +1299,7 @@ Proof.
 
               assert (HGET1:
                         Ir.Memory.get (Ir.Memory.set (Ir.Config.m st1) l
-                  (Ir.MemBlock.set_bytes t ofs (Ir.Byte.ofint (N.of_nat n0) n))) blkid =
+                  (Ir.MemBlock.set_bytes mbl2 ofs (Ir.Byte.ofint (N.of_nat n0) n))) blkid =
                       Ir.Memory.get (Ir.Config.m st1) blkid).
               { erewrite Ir.Memory.get_set_diff with (bid' := l) (mb := mb1)
                 (m := Ir.Config.m st1); try congruence.
@@ -1310,7 +1310,7 @@ Proof.
 
               assert (HGET2:
                         Ir.Memory.get (Ir.Memory.set (Ir.Config.m st2) l
-                  (Ir.MemBlock.set_bytes t ofs (Ir.Byte.ofint (N.of_nat n0) n))) blkid =
+                  (Ir.MemBlock.set_bytes mbl2 ofs (Ir.Byte.ofint (N.of_nat n0) n))) blkid =
                       Ir.Memory.get (Ir.Config.m st2) blkid).
               { erewrite Ir.Memory.get_set_diff with (bid' := l) (mb := mb2)
                 (m := Ir.Config.m st2); try congruence.
